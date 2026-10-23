@@ -74,3 +74,17 @@ Morpho Base read-only integration, Chain Signatures, audited custody/execution, 
 - [ ] Establish exact lending-contract liquidation arithmetic and gas/financing controls.
 
 See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
+
+## Stage 5 — lending-owned price metadata discovery (read-only)
+
+- [x] Implement finalized-block-pinned `get_config`, `get_assets_paged` and `get_all_token_pyth_infos` reads.
+- [x] Parse token-specific feed identifiers/default prices and flag missing information.
+- [x] Preserve shared-feed mappings without inferring asset values or liquidator profit.
+- [x] Add fail-closed code-hash pin, block consistency and invalid-schema tests.
+- [x] Add advisory GitHub Actions diagnostics, isolated from wallet and transaction signing.
+- [ ] Confirm live mainnet method/API compatibility from actual recorded CI evidence.
+- [ ] Verify derived asset price ratios, oracle refresh constraints and on-chain contract lineage.
+- [ ] Differential test health-factor, share rounding, liquidation restrictions and liquidator financing against deployed contract.
+- [ ] Verify source/code-hash matching before funding or any form of execution.
+
+**No live liquidation, transfer, wallet signing, or safe-trading designation exists.**
