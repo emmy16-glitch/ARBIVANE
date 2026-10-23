@@ -14,6 +14,20 @@ Research and a Stage 1 safety foundation were begun October 23, 2026 at the user
 - [x] Test suite and CI configuration
 - [ ] Test read-only scan against current real Rhea deployment
 
+## Stage 2 (completed locally; NOT yet validated against current live contracts)
+
+- [x] Parse historical Burrow-style asset pools, share balances, risk ratios and price feed structures with strict schema checks.
+- [x] Use bigint fixed-point arithmetic with conservative rounding and debt-free/unknown-price handling.
+- [x] Implement documented Rhea initial/final health and liquidation discount rules without constructing executable transactions.
+- [x] Match the Rhea official published 1000-DAI / 152-wNEAR example in automated tests.
+- [x] Fail closed on malformed data, zero share pools, missing or duplicate oracle prices and invalid transfers.
+- [x] Document the current `aggregate-oracle.near` vs legacy `priceoracle.near` difference.
+- [ ] Confirm actual deployed oracle method ABI and successful pinned-block **live** RPC reads.
+- [ ] Verify arithmetic parity, precise rounding, asset config and code hashes against live lending contract.
+- [ ] Independently verify financing and health constraints for the liquidator.
+
+See [Rhea parity evidence](RHEA_PARITY.md). No execution capability added.
+
 ## November 1–14 target sprint, subject to verification
 
 | Day | Delivery | Acceptance proof |

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "demo": "node --experimental-strip-types src/demo/run.ts",
     "scan:readonly": "node --experimental-strip-types src/rhea/cli.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "scan:indicative": "node --experimental-strip-types src/rhea/assess-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
