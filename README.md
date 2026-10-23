@@ -2,7 +2,7 @@
 
 **Autonomous Risk-Based Intelligence, Verification And NEAR Execution**
 
-> **Status: Stage 2 paper liquidation validation. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
+> **Status: Stage 5 read-only lending metadata verification. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
 
 ARBIVANE is a proposed NEAR-first autonomous DeFi liquidation system. It is designed to observe a market, validate current protocol state, calculate conservative economics, reject unsafe/competitive opportunities, execute only when on-chain authorization is enforceable, reconcile final actual balances, then optionally convert and transfer realized proceeds via NEAR Intents.
 
@@ -15,7 +15,7 @@ The first implementation intentionally stops **before money moves**. The publicl
 | Exact fixed-point profit/loss math | Implemented and unit tested |
 | Deterministic risk gate with conservative defaults | Implemented and unit tested |
 | Chain snapshots pinned to one NEAR final block | Read-only adapter and mocked-RPC tests |
-| Rhea asset, oracle, borrower account pagination | Read-only adapter; live deployment/API compatibility **not yet verified** |
+| Rhea asset, oracle, borrower account pagination | Read-only adapter; selected live interfaces verified, full lending parity **not yet verified** |
 | Rhea shares, risk ratios, health, discount and proposal rules | **Stage 2:** conservative fixed-point implementation and Rhea-guide example tests; **not yet parity-verified** with current deployed contracts |
 | Historical competition proxy | Implemented; incomplete data means unknown, never zero competition |
 | Execution/settlement lifecycle transitions | Pure state transition validation; no database yet |
@@ -113,3 +113,26 @@ The documented `aggregate-oracle.near` does **not** provide the old Burrow bot's
 `npm run probe:rhea:aggregate` requires explicit mainnet contract IDs, `EXECUTION_ENABLED=false`, and `RHEA_OPERATOR_FEED_MAPPINGS_JSON`. See [Stage 4 oracle evidence](docs/RHEA_AGGREGATE_ORACLE.md) before trying it. No default feed mapping is assumed.
 
 **Safety state:** `exactContractParityVerified=false` and `executionEnabled=false` remain mandatory. No wallet access, trades, contracts or token transfers were added.
+
+## Stage 5 — lending-owned Pyth metadata verification
+
+The read-only `npm run probe:rhea:metadata` command reads `get_config`,
+`get_assets_paged` and `get_all_token_pyth_infos` from the **same finalized
+lending block**, along with lending and oracle code hashes. It reports only
+public asset configuration and flags unknown, default-priced, and direct-Pyth
+assets separately. It does **not** synthesize prices or treat a shared Pyth
+feed as an error. It never authorizes liquidation.
+
+```bash
+export EXECUTION_ENABLED=false
+export NEAR_NETWORK=mainnet
+export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
+export RHEA_LENDING_CONTRACT=contract.main.burrow.near
+export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
+npm run probe:rhea:metadata
+```
+
+This diagnostic is backed by Rhea's newer Go lending SDK, whose source calls
+`get_all_token_pyth_infos` for per-token metadata. The RPC code in this
+repository makes **no signed transactions**. See [Stage 5 verification](docs/RHEA_MARKET_METADATA.md)
+for checks, limitations and upstream references.
