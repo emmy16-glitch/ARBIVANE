@@ -29,15 +29,33 @@ jobs:
         run: |
           set -o pipefail
           npm run probe:rhea | tee rhea-probe-evidence.json
+      - name: Probe Pyth aggregate oracle with a public sample feed (read only; unverified Rhea mapping)
+        id: aggregate
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          # A USDC Pyth feed observed in a Rhea->aggregate-oracle receipt; asset binding not independently audited.
+          RHEA_OPERATOR_FEED_MAPPINGS_JSON: '[{"assetId":"a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near","priceId":"eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"}]'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:aggregate | tee rhea-aggregate-evidence.json
       - name: Record probe outcome (advisory, not a safety approval)
         if: always()
         run: |
-          echo "Read-only probe step outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Legacy method probe outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pyth sample feed probe outcome: ${{ steps.aggregate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pyth sample feed mapping is NOT validated against Rhea's current lending contract." >> "$GITHUB_STEP_SUMMARY"
           echo "This is RPC schema evidence only. Never infer transaction correctness or financial safety." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rhea-mainnet-readonly-evidence
-          path: rhea-probe-evidence.json
+          path: |
+            rhea-probe-evidence.json
+            rhea-aggregate-evidence.json
           if-no-files-found: warn
           retention-days: 7
