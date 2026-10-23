@@ -37,7 +37,9 @@ test('reject invalid/misleading fields, duplicate listed assets, malformed metad
  assert.throws(()=>parseRheaPythMetadata({},[]),/invalid listed/);
  assert.throws(()=>parseRheaPythMetadata({},['usdc.testnet','usdc.testnet']),/duplicate/);
  assert.throws(()=>parseRheaPythMetadata({'usdc.testnet':{price_identifier:'not-a-feed'}},['usdc.testnet']),/invalid on-chain/);
- assert.throws(()=>parseRheaPythMetadata({'usdc.testnet':{price_identifier:a,default_price:{multiplier:'1',decimals:6}}},['usdc.testnet']),/ambiguous/);
+ const precedence=parseRheaPythMetadata({'usdc.testnet':{price_identifier:a,default_price:{multiplier:'1',decimals:6}}},['usdc.testnet']);
+ assert.equal(precedence.assets[0].source,'CONTRACT_DEFAULT');
+ assert.deepEqual(precedence.uniqueDirectFeeds,[]);
  assert.throws(()=>parseRheaPythMetadata({'usdc.testnet':{default_price:{multiplier:'0',decimals:6}}},['usdc.testnet']),/positive integer/);
  assert.throws(()=>parseRheaPythMetadata({'usdc.testnet':{price_identifier:a,decimals:99}},['usdc.testnet']),/range/);
  assert.throws(()=>parseRheaPythMetadata({'usdc.testnet':{price_identifier:a,fraction_digits:-1}},['usdc.testnet']),/integer/);

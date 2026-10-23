@@ -89,7 +89,9 @@ export function parseRheaPythMetadata(raw: unknown, listedAssetIds: string[]): P
       defaultPrice = {multiplier:rawStringNumber(p.multiplier,'default multiplier'),decimals:boundedInt(p.decimals,'default decimals',72)};
     }
     let source: RheaPriceSource = 'UNRESOLVED';
-    if (feed !== null && defaultPrice !== null) throw new Error('ambiguous on-chain price configuration');
+    // Upstream Rhea Go SDK gives default_price precedence even when a
+    // price_identifier is also present. Do not reject that valid configuration.
+    // This is metadata only; the active valuation branch still needs parity checks.
     if (defaultPrice) source = 'CONTRACT_DEFAULT';
     else if (feed) { source = 'DIRECT_PYTH'; uniqueFeeds.add(feed); }
     else unresolvedAssets.push(assetId);

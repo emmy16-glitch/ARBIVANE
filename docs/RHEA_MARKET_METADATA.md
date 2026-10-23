@@ -17,7 +17,7 @@ Primary upstream references:
 
 `src/rhea/market-metadata.ts` reads the **finalized** lending contract code hash and pins the oracle account lookup, asset list, config and metadata to the *same* block ID. This avoids mixing prices and configuration from different blocks during discovery.
 
-It classifies observed assets as `DIRECT_PYTH`, `CONTRACT_DEFAULT`, or `UNRESOLVED`; a shared price ID is intentionally permitted across different token IDs. It reports extra/stale metadata separately from missing entries. Any malformed feed ID, unsupported price struct, duplicate token ID, code-hash pin mismatch, inconsistent block or RPC method failure aborts the probe.
+It classifies observed assets as `DIRECT_PYTH`, `CONTRACT_DEFAULT`, or `UNRESOLVED`. As required by the current Rhea SDK, `default_price` takes precedence over `price_identifier` when both are present; a shared price ID is intentionally permitted across different token IDs. It reports extra/stale metadata separately from missing entries. Any malformed feed ID, unsupported price struct, duplicate token ID, code-hash pin mismatch, inconsistent block or RPC method failure aborts the probe.
 
 `src/rhea/market-metadata-cli.ts` is a public **read-only** CLI. It requires `EXECUTION_ENABLED=false` and `NEAR_NETWORK=mainnet`. No credentials, wallet imports or signed transaction methods appear in the module. In CI, a failing live probe is **advisory** and will not be mistaken for a passed integration.
 
@@ -49,3 +49,5 @@ Inspect recorded CI output. If `get_all_token_pyth_infos` does not exist on the 
 If metadata reads succeed, independently reproduce selected on-chain position values against contract state at identical block IDs and compare with contract-level computation or audited source. Document divergence explicitly; do **not** silently change rounding to obtain matching fixtures.
 
 Financial permissions, custody, Shade/TEE and real NEAR Intents settlement remain future independent milestones.
+
+**October 23 live-probe correction:** The first CI run rejected assets that legally include both a default price and feed identifier. The SDK explicitly prioritizes the default price; the adapter and regression test now mirror that precedence. This alone does not establish deployed liquidation parity.
