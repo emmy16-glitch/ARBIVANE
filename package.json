@@ -1,0 +1,19 @@
+{
+  "name": "arbivane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "demo": "node --experimental-strip-types src/demo/run.ts",
+    "scan:readonly": "node --experimental-strip-types src/rhea/cli.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}
