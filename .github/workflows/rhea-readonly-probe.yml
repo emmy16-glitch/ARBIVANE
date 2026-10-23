@@ -38,8 +38,8 @@ jobs:
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
-          # This published Pyth NEAR ID is a diagnostic SAMPLE, not a confirmed Rhea mapping.
-          RHEA_OPERATOR_FEED_MAPPINGS_JSON: '[{"assetId":"wrap.near","priceId":"c415de8d2efa7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750"}]'
+          # A USDC Pyth feed observed in a Rhea->aggregate-oracle receipt; asset binding not independently audited.
+          RHEA_OPERATOR_FEED_MAPPINGS_JSON: '[{"assetId":"a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near","priceId":"eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"}]'
         run: |
           set -o pipefail
           npm run probe:rhea:aggregate | tee rhea-aggregate-evidence.json
