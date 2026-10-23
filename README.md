@@ -110,6 +110,6 @@ Optional approved-hash pins: `RHEA_EXPECTED_LENDING_CODE_HASH`, `RHEA_EXPECTED_O
 
 The documented `aggregate-oracle.near` does **not** provide the old Burrow bot's `get_price_data` API. Stage 4 adds a separately selected Pyth-style `list_prices_no_older_than({price_ids})` reader with strict integer math, per-feed freshness/confidence gates, manually reviewed asset-to-feed mapping, and block-pinned mock-RPC regression tests. This is **not** an approved production price feed or live liquidation parity check.
 
-`npm run probe:rhea:aggregate` requires explicit mainnet contract IDs, `EXECUTION_ENABLED=false`, and `RHEA_VERIFIED_FEED_MAPPINGS_JSON`. See [Stage 4 oracle evidence](docs/RHEA_AGGREGATE_ORACLE.md) before trying it. No default feed mapping is assumed.
+`npm run probe:rhea:aggregate` requires explicit mainnet contract IDs, `EXECUTION_ENABLED=false`, and `RHEA_OPERATOR_FEED_MAPPINGS_JSON`. See [Stage 4 oracle evidence](docs/RHEA_AGGREGATE_ORACLE.md) before trying it. No default feed mapping is assumed.
 
 **Safety state:** `exactContractParityVerified=false` and `executionEnabled=false` remain mandatory. No wallet access, trades, contracts or token transfers were added.

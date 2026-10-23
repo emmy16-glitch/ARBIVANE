@@ -9,9 +9,9 @@ async function main() {
   if (env.EXECUTION_ENABLED !== "false" || env.NEAR_NETWORK !== "mainnet") throw new Error("explicit read-only mainnet mode required");
   if (env.RHEA_ORACLE_CONTRACT !== "aggregate-oracle.near") throw new Error("this probe only supports explicitly selected aggregate-oracle.near");
   if (env.RHEA_LENDING_CONTRACT !== "contract.main.burrow.near") throw new Error("explicit documented lending contract required");
-  if (!env.RHEA_VERIFIED_FEED_MAPPINGS_JSON) throw new Error("RHEA_VERIFIED_FEED_MAPPINGS_JSON required; no implicit token-symbol mapping");
+  if (!env.RHEA_OPERATOR_FEED_MAPPINGS_JSON) throw new Error("RHEA_OPERATOR_FEED_MAPPINGS_JSON required; no implicit token-symbol mapping");
   let parsed: unknown;
-  try { parsed=JSON.parse(env.RHEA_VERIFIED_FEED_MAPPINGS_JSON); }
+  try { parsed=JSON.parse(env.RHEA_OPERATOR_FEED_MAPPINGS_JSON); }
   catch { throw new Error("invalid feed map JSON"); }
   const feeds = validateVerifiedFeedMappings(parsed);
   const rpc = new NearReadOnlyRpc(env.NEAR_RPC_URL ?? "https://rpc.mainnet.fastnear.com");

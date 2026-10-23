@@ -35,7 +35,7 @@ export EXECUTION_ENABLED=false
 export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
 export RHEA_LENDING_CONTRACT=contract.main.burrow.near
 export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
-export RHEA_VERIFIED_FEED_MAPPINGS_JSON='[{"assetId":"wrap.near","priceId":"c415de8d2efa7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750"}]'
+export RHEA_OPERATOR_FEED_MAPPINGS_JSON='[{"assetId":"wrap.near","priceId":"c415de8d2efa7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750"}]'
 npm run probe:rhea:aggregate
 ```
 
