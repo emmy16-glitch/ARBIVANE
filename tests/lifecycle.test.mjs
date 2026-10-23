@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {advance, InMemoryIdempotencyGuard} from '../src/pipeline/lifecycle.ts';
+import {validateSettlementOrder} from '../src/settlement/intents.ts';
+test('legal audit transition preserves prior and next state',()=>assert.deepEqual(advance('DISCOVERED','REVALIDATING','c1',1,'fresh read'),{id:'c1',from:'DISCOVERED',to:'REVALIDATING',atMs:1,note:'fresh read'}));
+test('cannot jump from discovery to submitted, final or settled',()=>{for(const next of ['SUBMITTED','FINAL','SETTLED']) assert.throws(()=>advance('DISCOVERED',next,'c1',1,'skip'));});
+test('cannot settle until reconciled',()=>assert.throws(()=>advance('FINAL','SETTLEMENT_PENDING','c1',1,'skip')));
+test('cannot mutate after settled',()=>assert.throws(()=>advance('SETTLED','SUBMITTED','c1',1,'replay')));
+test('failed settlement can be retried explicitly',()=>assert.equal(advance('SETTLEMENT_FAILED','SETTLEMENT_PENDING','c1',1,'retry').to,'SETTLEMENT_PENDING'));
+test('duplicate idempotency key rejected',()=>{const x=new InMemoryIdempotencyGuard();x.claim('same');assert.throws(()=>x.claim('same'));});
+test('settlement requires reconciled execution and refund address',()=>{const x={executionTxHash:'0xabc',reconciled:false,realisedAsset:'near',amountAtomic:'100',destinationAsset:'usdc',recipient:'alice',refundTo:'alice',maxSlippageBps:100};assert.throws(()=>validateSettlementOrder(x));assert.doesNotThrow(()=>validateSettlementOrder({...x,reconciled:true}));assert.throws(()=>validateSettlementOrder({...x,reconciled:true,refundTo:''}));});
+test('settlement blocks zero and too much slippage',()=>{const x={executionTxHash:'abc',reconciled:true,realisedAsset:'near',amountAtomic:'100',destinationAsset:'usdc',recipient:'alice',refundTo:'alice',maxSlippageBps:100};assert.throws(()=>validateSettlementOrder({...x,amountAtomic:'0'}));assert.throws(()=>validateSettlementOrder({...x,maxSlippageBps:10001}));});
