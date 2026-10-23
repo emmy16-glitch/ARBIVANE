@@ -14,9 +14,11 @@ async function main() {
   try { parsed=JSON.parse(env.RHEA_OPERATOR_FEED_MAPPINGS_JSON); }
   catch { throw new Error("invalid feed map JSON"); }
   const feeds = validateVerifiedFeedMappings(parsed);
+  if (env.RHEA_PYTH_READ_METHOD && !["single","batch"].includes(env.RHEA_PYTH_READ_METHOD)) throw new Error("invalid RHEA_PYTH_READ_METHOD");
   const rpc = new NearReadOnlyRpc(env.NEAR_RPC_URL ?? "https://rpc.mainnet.fastnear.com");
   const report = await probeRheaAggregateOracle(rpc,{
     lendingContract:env.RHEA_LENDING_CONTRACT,oracleContract:env.RHEA_ORACLE_CONTRACT,feedMappings:feeds,
+    readMethod: env.RHEA_PYTH_READ_METHOD === "batch" ? "batch" : "single",
     expectedLendingCodeHash:env.RHEA_EXPECTED_LENDING_CODE_HASH||undefined,
     expectedOracleCodeHash:env.RHEA_EXPECTED_ORACLE_CODE_HASH||undefined,
   });

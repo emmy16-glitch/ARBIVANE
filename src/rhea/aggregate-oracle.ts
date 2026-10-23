@@ -107,10 +107,26 @@ export async function readAggregateOraclePriceBatch(
   blockId: number,
   mappings: VerifiedFeedMapping[],
   options: AggregateOracleOptions,
+  method: "single" | "batch" = "batch",
 ): Promise<AggregateOracleBatch> {
   if (!ACCOUNT_ID.test(oracleContract) || !Number.isSafeInteger(blockId) || blockId < 1) throw new Error("invalid oracle read target");
   const feeds = validateVerifiedFeedMappings(mappings);
-  const response = await rpc.view<unknown>(oracleContract, "list_prices_no_older_than", {price_ids: feeds.map(x => x.priceId)}, blockId);
-  const result = parseAggregateOraclePrices(response.value, feeds, options);
-  return {blockHeight: response.blockHeight, ...result};
+  if (method !== "single" && method !== "batch") throw new Error("unsupported oracle method");
+  if (method === "batch") {
+    const response = await rpc.view<unknown>(oracleContract, "list_prices_no_older_than", {price_ids: feeds.map(x => x.priceId)}, blockId);
+    const result = parseAggregateOraclePrices(response.value, feeds, options);
+    return {blockHeight: response.blockHeight, ...result};
+  }
+  // Confirmed in public Rhea lending -> aggregate oracle execution receipts.
+  // Explicit method selection: never silently fall back between oracle contracts or methods.
+  const resultMap: Record<string, unknown> = {};
+  const maxAgeSeconds = Math.ceil(options.maxAgeMs / 1000);
+  for (const feed of feeds) {
+    const response = await rpc.view<unknown>(oracleContract, "get_price_no_older_than", {
+      price_id: feed.priceId, age: maxAgeSeconds,
+    }, blockId);
+    resultMap[feed.priceId] = response.value;
+  }
+  const result = parseAggregateOraclePrices(resultMap, feeds, options);
+  return {blockHeight: String(blockId), ...result};
 }

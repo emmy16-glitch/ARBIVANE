@@ -17,7 +17,7 @@ The current `aggregate-oracle.near` is Pyth-compatible: on-chain Rhea receipts i
 
 ## What is implemented
 
-`src/rhea/aggregate-oracle.ts`: strictly parse a bounded map of requested 64-character feed IDs; preserve exact bigint price math and signed `expo`, and accept only positive prices with bounded confidence, fresh timestamps, complete maps and matching block heights.
+`src/rhea/aggregate-oracle.ts`: read the observed Rhea method `get_price_no_older_than({price_id,age})` by default; optionally select `RHEA_PYTH_READ_METHOD=batch` for the separate `list_prices_no_older_than({price_ids})` interface. There is no automatic fallback. Strictly parse a bounded map of requested 64-character feed IDs; preserve exact bigint price math and signed `expo`, and accept only positive prices with bounded confidence, fresh timestamps, complete maps and matching block heights.
 
 `src/rhea/aggregate-probe.ts`: check lending and oracle account code hashes at a single finalized block, prove mapped assets are present in the lending market, then query the Pyth-compatible batch method and return a non-executing report. An operator may optionally supply approved code hash pins. An unpinned or partially mapped diagnostic explicitly warns that coverage/contract identity isn't approved.
 
@@ -36,6 +36,7 @@ export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
 export RHEA_LENDING_CONTRACT=contract.main.burrow.near
 export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
 export RHEA_OPERATOR_FEED_MAPPINGS_JSON='[{"assetId":"wrap.near","priceId":"c415de8d2efa7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750"}]'
+export RHEA_PYTH_READ_METHOD=single
 npm run probe:rhea:aggregate
 ```
 
@@ -52,3 +53,5 @@ The `wrap.near` feed above is a public Pyth NEAR reference, *not proof* the depl
 ### Important economic distinction
 
 A valid Pyth feed describes an oracle price, not a realizable swap route. ARBIVANE must later revalidate liquidity, gas, repay requirements, collateral disposition, liquidator account solvency and final receipts. A positive oracle spread is not profit.
+
+The Stage 4 first live CI probe using the batch method and a single **unverified** public NEAR feed failed at block `221305261`, although both contracts and 25 lending assets were readable. The initial report was too coarse to identify whether this was a missing feed, method call or response validation error. The new single-feed method and bounded error codes are designed to isolate the failure in the next advisory run. See the [advisory CI history](https://github.com/emmy16-glitch/ARBIVANE/actions/workflows/rhea-readonly-probe.yml). Never represent a green advisory workflow as a successful mainnet feed read without examining its JSON status.

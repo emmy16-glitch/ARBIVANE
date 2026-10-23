@@ -8,6 +8,7 @@ export interface AggregateProbeConfig {
   expectedLendingCodeHash?: string;
   expectedOracleCodeHash?: string;
   nowMs?: number;
+  readMethod?: "single" | "batch";
 }
 export interface AggregateProbeReport {
   mode: "RHEA_AGGREGATE_ORACLE_READONLY";
@@ -20,6 +21,7 @@ export interface AggregateProbeReport {
   oracleCodeHash: string | null;
   blockHeight: string | null;
   observedAssets: number | null;
+  readMethod: "single" | "batch";
   mappedAssets: number;
   sampledPriceAgesMs: Record<string, number>;
   failures: string[];
@@ -37,7 +39,7 @@ export async function probeRheaAggregateOracle(rpc: NearReadOnlyRpc, config: Agg
     mode:"RHEA_AGGREGATE_ORACLE_READONLY", executionEnabled:false,exactContractParityVerified:false,
     result:"INCOMPATIBLE_READS",lendingContract:config.lendingContract,oracleContract:config.oracleContract,
     lendingCodeHash:null,oracleCodeHash:null,blockHeight:null,observedAssets:null,mappedAssets:feeds.length,
-    sampledPriceAgesMs:{},failures:[],warnings:["FEED_MAP_IS_OPERATOR_SUPPLIED_NOT_ONCHAIN_VERIFIED", "COMPATIBLE_READS_DO_NOT_PROVE_LIQUIDATION_PARITY"],
+    readMethod:config.readMethod ?? "single", sampledPriceAgesMs:{},failures:[],warnings:["FEED_MAP_IS_OPERATOR_SUPPLIED_NOT_ONCHAIN_VERIFIED", "COMPATIBLE_READS_DO_NOT_PROVE_LIQUIDATION_PARITY"],
   };
   try {
     const lending = await rpc.viewAccount(config.lendingContract);
@@ -61,14 +63,22 @@ export async function probeRheaAggregateOracle(rpc: NearReadOnlyRpc, config: Agg
     for (const {assetId} of feeds) if (!assetIds.has(assetId)) throw new Error("mapped token absent from Rhea lending assets");
     const batch = await readAggregateOraclePriceBatch(rpc,config.oracleContract,blockId,feeds,{
       nowMs:config.nowMs ?? Date.now(),maxAgeMs:60_000,maxFutureSkewMs:5_000,maxConfidenceBps:250,
-    });
+    }, config.readMethod ?? "single");
     for (const [assetId,price] of batch.prices) report.sampledPriceAgesMs[assetId]=price.ageMs;
     report.result = assetIds.size === feeds.length ? "ALL_LISTED_FEEDS_READ" : "PARTIAL_FEED_READS";
     if (report.result === "PARTIAL_FEED_READS") report.warnings.push("PARTIAL_ASSET_COVERAGE_NOT_SUITABLE_FOR_MARKET_WIDE_VALUATION");
   } catch (err:unknown) {
     // No RPC payload, positions or private identifiers in diagnostic errors.
     const code = err instanceof Error ? err.message : "UNKNOWN_READ_FAILURE";
-    report.failures.push(code.startsWith("PINNED_") ? code : "AGGREGATE_ORACLE_RPC_OR_SCHEMA_FAILURE");
+    const reason = code.startsWith("PINNED_") ? code
+      : code.includes("no usable price") ? "PYTH_PRICE_MISSING_OR_STALE"
+      : code.includes("confidence") ? "PYTH_CONFIDENCE_EXCEEDS_POLICY"
+      : code.includes("stale or from the future") ? "PYTH_PRICE_OUTSIDE_FRESHNESS_WINDOW"
+      : code.includes("NEAR RPC returned an error") ? "PYTH_ORACLE_METHOD_REJECTED_BY_RPC"
+      : code.includes("oracle price map") ? "PYTH_ORACLE_RESPONSE_MAP_INVALID"
+      : code.includes("invalid") || code.includes("missing") ? "INVALID_LENDING_OR_ORACLE_SCHEMA"
+      : "AGGREGATE_ORACLE_RPC_OR_SCHEMA_FAILURE";
+    report.failures.push(reason);
   }
   return report;
 }

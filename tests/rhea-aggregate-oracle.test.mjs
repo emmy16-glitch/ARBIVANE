@@ -51,6 +51,11 @@ function createRpc({wrongBlock=false,missingAsset=false,failPrice=false}={}){
   if(params.request_type==='view_account')return response({block_height:12345,code_hash:params.account_id==='contract.main.burrow.near'?'3'.repeat(43):'4'.repeat(43)});
   const view=value=>response({block_height:wrongBlock?12346:12345,result:[...new TextEncoder().encode(JSON.stringify(value))]});
   if(params.method_name==='get_assets_paged')return view([[missingAsset?'fake.near':'wrap.near',{test:true}],['usdc.near',{test:true}]]);
+  if(params.method_name==='get_price_no_older_than'){
+    if(failPrice)return {ok:true,json:async()=>({error:{code:-32000,message:'bad feed'}})};
+    const args=JSON.parse(Buffer.from(params.args_base64,'base64').toString());
+    return view(validMap()[args.price_id]);
+  }
   if(params.method_name==='list_prices_no_older_than'){
     if(failPrice)return {ok:true,json:async()=>({error:{code:-32000,message:'bad feed'}})};
     const all=validMap();
@@ -63,7 +68,7 @@ function createRpc({wrongBlock=false,missingAsset=false,failPrice=false}={}){
 }
 test('read batch pins aggregate oracle call to the supplied block',async()=>{
  const {rpc,log}=createRpc();
- const data=await readAggregateOraclePriceBatch(rpc,'aggregate-oracle.near',12345,mappings,options);
+ const data=await readAggregateOraclePriceBatch(rpc,'aggregate-oracle.near',12345,mappings,options,'batch');
  assert.equal(data.blockHeight,'12345');
  assert.deepEqual(JSON.parse(Buffer.from(log[0].params.args_base64,'base64').toString()),{price_ids:[near,usdc]});
  assert.equal(log[0].params.block_id,12345);
@@ -83,7 +88,8 @@ test('aggregate oracle probe reports all mapped assets while retaining parity wa
  assert.equal(result.result,'ALL_LISTED_FEEDS_READ');
  assert.equal(result.exactContractParityVerified,false);
  assert.ok(result.warnings.includes('FEED_MAP_IS_OPERATOR_SUPPLIED_NOT_ONCHAIN_VERIFIED'));
- assert.equal(log.length,4);
+ assert.equal(log.length,5);
+ assert.equal(result.readMethod,'single');
  for(const row of log.slice(1))assert.equal(row.params.block_id,12345);
 });
 test('aggregate oracle probe refuses wrong asset feed, wrong block and code-hash pin mismatch',async()=>{
@@ -96,4 +102,22 @@ test('aggregate oracle probe refuses wrong asset feed, wrong block and code-hash
  const {rpc}=createRpc();
  const pinned=await probeRheaAggregateOracle(rpc,{lendingContract:'contract.main.burrow.near',oracleContract:'aggregate-oracle.near',feedMappings:mappings,expectedOracleCodeHash:'5'.repeat(43),nowMs});
  assert.equal(pinned.failures[0],'PINNED_ORACLE_CODE_HASH_MISMATCH');
+});
+
+test('single-feed API uses price_id and age for each feed without executing transactions',async()=>{
+ const {rpc,log}=createRpc();
+ const data=await readAggregateOraclePriceBatch(rpc,'aggregate-oracle.near',12345,mappings,options,'single');
+ assert.equal(data.prices.size,2);
+ assert.equal(log.length,2);
+ for(const [i,row] of log.entries()){
+  assert.equal(row.params.method_name,'get_price_no_older_than');
+  assert.equal(row.params.block_id,12345);
+  assert.deepEqual(JSON.parse(Buffer.from(row.params.args_base64,'base64').toString()),{price_id:mappings[i].priceId,age:60});
+ }
+});
+test('single oracle method failure has specific bounded diagnostic without leaking raw error',async()=>{
+ const {rpc}=createRpc({failPrice:true});
+ const result=await probeRheaAggregateOracle(rpc,{lendingContract:'contract.main.burrow.near',oracleContract:'aggregate-oracle.near',feedMappings:mappings,nowMs});
+ assert.equal(result.result,'INCOMPATIBLE_READS');
+ assert.deepEqual(result.failures,['PYTH_ORACLE_METHOD_REJECTED_BY_RPC']);
 });
