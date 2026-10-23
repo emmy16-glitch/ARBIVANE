@@ -35,3 +35,17 @@ Inspect the final `result` and per-step PASS/FAIL statuses. `INCOMPATIBLE_READS`
 3. Prove an on-chain custody/permission contract controls every outbound asset transfer; agent logs are insufficient.
 4. Add protocol-specific transaction simulation and balance deltas, funded dry runs, gas limits, safety review and a manually approved mainnet pilot.
 5. Never equate read compatibility with actual profit or zero-capital execution.
+
+## Actual GitHub Actions mainnet probe, 23 October 2026
+
+Evidence: [read-only probe run #40037072511](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40037072511), [artifact](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40037072511/artifacts/12537960382).
+
+- Finalized block height: `221303815`.
+- Lending `contract.main.burrow.near` deployed code hash: `6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa`.
+- Oracle `aggregate-oracle.near` deployed code hash: `9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg`.
+- Lending assets schema: **PASS**, 25 assets.
+- Lending account count schema: **PASS**, 72,766 accounts.
+- Oracle `get_price_data` method or schema: **FAIL**, reason category `RPC_METHOD_OR_SCHEMA_INCOMPATIBLE`.
+- Result: `INCOMPATIBLE_READS`, `exactContractParityVerified=false`, `executionEnabled=false`.
+
+The failure classification intentionally does not claim whether the method was removed or its response format changed. Next task: inspect the actual current oracle source/deployed API and add a reviewed, pinned parser. **Do not substitute the historic price oracle or execute transactions while incompatible.**
