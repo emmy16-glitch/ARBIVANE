@@ -1,0 +1,43 @@
+name: Advisory Rhea read-only compatibility evidence
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/**'
+      - 'tests/rhea-probe.test.mjs'
+      - '.github/workflows/rhea-readonly-probe.yml'
+permissions:
+  contents: read
+jobs:
+  compatibility-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Public mainnet view queries only - never a transaction
+        id: probe
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+        run: |
+          set -o pipefail
+          npm run probe:rhea | tee rhea-probe-evidence.json
+      - name: Record probe outcome (advisory, not a safety approval)
+        if: always()
+        run: |
+          echo "Read-only probe step outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "This is RPC schema evidence only. Never infer transaction correctness or financial safety." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-mainnet-readonly-evidence
+          path: rhea-probe-evidence.json
+          if-no-files-found: warn
+          retention-days: 7

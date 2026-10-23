@@ -52,3 +52,12 @@ See [Rhea parity evidence](RHEA_PARITY.md). No execution capability added.
 ## Post-hackathon only
 
 Morpho Base read-only integration, Chain Signatures, audited custody/execution, competing-liquidator data pipeline, optional EVM flash-loan execution and production live capital controls.
+
+## Stage 3 (October 23, 2026): public contract identity / API compatibility probe
+
+- [x] Implement read-only, finalized-block-pinned contract account/code hash verification.
+- [x] Add schema and freshness probe for current documented Rhea contracts with no fallback to legacy oracle.
+- [x] Add mock-RPC regression coverage including oracle method and code-hash mismatch.
+- [x] Add advisory GitHub Actions network probe storing verifiable diagnostics.
+- [ ] Confirm real mainnet RPC probe output and capture exact code hashes, timestamp and error methods.
+- [ ] Differential-test current deployed contract math and receipt traces. No funds or transaction execution until audited.

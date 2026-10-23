@@ -12,7 +12,8 @@
     "demo": "node --experimental-strip-types src/demo/run.ts",
     "scan:readonly": "node --experimental-strip-types src/rhea/cli.ts",
     "check": "npm run typecheck && npm test",
-    "scan:indicative": "node --experimental-strip-types src/rhea/assess-cli.ts"
+    "scan:indicative": "node --experimental-strip-types src/rhea/assess-cli.ts",
+    "probe:rhea": "node --experimental-strip-types src/rhea/probe-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

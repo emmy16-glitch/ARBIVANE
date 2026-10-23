@@ -91,3 +91,17 @@ Original Stage 1 code is written for this repository. External bot code has **no
 ## Not financial advice / not production-ready
 
 Tests use fabricated positions (including Rhea's own published numerical example) and mocked-RPC responses. A passing unit test does not prove current Rhea liquidation math, true execution profitability, compliance with hackathon rules, deployed contract security, or that an external transfer can succeed. Do not fund, connect secrets, or deploy an autonomous executor based on this stage.
+
+## Stage 3 public contract compatibility probe
+
+`npm run probe:rhea` performs **only JSON-RPC view queries**, pins reads to one finalized block, records lending/oracle code hashes, tests historical method/schema compatibility and oracle age, and emits a borrower-free evidence report. It never signs or sends a transaction. The documented mainnet accounts are `contract.main.burrow.near` and `aggregate-oracle.near`.
+
+```bash
+export NEAR_NETWORK=mainnet
+export EXECUTION_ENABLED=false
+export RHEA_LENDING_CONTRACT=contract.main.burrow.near
+export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
+npm run probe:rhea
+```
+
+Optional approved-hash pins: `RHEA_EXPECTED_LENDING_CODE_HASH`, `RHEA_EXPECTED_ORACLE_CODE_HASH`. The repo also includes an **advisory** workflow `rhea-readonly-probe.yml` which attempts public views on PRs and stores the report even if it fails. A failed or passing probe does not activate any executor. See [Stage 3 evidence](docs/RHEA_LIVE_PROBE.md).

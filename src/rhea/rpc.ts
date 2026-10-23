@@ -18,6 +18,38 @@ export class NearReadOnlyRpc {
     }
   }
 
+  /** Observe deployed contract identity at the same finalized block as protocol reads.
+   * Never signs, changes state, or downloads potentially huge Wasm binaries.
+   */
+  async viewAccount(contractId: string, blockId?: number): Promise<{blockHeight: string; codeHash: string}> {
+    if (!/^[a-z0-9._-]{2,64}$/.test(contractId)) throw new Error("invalid contract account ID");
+    const params: Record<string, unknown> = {
+      request_type: "view_account", account_id: contractId,
+      ...(blockId === undefined ? {finality: "final"} : {block_id: blockId}),
+    };
+    const resp = await this.fetcher(this.rpcUrl, {
+      method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({jsonrpc: "2.0", id: this.#nextId++, method: "query", params}),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!resp.ok) throw new Error(`NEAR RPC HTTP ${resp.status}`);
+    const envelope: unknown = await resp.json();
+    if (!envelope || typeof envelope !== "object") throw new Error("invalid RPC response");
+    const response = envelope as Record<string, unknown>;
+    if (response.error !== undefined) throw new Error(`NEAR RPC account query returned an error`);
+    const result = response.result;
+    if (!result || typeof result !== "object") throw new Error("invalid NEAR account response");
+    const account = result as Record<string, unknown>;
+    if (typeof account.block_height !== "number" || !Number.isSafeInteger(account.block_height)) throw new Error("missing block height");
+    if (blockId !== undefined && account.block_height !== blockId) throw new Error("inconsistent snapshot block");
+    // NEAR's zero code hash is the base58 representation of a 32-byte zero digest.
+    if (typeof account.code_hash !== "string" || account.code_hash.length < 32 || account.code_hash.length > 64 ||
+        !/^[1-9A-HJ-NP-Za-km-z]+$/.test(account.code_hash) || account.code_hash === "11111111111111111111111111111111") {
+      throw new Error("account has no valid deployed contract code hash");
+    }
+    return {blockHeight: String(account.block_height), codeHash: account.code_hash};
+  }
+
   async view<T>(contractId: string, method: string, args: Record<string, unknown> = {}, blockId?: number): Promise<NearViewResult<T>> {
     if (!/^[a-z0-9._-]{2,64}$/.test(contractId) || !/^[a-z][a-z0-9_]*$/.test(method)) throw new Error("invalid contract or method");
     const encoded = new TextEncoder().encode(JSON.stringify(args));
