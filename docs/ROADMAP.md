@@ -61,3 +61,16 @@ Morpho Base read-only integration, Chain Signatures, audited custody/execution, 
 - [x] Add advisory GitHub Actions network probe storing verifiable diagnostics.
 - [ ] Confirm real mainnet RPC probe output and capture exact code hashes, timestamp and error methods.
 - [ ] Differential-test current deployed contract math and receipt traces. No funds or transaction execution until audited.
+
+## Stage 4 (October 24, 2026): Pyth-style aggregate oracle adapter
+
+- [x] Identify documented Pyth oracle method signatures and a real Rhea-to-oracle receipt.
+- [x] Implement explicit asset-to-price-ID mappings with no implicit symbol fallback.
+- [x] Parse Pyth price, confidence, exponent and publish timestamp via integer math.
+- [x] Read single-block Pyth batch quotes and reject null, stale, out-of-bound and partial responses.
+- [x] Add non-executing compatibility CLI with code-hash observations and 9+ regression tests.
+- [ ] Confirm on-chain mappings and current deployed oracle source and code hashes.
+- [ ] Confirm current RPC outputs match this parser; GitHub Actions advisory probe cannot authorize trading.
+- [ ] Establish exact lending-contract liquidation arithmetic and gas/financing controls.
+
+See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
