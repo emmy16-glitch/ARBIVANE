@@ -1,0 +1,11 @@
+# Stage 28 — Resolve lending price decimal units before any liquidation sizing
+
+**Context:** Stage 27 showed gigantic E27 amounts (about 10^51 raw) while the paper health ratio was 97.27%. This can arise from substituting aggregate Pyth's raw exponent for the lending oracle PriceData token-denominated `decimals`. The archived `NearDeFi/burrowland` lending source uses `Price.multiplier` with `Price.decimals + asset.config.extra_decimals`; price `decimals` may already include the token's own precision. Therefore the Stage 26 health percentage can appear sensible while its USD magnitudes are wrong by many orders.
+
+Stage 28 independently calls the contract-configured `priceoracle.near.get_price_data({asset_ids: [...]})`, at exactly the **same new finalized mainnet block** as deployed lending contract ID/code, asset pools, and borrower detail. It parses the archived `PriceData` shape (including nanosecond timestamp, recency and optional missing prices), checks publication age ≤2 minutes, rechecks each share balance via source math, and recomputes each token's E27 USD reference value using the oracle-supplied **price decimal scale**, not the raw aggregate Pyth exponent. Invalid, stale or uncallable legacy price views are explicitly blocked; no invented fallback to token tickers or alternative oracle endpoints. Unit sanity threshold is bounded to $10 million for one observed research position and is **not an economic approval rule**.
+
+**WARNING:** Even if legacy price data returns plausible USD E27 values, this is NOT attestation that the same price transformation is used by deployed Rhea `execute_with_pyth`, or that the borrower is currently liquidatable. No wallet is configured. No transaction replay, gas, swap return, flash loan, competition, net-profit calculation, signer or broadcast occurs. An unavailable legacy quote view is a meaningful result, not a reason to fabricate a price. This step aims to isolate the decimal discrepancy so the next implementation can derive exact atomic sizing and a complete Sandbox transaction execution proof.
+
+Archived source reference: https://github.com/NearDeFi/burrowland/blob/main/contract/src/big_decimal.rs. Published SDK API describes `get_price_data` multiplier/decimals and token precision: https://github.com/rhea-finance/lending-sdk-golang .
+
+No PDF.
