@@ -78,7 +78,7 @@ test('missing actor positions and malformed exact balances cannot become zero-am
   {actorAfter:{supplied:[]}},
   {actorSeizeFtAfter:'1.5'},
   {borrowerAfter:{positions:[]}},
-  {borrowerBefore:{positions:{REGULAR:{borrowed:[{token_id:'usdt.near',shares:'12',balance:'13'}],collateral:[]}}}},
+  {borrowerBefore:{positions:{REGULAR:{borrowed:[{token_id:'usdt.near',shares:'0',balance:'13'}],collateral:[]}}}},
   {borrowerAfter:{positions:{REGULAR:{borrowed:[leg('usdt.near',-1)],collateral:[]}}}},
   {plan:{...plan(),mayBroadcastMainnet:true}},
  ])assert.throws(()=>attestStage41SandboxSettlement({...input(),...changes}));
