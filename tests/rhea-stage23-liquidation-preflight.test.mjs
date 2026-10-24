@@ -53,7 +53,9 @@ test('static workflow retains research-only, source-vs-Wasm warning and no signi
  const {readFile}=await import('node:fs/promises');
  const yaml=await readFile(new URL('../.github/workflows/rhea-stage23-liquidation-preflight.yml',import.meta.url),'utf8');
  assert.ok(yaml.includes("EXECUTION_ENABLED: 'false'"));
- assert.ok(yaml.includes('probe:rhea:liquidation-preflight'));
+ assert.ok(yaml.includes('node --experimental-strip-types src/rhea/liquidation-preflight-cli.ts > stage23-liquidation-preflight.json'));
+ assert.ok(yaml.includes('.contract.sourceWasmReproduciblyMatched == false'));
+ assert.ok(yaml.includes('.mayBroadcast == false'));
  assert.ok(!yaml.includes('near transaction sign'));
  assert.ok(!yaml.includes('broadcast_tx'));
 });
