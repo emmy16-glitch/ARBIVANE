@@ -1,0 +1,138 @@
+name: Rhea complete mainnet bulk borrower scan (read only)
+on:
+  workflow_dispatch:
+  # A successful merge adding this workflow launches the complete scan once.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage30-full-paged-scan.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      block: ${{ steps.get.outputs.block }}
+      hash: ${{ steps.get.outputs.hash }}
+      total: ${{ steps.get.outputs.total }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Pin the exact entire-market NEAR finalized snapshot
+        id: get
+        env:
+          NEAR_NETWORK: mainnet
+          EXECUTION_ENABLED: 'false'
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:shard-snapshot > snapshot.json
+          jq -e '.mode == "NEAR_SHARD_SNAPSHOT" and .executionEnabled == false and .borrowedPoolBalancePositive == true and .lendingCodeHash == "6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa" and .totalAccounts >= 4 and .totalAccounts <= 250000' snapshot.json
+          echo "block=$(jq -r '.blockHeight' snapshot.json)" >> "$GITHUB_OUTPUT"
+          echo "hash=$(jq -r '.lendingCodeHash' snapshot.json)" >> "$GITHUB_OUTPUT"
+          echo "total=$(jq -r '.totalAccounts' snapshot.json)" >> "$GITHUB_OUTPUT"
+          jq '{blockHeight,totalAccounts,borrowedPoolBalancePositive,executionEnabled}' snapshot.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-paged-full-scan-snapshot
+          path: snapshot.json
+          retention-days: 14
+  scan:
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        id: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Assign nonoverlapping borrower registry window
+        env:
+          TOTAL: ${{ needs.snapshot.outputs.total }}
+          SHARD: ${{ matrix.id }}
+        run: |
+          set -euo pipefail
+          start=$((TOTAL * SHARD / 4))
+          end=$((TOTAL * (SHARD+1) / 4))
+          echo "RHEA_SCAN_FROM=$start" >> "$GITHUB_ENV"
+          echo "RHEA_SCAN_MAX=$((end-start))" >> "$GITHUB_ENV"
+          echo "Scanning accounts [$start,$end) at one pinned block"
+      - name: Scan every detailed-position account in this shard
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_PINNED_BLOCK: ${{ needs.snapshot.outputs.block }}
+          RHEA_EXPECTED_LENDING_CODE_HASH: ${{ needs.snapshot.outputs.hash }}
+          RHEA_SCAN_PAGE_SIZE: '50'
+          RHEA_SCAN_CONCURRENCY: '2'
+          RHEA_SCAN_RETRIES: '8'
+          RHEA_SCAN_BATCH_DELAY_MS: '500'
+          RHEA_SCAN_RETRY_DELAY_MS: '5000'
+          RHEA_CHECKPOINT_EVERY_BATCHES: '5'
+          RHEA_PAGED_CHECKPOINT_PATH: shard-${{ matrix.id }}.json
+          RHEA_PAGED_REPORT_PATH: report-${{ matrix.id }}.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:paged-position-index | tee summary-${{ matrix.id }}.json
+          jq -e '.mode == "NEAR_RHEA_SAME_BLOCK_BACKFILL" and .executionEnabled == false and .invalidAccounts == 0 and .nextIndex == .targetEndIndex' summary-${{ matrix.id }}.json
+      - name: Save shard checkpoints even if interrupted
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-full-paged-shard-${{ matrix.id }}
+          path: |
+            shard-${{ matrix.id }}.json
+            report-${{ matrix.id }}.json
+            summary-${{ matrix.id }}.json
+          if-no-files-found: warn
+          retention-days: 14
+  reconcile:
+    needs: [snapshot, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rhea-full-paged-shard-*
+          path: shards
+      - name: Prove complete one-block market coverage and no duplicate accounts
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          RHEA_SHARD_ROOT: shards
+          RHEA_SHARD_COUNT: '4'
+          RHEA_TOTAL_ACCOUNTS: ${{ needs.snapshot.outputs.total }}
+          RHEA_PINNED_BLOCK: ${{ needs.snapshot.outputs.block }}
+          RHEA_EXPECTED_LENDING_CODE_HASH: ${{ needs.snapshot.outputs.hash }}
+          RHEA_AGGREGATED_REPORT_PATH: rhea-full-paged-index.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/complete-paged-index-cli.ts | tee rhea-full-scan-summary.json
+          jq -e '.completeSnapshot == true and .totalAccounts == .scannedAccounts and .zeroSchemaErrors == true and .executionEnabled == false' rhea-full-scan-summary.json
+          jq -r '"FULL scan: "+(.scannedAccounts|tostring)+" accounts, "+(.debtAccounts|tostring)+" borrowers with debt, "+(.debtPositions|tostring)+" debt positions, block "+.blockHeight' rhea-full-scan-summary.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-full-paged-verified-market
+          path: |
+            rhea-full-paged-index.json
+            rhea-full-scan-summary.json
+          if-no-files-found: warn
+          retention-days: 14
