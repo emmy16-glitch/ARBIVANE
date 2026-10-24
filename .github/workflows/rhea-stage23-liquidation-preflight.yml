@@ -1,0 +1,41 @@
+name: NEAR Rhea deployed liquidation preflight (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage23-liquidation-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  deployed-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify deployed NEAR code identities, pool and config views without transactions
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/liquidation-preflight-cli.ts > stage23-liquidation-preflight.json
+          jq -e '.executionEnabled == false and .mayBroadcast == false and .contract.deployedLiquidationRulesVerified == false and .contract.sourceWasmReproduciblyMatched == false' stage23-liquidation-preflight.json
+      - name: Mark on-chain trade permissions as unavailable
+        if: always()
+        run: |
+          echo 'Source example arithmetic is NOT a stateful transaction dry run.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No signer or real-money execution. Source vs deployed Wasm is NOT attested.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage23-deployed-preflight-readonly
+          path: stage23-liquidation-preflight.json
+          if-no-files-found: warn
+          retention-days: 7

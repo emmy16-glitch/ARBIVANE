@@ -35,7 +35,8 @@
     "probe:rhea:sharded-health": "node --experimental-strip-types src/rhea/sharded-health-cli.ts",
     "probe:rhea:observed-shard": "node --experimental-strip-types src/rhea/observed-shard-health-cli.ts",
     "probe:rhea:select-shard-review": "node --experimental-strip-types src/rhea/artifact-review-selector-cli.ts",
-    "probe:rhea:fresh-borrowers": "node --experimental-strip-types src/rhea/fresh-borrower-health-cli.ts"
+    "probe:rhea:fresh-borrowers": "node --experimental-strip-types src/rhea/fresh-borrower-health-cli.ts",
+    "probe:rhea:liquidation-preflight": "node --experimental-strip-types src/rhea/liquidation-preflight-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
