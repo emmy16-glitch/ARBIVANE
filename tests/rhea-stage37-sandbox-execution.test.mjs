@@ -37,23 +37,25 @@ test('never interpret Stage35 zero-source-spread or blocked candidate as executa
  }
 });
 const receipt=(s,id='4'.repeat(43))=>({id,outcome:{status:s,gas_burnt:'4000000000000'}});
+const callbackReceipt=(id)=>({receipt_id:id,receipt:{Action:{actions:[
+ {FunctionCall:{method_name:'callback_execute_with_pyth',args:''}}]}}});
 test('fail-closed on skipped async callback or failed receipt despite successful initial call',()=>{
  const success=receipt({SuccessValue:''});const failure=receipt({Failure:{ActionError:'borrow denied'}},'5'.repeat(43));
  const r=summarizeStage37SandboxOutcome({
   final_execution_status:'FINAL',status:{Failure:'callback reverted'},
-  receipts_outcome:[success,failure]
+  receipts_outcome:[success,failure],receipts:[callbackReceipt('5'.repeat(43))]
  },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,importedContractCount:4,allStoredKeysAttested:false});
  assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');assert.equal(r.failedReceiptCount,1);
  assert.equal(r.realMainnetExecuted,false);assert.equal(r.realProfitVerified,false);
  assert.equal(r.gasBurntGasUnits,'8000000000000');
  assert.throws(()=>summarizeStage37SandboxOutcome({
-  final_execution_status:'FINAL',status:{SuccessValue:''},receipts_outcome:[success,failure],
+  final_execution_status:'FINAL',status:{SuccessValue:''},receipts_outcome:[success,failure],receipts:[callbackReceipt('5'.repeat(43))],
  },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,importedContractCount:4,allStoredKeysAttested:false}),/CONTRADICTION/);
 });
 test('even locally successful callback never authorizes spending or claims mainnet profits',()=>{
  const r=summarizeStage37SandboxOutcome({
   final_execution_status:'FINAL',status:{SuccessValue:''},
-  receipts_outcome:[receipt({SuccessValue:''})],
+  receipts_outcome:[receipt({SuccessValue:''})],receipts:[callbackReceipt('4'.repeat(43))],
  },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,importedContractCount:5,allStoredKeysAttested:false});
  assert.equal(r.status,'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF');
  assert.equal(r.realProfitVerified,false);assert.equal(r.executionEnabled,false);
