@@ -1,0 +1,50 @@
+name: Rhea Stage34 resilient candidate preflight (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage34-resilient-candidate-preflight.yml'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/resilient-readonly-rpc.ts'
+      - 'src/rhea/stage34-candidate-preflight.ts'
+      - 'src/rhea/stage34-candidate-preflight-cli.ts'
+      - 'tests/rhea-stage34-readonly-retry-candidate.test.mjs'
+      - '.github/workflows/rhea-stage34-resilient-candidate-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Validate exact-block read-only metadata and Pyth candidate
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_CONFIGURED_ORACLE: priceoracle.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: godlike.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_CONFIGURED_ORACLE_CODE_HASH: 4sUttxKK4gJpWr1mhfNddBt497ZiXsRMbTYvCeQQbjR2
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage34-candidate-preflight-cli.ts > stage34-candidate.json
+          jq -e '.mode == "RHEA_STAGE34_ONE_BLOCK_CANDIDATE_PREFLIGHT" and .chain == "NEAR_MAINNET" and .borrowerAccountId == "godlike.near" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .liquidationContractLogicVerified == false and .statefulTransactionReplayVerified == false and .netProfitVerified == false and (.status | IN("PAPER_AT_RISK_UNAPPROVED","PAPER_HEALTHY_UNAPPROVED","NO_CURRENT_DEBT","BLOCKED_INCOMPLETE_PRICE_EVIDENCE","BLOCKED_CONTRADICTORY_POSITION","BLOCKED_READONLY_OBSERVATION_ERROR"))' stage34-candidate.json
+          jq '{blockHeight,borrowerAccountId,status,positionHealthBps,reasonCode,rpcStatistics,mayInferReferenceLiquidatable,liquidationContractLogicVerified,executionEnabled}' stage34-candidate.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'No deployed Liquidate action equivalence, funding, stateful transaction replay or net profit demonstrated.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage34-resilient-candidate-preflight
+          path: stage34-candidate.json
+          if-no-files-found: warn
+          retention-days: 14
