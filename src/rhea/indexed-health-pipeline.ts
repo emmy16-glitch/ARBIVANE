@@ -3,7 +3,9 @@ import type { DebtBackfillCheckpoint } from './market-debt-index.ts';
 import { parseParityPools } from './deployed-share-parity.ts';
 import { discoverDebtInAccount } from './debt-discovery.ts';
 import { parseDetailedDebtScopes, type DetailedDebtPosition } from './candidate-triage.ts';
-import { compareIsolatedPositions } from './isolated-parity.ts';
+import { compareIsolatedPositions, parseIsolatedDetailed } from './isolated-parity.ts';
+import { parseDetailedBorrower } from './detailed-debt-index.ts';
+import { sourceSharesToAmount } from './source-math.ts';
 import { parseRheaPythMetadata, parseLendingPriceConfig } from './market-metadata.ts';
 import { parseAggregateOraclePrices, type AggregateOracleOptions } from './aggregate-oracle.ts';
 import { calculatePaperPositionHealth, type HealthScreenReport, type PaperHealthPosition } from './health-screen.ts';
@@ -41,6 +43,7 @@ export interface IndexedHealthOutput {
   mode:'NEAR_RHEA_INDEXED_HEALTH_BRIDGE';
   chain:'NEAR_MAINNET';status:'NO_FINDINGS'|'PAPER_HEALTH_OBSERVED_UNAPPROVED'|'INCOMPLETE_EVIDENCE';
   sourceSnapshotComplete:boolean;sourceSnapshotHasSchemaErrors:boolean;
+ sourceRegistry:'PAGED_LEGACY_UNVERIFIED'|'DETAILED_POSITION_SHARDS';
   blockHeight:string;lendingCodeHash:string;oracleCodeHash:string;
   marketAccounts:number;sourceScannedAccounts:number;sourceDebtAccounts:number;
   fromFinding:number;nextFinding:number;totalFindings:number;
@@ -68,7 +71,10 @@ export function validateIndexedCheckpoint(input:unknown):asserts input is DebtBa
     !Array.isArray(c.seenAccountIds)||c.seenAccountIds.length!==c.scannedAccounts||
     !Array.isArray(c.findings)||c.findings.length>c.scannedAccounts||
     c.completeSnapshot!==(c.startIndex===0&&c.nextIndex===c.totalAccounts&&c.invalidAccounts===0)||
-    typeof c.schemaReasons!=='object'||c.schemaReasons===null||Array.isArray(c.schemaReasons))throw Error('INVALID_CHECKPOINT');
+    typeof c.schemaReasons!=='object'||c.schemaReasons===null||Array.isArray(c.schemaReasons)||
+    (c.sourceView!==undefined&&c.sourceView!=='get_account_all_positions')||
+    (c.sourceView==='get_account_all_positions'&&(c.codeHashPinProvided!==true||c.invalidAccounts!==0||
+      c.borrowedPoolBalancePositive!==true&&c.borrowedPoolBalancePositive!==false)))throw Error('INVALID_CHECKPOINT');
  const ids=new Set<string>();
  for(const accountId of c.seenAccountIds){if(typeof accountId!=='string'||!ID.test(accountId)||ids.has(accountId))throw Error('INVALID_CHECKPOINT_ACCOUNT');ids.add(accountId);}
  const foundIds=new Set<string>();
@@ -86,6 +92,7 @@ export function validateIndexedCheckpoint(input:unknown):asserts input is DebtBa
       pids.has(String(p.positionId))||!Array.isArray(p.debtAssetIds)||p.debtAssetIds.length<1||p.debtAssetIds.length>256||
       !p.debtAssetIds.every(a=>typeof a==='string'&&ID.test(a))||
       new Set(p.debtAssetIds).size!==p.debtAssetIds.length||typeof p.collateralRecorded!=='boolean')throw Error('INVALID_CHECKPOINT_POSITION');
+   if(c.sourceView==='get_account_all_positions'&&p.positionId===null)throw Error('INVALID_CHECKPOINT_DETAILED_POSITION');
    pids.add(String(p.positionId));
   }
  }
@@ -119,6 +126,7 @@ export async function inspectIndexedRheaHealth(
 ):Promise<IndexedHealthOutput>{
  validateIndexedCheckpoint(rawCheckpoint);
  const checkpoint=rawCheckpoint;
+ const detailedSource=(checkpoint as DebtBackfillCheckpoint & {sourceView?:string}).sourceView==='get_account_all_positions';
  validateOptions(opts,checkpoint);
  const height=Number(checkpoint.blockHeight);
  const [lending,oracle]=await Promise.all([
@@ -168,7 +176,12 @@ export async function inspectIndexedRheaHealth(
   }
   let parsed:DetailedDebtPosition[];
   try {
-   const reobserved=discoverDebtInAccount(paged,pools);
+   // Paged registry records on deployed Rhea do NOT expose all isolated debt.
+   // Use them only to prove the account still occupies the checkpointed index.
+   const row=paged as Record<string,unknown>;
+   if(!row||typeof row!=='object'||Array.isArray(row)||row.account_id!==found.accountId)throw Error('INDEX_ID_CHANGED');
+   const reobserved=detailedSource?
+     parseDetailedBorrower(detail,found.accountId,pools):discoverDebtInAccount(paged,pools);
    if(!reobserved||reobserved.accountId!==found.accountId||reobserved.positions.length!==found.positions.length||
       found.positions.some(pos=>!reobserved.positions.some(p=>p.positionId===pos.positionId&&
          same(p.debtAssetIds,pos.debtAssetIds)&&p.collateralRecorded===pos.collateralRecorded)))throw Error('INDEX_CHANGED');
@@ -187,11 +200,27 @@ export async function inspectIndexedRheaHealth(
   }catch{
    for(const pos of found.positions)fail(found.accountId,pos.positionId,pos.debtAssetIds,'POSITION_SCOPE_MISMATCH');continue;
   }
-  // Independent Stage 10 share-to-balance comparator covers every isolated position,
-  // including positions without debt; no flattening or silent share adjustment.
+  // For detailed-source indexes, we cannot cross-compare nonexistent paged debt.
+  // Independently rederive each detailed leg balance from historical pool shares.
+  // This is historical SOURCE maths, NOT verified deployed liquidation parity.
   try {
-   const difference=compareIsolatedPositions(paged,detail,pools);
-   if(difference.status!=='MATCH'||difference.comparedLegs===0)throw Error('DIFFERENTIAL_MISMATCH');
+   if(detailedSource){
+    const positions=parseIsolatedDetailed(detail,pools);
+    let compared=0;
+    for(const position of positions.values()){
+     for(const role of ['borrowed','collateral'] as const){
+      for(const [asset,leg] of position[role]){
+       const pool=pools.get(asset)![role==='borrowed'?'borrowed':'supplied'];
+       if(sourceSharesToAmount(leg.shares,pool,role==='borrowed')!==leg.balance)throw Error('POOL_BALANCE_MISMATCH');
+       compared++;
+      }
+     }
+    }
+    if(compared===0)throw Error('ZERO_COMPARABLE_LEGS');
+   }else{
+    const difference=compareIsolatedPositions(paged,detail,pools);
+    if(difference.status!=='MATCH'||difference.comparedLegs===0)throw Error('DIFFERENTIAL_MISMATCH');
+   }
   }catch{
    for(const pos of found.positions)fail(found.accountId,pos.positionId,pos.debtAssetIds,'DETAILED_SHARE_PARITY_FAILED');continue;
   }
@@ -252,6 +281,7 @@ export async function inspectIndexedRheaHealth(
  return {mode:'NEAR_RHEA_INDEXED_HEALTH_BRIDGE',chain:'NEAR_MAINNET',
   status:blockedN||checkpoint.invalidAccounts>0||!checkpoint.completeSnapshot?'INCOMPLETE_EVIDENCE':results.length?'PAPER_HEALTH_OBSERVED_UNAPPROVED':'NO_FINDINGS',
   sourceSnapshotComplete:checkpoint.completeSnapshot,sourceSnapshotHasSchemaErrors:checkpoint.invalidAccounts>0,
+  sourceRegistry:detailedSource?'DETAILED_POSITION_SHARDS':'PAGED_LEGACY_UNVERIFIED',
   blockHeight:checkpoint.blockHeight,lendingCodeHash:lending.codeHash,oracleCodeHash:oracle.codeHash,
   marketAccounts:checkpoint.totalAccounts,sourceScannedAccounts:checkpoint.scannedAccounts,
   sourceDebtAccounts:checkpoint.findings.length,fromFinding:opts.fromFinding,nextFinding:next,
@@ -261,6 +291,7 @@ export async function inspectIndexedRheaHealth(
   warnings:['ONLY_REAL_CHECKPOINT_FINDINGS_WERE_QUERIED','SINGLE_HISTORICAL_FINALIZED_NEAR_BLOCK',
    'LIVE_RHEA_LIQUIDATION_PARITY_NOT_ESTABLISHED','NO_AUTO_GENERATED_REPAYMENT_OR_PROFIT_SCENARIOS',
    'INDEX_CHECKPOINT_IS_NOT_CRYPTOGRAPHIC_ATTESTATION',
+   ...(detailedSource?['PAGED_REGISTRY_HAS_NO_AUTHORITATIVE_DEBT_SHARES','DETAILED_SHARE_MATH_IS_HISTORICAL_SOURCE_NOT_DEPLOYED_ATTESTATION']:[]),
    ...(!checkpoint.completeSnapshot?['INCOMPLETE_MARKET_BACKFILL']:[]),
    ...(checkpoint.invalidAccounts>0?['SOURCE_INDEX_HAS_SCHEMA_ERRORS']:[]),
    ...(!opts.expectedLendingCodeHash||!opts.expectedOracleCodeHash?['CONTRACT_CODE_HASH_PINS_NOT_INDEPENDENTLY_APPROVED']:[])],

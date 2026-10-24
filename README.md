@@ -320,3 +320,8 @@ Run `npm run probe:rhea:indexed-health` with
 `RHEA_INDEX_CHECKPOINT_PATH` and `EXECUTION_ENABLED=false`. GitHub provides a
 manual read-only workflow. A cancelled full-index run does **not** provide a
 verified market count, and no current liquidatable borrowers are claimed.
+
+
+### Stage 18: verified NEAR shard-to-health bridge
+
+Use \`npm run probe:rhea:sharded-health\` to reconcile a complete set of \`get_account_all_positions\` shard checkpoints at one pinned NEAR block and recheck discovered borrowers using the *detailed* view rather than the paged registry's incomplete debt fields. The read-only GitHub workflow can run automatically after successful main-branch sharded scans or be manually dispatched. No liquidation eligibility, executable profit or trading authorization. See [Stage 18 documentation](docs/RHEA_STAGE18_SHARD_HEALTH.md).
