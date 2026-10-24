@@ -63,7 +63,7 @@ test('shard merge rejects inconsistent block, missed ranges and cross-shard acco
  assert.throws(()=>mergeDebtShards([a,{...b,seenAccountIds:[...b.seenAccountIds.slice(0,4),a.seenAccountIds[0]]}],2),/DUPLICATE/);
 });
 test('invalid shard planner indices rejected before network work',()=>{
- for(const bad of [[10,-1,2],[10,2,2],[10,0,0],[10,0,17],[-2,0,3]])assert.throws(()=>shardRange(...bad),/INVALID/);
+ for(const bad of [[10,-1,2],[10,2,2],[10,0,0],[10,0,129],[-2,0,3]])assert.throws(()=>shardRange(...bad),/INVALID/);
 });
 
 test('full-market shards run once on a main workflow update and do not overload public RPC',async()=>{
