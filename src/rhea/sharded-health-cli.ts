@@ -13,8 +13,8 @@ function count(name:string,otherwise:string){
 async function main(){
  if(env.EXECUTION_ENABLED!=='false'||env.NEAR_NETWORK!=='mainnet'||!env.NEAR_RPC_URL)
   throw Error('READ_ONLY_MAINNET_REQUIRED');
- const shardCount=count('RHEA_SHARD_COUNT','12');
- if(shardCount<1||shardCount>16)throw Error('INVALID_SHARD_COUNT');
+ const shardCount=count('RHEA_SHARD_COUNT','96');
+ if(shardCount<1||shardCount>128)throw Error('INVALID_SHARD_COUNT');
  const root=resolve(env.RHEA_SHARD_ROOT??'shards');
  const records:unknown[]=[];
  for(let i=0;i<shardCount;i++)records.push(JSON.parse(await readFile(resolve(root,'near-rhea-shard-'+i,'shard-'+i+'.json'),'utf8')));

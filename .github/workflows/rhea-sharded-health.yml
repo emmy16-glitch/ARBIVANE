@@ -44,7 +44,7 @@ jobs:
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
           RHEA_SHARD_ROOT: downloaded-shards
-          RHEA_SHARD_COUNT: '12'
+          RHEA_SHARD_COUNT: '96'
           RHEA_INDEX_FINDING_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.finding_cursor || '0' }}
           RHEA_INDEX_MAX_FINDINGS: '8'
           RHEA_INDEX_MAX_FEEDS: '16'
@@ -56,7 +56,7 @@ jobs:
         if: always()
         run: |
           echo "Stage 18 shard bridge outcome: ${{ steps.evidence.outcome }}" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Only a complete 12-shard, one-block read-only market index may enter the health bridge.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Only a complete 96-shard, one-block read-only market index may enter the health bridge.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Old-block Pyth quotes may be stale. Paper health is not liquidation eligibility or profit.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No wallet, signing or transaction.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
