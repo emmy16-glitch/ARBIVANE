@@ -2,7 +2,7 @@
 
 **Autonomous Risk-Based Intelligence, Verification And NEAR Execution**
 
-> **Status: Stage 5 read-only lending metadata verification. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
+> **Status: Stage 6 read-only lending coverage and derived-price comparison. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
 
 ARBIVANE is a proposed NEAR-first autonomous DeFi liquidation system. It is designed to observe a market, validate current protocol state, calculate conservative economics, reject unsafe/competitive opportunities, execute only when on-chain authorization is enforceable, reconcile final actual balances, then optionally convert and transfer realized proceeds via NEAR Intents.
 
@@ -87,6 +87,12 @@ NEAR RPC (final block)      Rhea account/oracle discovery
 - [Hackathon evidence checklist](docs/HACKATHON_CHECKLIST.md)
 
 Original Stage 1 code is written for this repository. External bot code has **not** been pasted into it. Patterns referenced from upstream projects are credited in `docs/REUSE.md`; any future source imports must preserve licenses/NOTICES and pin commits.
+
+## Stage 6 — market coverage and price-source parity groundwork
+
+The additional `npm run probe:rhea:coverage` diagnostic reads pool balances and borrowing flags for **all listed Rhea assets at the same finalized block as lending-owned price metadata**. It reports unpriced market exposure without treating missing metadata as proof of delisting. New BigInt-only derivative price comparisons and provenance-aware reference comparisons remain strictly non-executable. See [Stage 6 coverage and parity limits](docs/RHEA_STAGE6_COVERAGE.md).
+
+**Stage 6 does not establish full deployed-contract health-factor or liquidation parity. Real-money execution remains off.**
 
 ## Not financial advice / not production-ready
 
