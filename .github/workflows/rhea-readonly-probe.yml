@@ -7,6 +7,7 @@ on:
       - 'tests/rhea-probe.test.mjs'
       - 'tests/rhea-market-metadata.test.mjs'
       - 'tests/rhea-coverage.test.mjs'
+      - 'tests/rhea-borrower-audit.test.mjs'
       - '.github/workflows/rhea-readonly-probe.yml'
 permissions:
   contents: read
@@ -69,12 +70,28 @@ jobs:
         run: |
           set -o pipefail
           npm run probe:rhea:coverage | tee rhea-coverage-evidence.json
+      - name: Bounded borrower exposure sampling (Stage 7; advisory)
+        id: borrowers
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_AUDIT_MAX_ACCOUNTS: '25'
+          RHEA_AUDIT_PAGE_SIZE: '10'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:borrowers | tee rhea-borrower-evidence.json
       - name: Record probe outcome (advisory, not a safety approval)
         if: always()
         run: |
           echo "Legacy method probe outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pyth sample feed probe outcome: ${{ steps.aggregate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Lending metadata probe outcome: ${{ steps.metadata.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Stage 7 borrower sample outcome: ${{ steps.borrowers.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "The first N accounts are NOT a representative sample; no liquidation parity verified." >> "$GITHUB_STEP_SUMMARY"
           echo "Stage 6 pool exposure outcome: ${{ steps.coverage.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pyth sample feed mapping is NOT validated against Rhea's current lending contract." >> "$GITHUB_STEP_SUMMARY"
           echo "This is RPC schema evidence only. Never infer transaction correctness or financial safety." >> "$GITHUB_STEP_SUMMARY"
@@ -87,5 +104,6 @@ jobs:
             rhea-aggregate-evidence.json
             rhea-metadata-evidence.json
             rhea-coverage-evidence.json
+            rhea-borrower-evidence.json
           if-no-files-found: warn
           retention-days: 7

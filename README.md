@@ -142,3 +142,36 @@ This diagnostic is backed by Rhea's newer Go lending SDK, whose source calls
 `get_all_token_pyth_infos` for per-token metadata. The RPC code in this
 repository makes **no signed transactions**. See [Stage 5 verification](docs/RHEA_MARKET_METADATA.md)
 for checks, limitations and upstream references.
+
+
+## Stage 7 — borrower-level exposure audit and offline differential suite
+
+`npm run probe:rhea:borrowers` reads the same finalized Rhea lending block as the
+Stage 6 coverage report and enumerates a **capped prefix** of borrower records
+(default 25; hard limit 200). It reports how many sampled accounts have debt or
+collateral in assets with missing on-chain price metadata, including USN.
+
+This is **not a full-market borrower scan**, does not establish whether an
+account is liquidatable, and does not convert shares into token or USD values.
+It does not return personal account identifiers in the standard report. The
+first N accounts are not a statistically representative sample. Invalid or
+incomplete account pages abort instead of being counted as empty.
+
+```bash
+export EXECUTION_ENABLED=false
+export NEAR_NETWORK=mainnet
+export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
+export RHEA_LENDING_CONTRACT=contract.main.burrow.near
+export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
+export RHEA_AUDIT_MAX_ACCOUNTS=25
+export RHEA_AUDIT_PAGE_SIZE=10
+npm run probe:rhea:borrowers
+```
+
+`src/rhea/reference-suite.ts` provides reproducible **offline** comparisons to
+explicit reference fixtures with strict account, block and contract-hash
+identity. The fixture system cannot grant execution approval, even when every
+sample matches. Source details: [Stage 7 notes](docs/RHEA_STAGE7_BORROWERS.md).
+
+No signing functionality, transaction submission, collateral custody, or real
+profit extraction was added in Stage 7.

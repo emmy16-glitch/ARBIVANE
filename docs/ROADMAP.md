@@ -99,3 +99,10 @@ See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
 - [ ] Verify current deployed-contract price semantics and exact liquidation arithmetic with independently audited source.
 - [ ] Independently resolve all four missing assets and close issue #7 based on actual borrower positions, source and RPC evidence.
 - [ ] Build an enforceable NEAR policy/treasury contract; no funds before a security review.
+
+
+### Stage 7 (research prototype) — borrower exposure + offline differential harness
+- Implement a bounded, read-only borrower sample at a finalized block.
+- Count missing-price collateral/debt exposure without treating shares as USD.
+- Check reference fixtures against indicative arithmetic; never grant parity.
+- **Not complete:** exhaustive borrower enumeration, on-chain source verification, USN authoritative valuation, deployed liquidation math, custody safety, TEE, real execution.
