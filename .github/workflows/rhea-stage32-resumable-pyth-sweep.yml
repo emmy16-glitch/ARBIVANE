@@ -1,0 +1,94 @@
+name: Rhea Stage32 resumable full-debt Pyth sweep (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_scan_run_id:
+        description: 'Verified full market scan Actions run'
+        required: true
+        default: '40128285853'
+      base_cursor:
+        description: 'First debt finding; each run processes 4 adjacent windows of 80'
+        required: true
+        default: '12'
+      resume_run_id:
+        description: 'Optional Stage32 run to resume checkpoint files for same source/cursor'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage32-resumable-pyth-sweep.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reprice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Retrieve verified entire-market debt index, never historic price guesses
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: ${{ github.event_name == 'workflow_dispatch' && inputs.source_scan_run_id || '40128285853' }}
+          github-token: ${{ github.token }}
+          path: source
+      - name: Resume exact existing shard checkpoint when provided
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-stage32-repriced-shard-${{ matrix.shard }}
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+          path: .
+      - name: Select deterministic nonoverlapping debt-finding window
+        env:
+          BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '12' }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_CURSOR" =~ ^(0|[1-9][0-9]*)$ ]] || exit 2
+          ((BASE_CURSOR >= 0 && BASE_CURSOR <= 250000)) || exit 2
+          echo "RHEA_STAGE32_START_FINDING=$((BASE_CURSOR + SHARD * 80))" >> "$GITHUB_ENV"
+      - name: Refresh indexed borrower debt with current Pyth feeds and save every 20 accounts
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE32_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
+          RHEA_STAGE32_MAX_FINDINGS: '80'
+          RHEA_STAGE32_BATCH_SIZE: '20'
+          RHEA_STAGE32_CONCURRENCY: '2'
+          RHEA_STAGE32_RESUME: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_run_id != '' && 'true' || 'false' }}
+          RHEA_STAGE32_CHECKPOINT_PATH: stage32-reprice-checkpoint.json
+          RHEA_STAGE32_REPORT_PATH: stage32-reprice-report.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/full-active-pyth-sweep-cli.ts > stage32-summary.json
+          jq -e '.mode == "RHEA_STAGE32_RESUMABLE_PYTH_REPRICE_SWEEP" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .liquidationEligibilityVerified == false and .processed <= 80 and .processed == (.paperAtRisk+.paperHealthy+.noDebtNow+.blocked)' stage32-summary.json
+          jq -r '"Stage32 shard: "+(.processed|tostring)+" priced attempts; "+(.paperAtRisk|tostring)+" paper-at-risk, "+(.paperHealthy|tostring)+" paper-healthy, "+(.blocked|tostring)+" blocked. Next index "+(.nextFinding|tostring)' stage32-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'READ-ONLY research: zero liquidation authorizations, zero signed transactions, zero verified profits.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Persist exact checkpoint and evidence after partial failure or success
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage32-repriced-shard-${{ matrix.shard }}
+          path: |
+            stage32-reprice-checkpoint.json
+            stage32-reprice-report.json
+            stage32-summary.json
+          if-no-files-found: warn
+          retention-days: 14
