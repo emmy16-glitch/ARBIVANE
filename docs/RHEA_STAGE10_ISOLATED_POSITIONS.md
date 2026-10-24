@@ -78,3 +78,21 @@ found zero borrowers among its first 25 accounts. This is a sample-selection
 limitation, **not** a proof that the contract has no debt. The follow-up
 implementation samples up to 100 accounts using bounded, deterministic spread
 windows over the full index range. Inspect the new CI artifact for exact status.
+
+### Expanded live probe — 24 October 2026
+
+At finalized block `221346297`, the PR #13 read-only advisory workflow
+sampled **100 of 72,768 accounts** across **10 deterministic index windows**.
+It reported `NO_ELIGIBLE_POSITIONS` with 0 matched accounts, 0 compared
+balance legs and 0 schema failures. **No deployed share parity comparison
+was completed** because no debt-bearing isolated position was observed in
+this bounded sample. A zero schema-error count in untested detailed views
+is not evidence of view compatibility.
+
+The CI wrapper showed success, but the Stage 10 step itself exited code 2.
+See [live workflow run 40067455095](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40067455095).
+A future candidate-discovery stage needs a defensible way to select accounts
+with active borrow positions before claiming same-block differential evidence.
+Never interpret a 100-account sample as proof there are no borrowers in the
+other **72,668 accounts**; the account count and allocation can change between
+blocks.
