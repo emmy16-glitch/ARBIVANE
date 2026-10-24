@@ -121,3 +121,8 @@ See [Stage 8 source-math verification](RHEA_STAGE8_SOURCE_MATH.md).
 
 ## Stage 9: Deployed borrower share differential
 Implemented: strictly block-pinned share-to-amount comparisons to the deployed `get_account` view on a bounded borrower sample; on-chain code hash observations and optional pins; explicit incompatible and mismatch outcomes. **Liquidation, oracle, custody and bytecode parity still not verified.**
+
+
+### Stage 10 — isolated-position differential, not execution approval
+
+Read-only `get_account_all_positions` validation, position-scoped shares, pinned finalized blocks and adverse schema tests. A live advisory probe reports its true JSON status separately from the green CI wrapper. Follow-up: prove deployed Wasm provenance, inspect any unsupported position schema, validate dynamic interest accrual, price composition and mutation rules; leave signing and money movement disabled.
