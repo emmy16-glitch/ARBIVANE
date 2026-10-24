@@ -196,3 +196,27 @@ eligibility. This stage is **not** a NEAR WASM execution test; current Rhea
 pricing, USN debt, modern isolated markets, source-to-code-hash provenance,
 and liquidator financing remain unresolved. See
 [Stage 8 source-math evidence](docs/RHEA_STAGE8_SOURCE_MATH.md).
+
+## Stage 9 — deployed borrower share-balance differential (READ ONLY)
+
+`npm run probe:rhea:share-parity` pins the current finalized mainnet block,
+checks lending and oracle code-hash observations, reads a capped page of borrower
+accounts, and compares independent 27-decimal *historical source* pool/share
+amounts with `get_account` balances at that **same block**. It reports mismatches,
+unsupported account formats and an empty/debt-free sample as separate outcomes.
+The tool never reads secrets, signs transactions, or authorizes liquidation.
+
+```bash
+export EXECUTION_ENABLED=false
+export NEAR_NETWORK=mainnet
+export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
+export RHEA_LENDING_CONTRACT=contract.main.burrow.near
+export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
+npm run probe:rhea:share-parity
+```
+
+A result of `SAMPLED_SHARE_MATCH` proves **only sampled share-to-balance parity**,
+not price-source, liquidation, contract-bytecode, borrower-position or
+profitability parity. A read-only GitHub Actions run records its evidence;
+errors are advisory and **do not make CI a financial-approval gate**.
+See [Stage 9 notes](docs/RHEA_STAGE9_DEPLOYED_PARITY.md).

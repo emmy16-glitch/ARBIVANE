@@ -8,6 +8,7 @@ on:
       - 'tests/rhea-market-metadata.test.mjs'
       - 'tests/rhea-coverage.test.mjs'
       - 'tests/rhea-borrower-audit.test.mjs'
+      - 'tests/rhea-deployed-share-parity.test.mjs'
       - '.github/workflows/rhea-readonly-probe.yml'
 permissions:
   contents: read
@@ -84,12 +85,29 @@ jobs:
         run: |
           set -o pipefail
           npm run probe:rhea:borrowers | tee rhea-borrower-evidence.json
+      - name: Compare observed borrower balances to source pool/share math (Stage 9; advisory)
+        id: share_parity
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_STAGE9_MAX_ACCOUNTS: '40'
+          RHEA_STAGE9_PAGE_SIZE: '10'
+          RHEA_STAGE9_MAX_DETAILS: '8'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:share-parity | tee rhea-share-parity-evidence.json
       - name: Record probe outcome (advisory, not a safety approval)
         if: always()
         run: |
           echo "Legacy method probe outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pyth sample feed probe outcome: ${{ steps.aggregate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Lending metadata probe outcome: ${{ steps.metadata.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Stage 9 deployed share differential outcome: ${{ steps.share_parity.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Even a matching sample does NOT prove audited deployed Wasm or executable liquidation parity." >> "$GITHUB_STEP_SUMMARY"
           echo "Stage 7 borrower sample outcome: ${{ steps.borrowers.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "The first N accounts are NOT a representative sample; no liquidation parity verified." >> "$GITHUB_STEP_SUMMARY"
           echo "Stage 6 pool exposure outcome: ${{ steps.coverage.outcome }}" >> "$GITHUB_STEP_SUMMARY"
@@ -105,5 +123,6 @@ jobs:
             rhea-metadata-evidence.json
             rhea-coverage-evidence.json
             rhea-borrower-evidence.json
+            rhea-share-parity-evidence.json
           if-no-files-found: warn
           retention-days: 7
