@@ -1,0 +1,109 @@
+name: NEAR Rhea progressive shard review (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Optional existing NEAR 96-shard scan run ID; blank selects newest main push'
+        required: false
+        default: ''
+        type: string
+  schedule:
+    - cron: '23 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-progressive-shard-review.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: near-rhea-stage21-progressive-review
+  cancel-in-progress: false
+jobs:
+  progressive-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Select one unreviewed trusted shard from live OR completed NEAR scan
+        id: pick
+        env:
+          GH_TOKEN: \${{ github.token }}
+          REQUESTED_RUN: \${{ inputs.source_run_id }}
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+        run: |
+          set -euo pipefail
+          run="$REQUESTED_RUN"
+          if [ -z "$run" ]; then
+            run="$(gh api "repos/\${GITHUB_REPOSITORY}/actions/workflows/rhea-sharded-index.yml/runs?event=push&branch=main&per_page=1" --jq '.workflow_runs[0].id // empty')"
+          fi
+          if [ -z "$run" ]; then
+            echo "No qualifying source run yet" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$run" =~ ^[1-9][0-9]{0,17}$ ]] || exit 2
+          gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/$run" | jq -e --arg repo "$GITHUB_REPOSITORY" \
+            '.repository.full_name == $repo and .head_repository.full_name == $repo and .event == "push" and .head_branch == "main" and .name == "NEAR Rhea sharded borrower index (read only)"' > /dev/null
+          gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/$run/artifacts?per_page=100" > source-artifacts.json
+          gh api --paginate "repos/\${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[].name' > reviewed-names.txt
+          RHEA_REVIEW_SOURCE_RUN_ID="$run" \
+            RHEA_REVIEW_SOURCE_ARTIFACTS_PATH=source-artifacts.json \
+            RHEA_REVIEWED_NAMES_PATH=reviewed-names.txt \
+            npm run probe:rhea:select-shard-review > selected-shard.json
+          if jq -e '.shardId != null' selected-shard.json > /dev/null; then
+            echo "run=$run" >> "$GITHUB_OUTPUT"
+            echo "shard=$(jq -r '.shardId' selected-shard.json)" >> "$GITHUB_OUTPUT"
+            echo "artifact=$(jq -r '.sourceArtifactName' selected-shard.json)" >> "$GITHUB_OUTPUT"
+            echo "review_name=$(jq -r '.reviewArtifactName' selected-shard.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new trusted shard artifact for source run $run" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Download one already persisted NEAR detailed shard
+        if: \${{ steps.pick.outputs.shard != '' }}
+        env:
+          GH_TOKEN: \${{ github.token }}
+          SOURCE_RUN: \${{ steps.pick.outputs.run }}
+          ARTIFACT: \${{ steps.pick.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" -R "$GITHUB_REPOSITORY" -n "$ARTIFACT" -D observed-shard
+      - name: Reattest the exact old NEAR block and inspect bounded borrower evidence
+        if: \${{ steps.pick.outputs.shard != '' }}
+        id: review
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_OBSERVED_SHARD_FILE: observed-shard/shard-\${{ steps.pick.outputs.shard }}.json
+          RHEA_OBSERVED_SHARD_ID: \${{ steps.pick.outputs.shard }}
+          RHEA_OBSERVED_SHARD_COUNT: '96'
+          RHEA_INDEX_FINDING_CURSOR: '0'
+          RHEA_INDEX_MAX_FINDINGS: '4'
+          RHEA_INDEX_MAX_FEEDS: '12'
+          RHEA_OBSERVED_REPORT_PATH: stage21-reviewed-evidence.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:observed-shard
+      - name: Record confirmed but limited evidence
+        if: always()
+        env:
+          SOURCE_RUN: \${{ steps.pick.outputs.run }}
+          SHARD: \${{ steps.pick.outputs.shard }}
+          REVIEW_OUTCOME: \${{ steps.review.outcome }}
+        run: |
+          echo "Source scan: $SOURCE_RUN; shard: $SHARD; read-only review: $REVIEW_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          echo 'This is an observed single-shard review, NOT a complete market index or liquidation/profit proof.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'A failed historical RPC recheck is NOT treated as a clean review and may be retried.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: \${{ steps.review.outcome == 'success' }}
+        with:
+          name: \${{ steps.pick.outputs.review_name }}
+          path: stage21-reviewed-evidence.json
+          if-no-files-found: error
+          retention-days: 7
