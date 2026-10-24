@@ -39,12 +39,13 @@ jobs:
           set -euo pipefail
           run="$REQUESTED_RUN"
           if [ -z "$run" ]; then
-            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/rhea-sharded-index.yml/runs?event=push&branch=main&per_page=1" --jq '.workflow_runs[0].id // empty')"
+            run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=push&branch=main&per_page=100" --jq '[.workflow_runs[] | select(.name == "NEAR Rhea sharded borrower index (read only)")][0].id // empty')"
           fi
           if [ -z "$run" ]; then
             echo "No qualifying source run yet" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          echo "Source index run: $run" >> "$GITHUB_STEP_SUMMARY"
           [[ "$run" =~ ^[1-9][0-9]{0,17}$ ]] || exit 2
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$run" | jq -e --arg repo "$GITHUB_REPOSITORY" \
             '.repository.full_name == $repo and .head_repository.full_name == $repo and .event == "push" and .head_branch == "main" and .name == "NEAR Rhea sharded borrower index (read only)"' > /dev/null
