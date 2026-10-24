@@ -40,6 +40,18 @@ function name(v:unknown,label:string):string {
 export interface ParityPool { supplied:{shares:bigint;balance:bigint}; borrowed:{shares:bigint;balance:bigint} }
 export interface ShareMismatch { role:'collateral'|'borrowed'; tokenId:string; reason:'SHARES_MISMATCH'|'BALANCE_MISMATCH'; expected:string; observed:string }
 export interface AccountShareParity { positionCount:number; mismatches:ShareMismatch[] }
+/** Diagnostic categories only. Never copy untrusted RPC errors or borrower IDs to CI logs. */
+export type SchemaFailureCode = 'ISOLATED_POSITIONS_PRESENT' | 'PAGED_POSITIONS_MISSING' |
+  'UNKNOWN_OR_DUPLICATE_ASSET' | 'PAGED_SHARES_FORMAT_UNSUPPORTED' |
+  'DETAILED_RECORD_MISSING' | 'DETAILED_RECORD_UNSUPPORTED' | 'OTHER_SCHEMA_ERROR';
+export function categorizeSchemaFailure(err:unknown,phase:'paged'|'detailed'):SchemaFailureCode {
+  const message=err instanceof Error?err.message:'';
+  if(message.includes('UNSUPPORTED_ISOLATED_POSITIONS'))return 'ISOLATED_POSITIONS_PRESENT';
+  if(message.includes('missing borrowed shares')||message.includes('missing collateral shares'))return 'PAGED_POSITIONS_MISSING';
+  if(message.includes('unknown or duplicate'))return 'UNKNOWN_OR_DUPLICATE_ASSET';
+  if(phase==='paged')return 'PAGED_SHARES_FORMAT_UNSUPPORTED';
+  return 'DETAILED_RECORD_UNSUPPORTED';
+}
 
 /** Reject legacy/new contract schema ambiguity and all unrecognized assets. */
 export function parseParityPools(raw:unknown):Map<string,ParityPool> {
@@ -151,6 +163,7 @@ export interface DeployedShareReport {
   mismatchedAccounts:number;
   mismatchCount:number;
   schemaFailures:number;
+  schemaFailureReasons: Partial<Record<SchemaFailureCode,number>>;
   warnings:string[];
 }
 
@@ -179,6 +192,8 @@ export async function probeDeployedShares(rpc:NearReadOnlyRpc,cfg:DeployedParity
   const total=borrowerCount(count.value);
   const sampleLimit=Math.min(total,cfg.maxAccounts);
   let examined=0,checked=0,checkedPositions=0,mismatched=0,mismatchCount=0,schemaFailures=0;
+  const schemaFailureReasons:Partial<Record<SchemaFailureCode,number>>={};
+  const countSchema=(reason:SchemaFailureCode)=>{schemaFailures++;schemaFailureReasons[reason]=(schemaFailureReasons[reason]??0)+1;};
   let anyDebt=false;
   for(let index=0;index<sampleLimit && checked<cfg.maxDetailedAccounts;index+=cfg.pageSize){
     const limit=Math.min(cfg.pageSize,sampleLimit-index);
@@ -191,17 +206,17 @@ export async function probeDeployedShares(rpc:NearReadOnlyRpc,cfg:DeployedParity
       // Must not treat a malformed candidate as a debt-free account.
       let debts:Map<string,bigint>;
       try { debts=pagedShares(row,'borrowed',pools);pagedShares(row,'collateral',pools); }
-      catch{schemaFailures++;continue;}
+      catch(err){countSchema(categorizeSchemaFailure(err,'paged'));continue;}
       if(debts.size===0)continue;
       anyDebt=true;
       const detail=await rpc.view<unknown>(cfg.lendingContract,'get_account',{account_id:row.account_id},height);
       if(detail.blockHeight!==String(height))throw Error('unmatched detailed borrower block');
-      if(detail.value===null){schemaFailures++;continue;}
+      if(detail.value===null){countSchema('DETAILED_RECORD_MISSING');continue;}
       try {
         const comparison=compareAccountShareParity(raw,detail.value,pools);
         checked++;checkedPositions+=comparison.positionCount;
         if(comparison.mismatches.length){mismatched++;mismatchCount+=comparison.mismatches.length;}
-      }catch{schemaFailures++;}
+      }catch(err){countSchema(categorizeSchemaFailure(err,'detailed'));}
       if(checked>=cfg.maxDetailedAccounts)break;
     }
   }
@@ -216,5 +231,5 @@ export async function probeDeployedShares(rpc:NearReadOnlyRpc,cfg:DeployedParity
     priceParityVerified:false,shareMathSampledOnly:true,blockHeight:String(height),lendingCodeHash:lending.codeHash,
     oracleCodeHash:oracle.codeHash,codeHashPinsProvided:!!cfg.expectedLendingCodeHash&&!!cfg.expectedOracleCodeHash,
     checkedAccounts:checked,examinedAccounts:examined,totalAccounts:total,checkedPositions,
-    mismatchedAccounts:mismatched,mismatchCount,schemaFailures,warnings};
+    mismatchedAccounts:mismatched,mismatchCount,schemaFailures,schemaFailureReasons,warnings};
 }

@@ -125,3 +125,20 @@ test('fractional and negative numeric account counts fail closed',async()=>{
   await assert.rejects(()=>probeDeployedShares(rpc,settings),/invalid total borrower count/);
  }
 });
+
+test('diagnostics classify on-chain schema failures without printing account identities',async()=>{
+ const {rpc}=mock({patch:async(args,old)=>args[1]==='get_accounts_paged'
+   ?{blockHeight:'101',value:[{account_id:'alice.near',positions:{isolated:{borrowed:{usn:'3'}}}},{account_id:'bob.near',borrowed:{},collateral:{}}]}
+   :old()});
+ const report=await probeDeployedShares(rpc,settings);
+ assert.equal(report.status,'UNSUPPORTED_ACCOUNT_SCHEMA');
+ assert.equal(report.schemaFailureReasons.ISOLATED_POSITIONS_PRESENT,1);
+ assert.equal(JSON.stringify(report).includes('alice.near'),false);
+});
+test('diagnostic exposes missing paged fields as a bounded failure code',async()=>{
+ const {rpc}=mock({patch:async(args,old)=>args[1]==='get_accounts_paged'
+   ?{blockHeight:'101',value:[{account_id:'alice.near',borrowed:{usn:'3'}},{account_id:'bob.near',borrowed:{},collateral:{}}]}
+   :old()});
+ const r=await probeDeployedShares(rpc,settings);
+ assert.equal(r.schemaFailureReasons.PAGED_POSITIONS_MISSING,1);
+});

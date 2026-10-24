@@ -83,3 +83,18 @@ Only after independent custody and financing proofs should transaction execution
 considered.
 
 **Initial live probe correction:** The first advisory run returned an on-chain `get_num_accounts` JSON number, not a numeric string. The strict parser now accepts bounded, safe-integer `u32`-style numbers for the account count only, retaining exact string-only `u128` validation for all share and token balances.
+
+## Stage 9 live CI verification outcome (2026-10-24)
+
+The first live sampling run on PR #11 did **not** pass: 40 sampled accounts
+produced 40 schema failures and zero completed balance comparisons. GitHub
+Actions showed a green *advisory workflow* because the live step explicitly
+used `continue-on-error`; the Stage 9 JSON result was
+`UNSUPPORTED_ACCOUNT_SCHEMA`. This is not evidence of deployed parity.
+
+A follow-up diagnostic now classifies failures into bounded, non-identifying
+categories (e.g. isolated positions, missing top-level borrowed/collateral,
+unsupported detailed row). The categories do not relax any guardrail or
+authorize a transaction. Inspect the JSON report and adapt only to a
+verified, source-backed current schema; do not assume the historical
+`get_account` view is compatible with modern isolated positions.
