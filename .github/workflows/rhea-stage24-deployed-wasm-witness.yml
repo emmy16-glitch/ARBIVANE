@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts > stage24-deployed-wasm-witness.json
-          jq -e '.lending.codeBytesHashMatched == true and .oracle.codeBytesHashMatched == true and .lending.blockHeight == .oracle.blockHeight and .lending.blockHeight == .blockHeight and .sourceWasmReproduciblyMatched == false and .deployedLiquidationRulesVerified == false and .transactionDryRunPerformed == false and .mayBroadcast == false and .executionEnabled == false' stage24-deployed-wasm-witness.json
+          jq -e '.lending.codeBytesHashMatched == true and .oracle.codeBytesHashMatched == true and (.configuredOracle == null or (.configuredOracle.codeBytesHashMatched == true and .configuredOracle.blockHeight == .blockHeight)) and .lending.blockHeight == .oracle.blockHeight and .lending.blockHeight == .blockHeight and .sourceWasmReproduciblyMatched == false and .deployedLiquidationRulesVerified == false and .transactionDryRunPerformed == false and .mayBroadcast == false and .executionEnabled == false' stage24-deployed-wasm-witness.json
       - name: Record strictly read-only interpretation
         if: always()
         run: |
