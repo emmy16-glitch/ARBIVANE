@@ -304,3 +304,19 @@ Try the explicitly synthetic example in
 [`examples/stage16-synthetic.json`](examples/stage16-synthetic.json), and read
 [`docs/RHEA_STAGE16_PAPER_OPPORTUNITIES.md`](docs/RHEA_STAGE16_PAPER_OPPORTUNITIES.md).
 Do not treat the fabricated sample as NEAR mainnet account evidence.
+
+
+### Stage 17 — Checkpoint-driven NEAR Rhea health bridge
+
+The read-only Stage 17 bridge consumes a genuine Stage 14 same-block checkpoint
+from NEAR mainnet, revisits only indexed debt-bearing accounts and their isolated
+positions, checks Stage 10 share parity, validates same-block Pyth quotes, and
+passes clean evidence into Stage 15 paper-health calculations. Stage 16 paper
+scenarios remain explicitly operator-supplied; this stage never invents a
+repayment or profitability estimate. See
+[Stage 17 documentation](docs/RHEA_STAGE17_INDEXED_HEALTH.md).
+
+Run `npm run probe:rhea:indexed-health` with
+`RHEA_INDEX_CHECKPOINT_PATH` and `EXECUTION_ENABLED=false`. GitHub provides a
+manual read-only workflow. A cancelled full-index run does **not** provide a
+verified market count, and no current liquidatable borrowers are claimed.

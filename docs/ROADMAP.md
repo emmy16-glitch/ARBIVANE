@@ -183,3 +183,14 @@ See [Stage 15 notes](RHEA_STAGE15_PAPER_HEALTH.md).
 - [ ] Complete the NEAR mainnet backfill, deployed contract and price parity,
   executable liquidity and fee quotes, safe custody/limits and MEV analysis.
 See [Stage 16 scope](RHEA_STAGE16_PAPER_OPPORTUNITIES.md).
+
+
+## Stage 17 checkpoint-to-health integration
+
+Implemented: strict Stage 14 checkpoint validation, targeted one-row NEAR index
+rechecks, isolated-position scope and share parity, pooled Pyth price validation,
+Stage 15 historical-source health results, and optional Stage 16 hypothetical
+scenario scoring. Manual GitHub Actions workflow and comprehensive mocks added.
+Pending: reliable complete real debt index, current deployed Rhea contract parity,
+production price coverage, real competition/funding/fee estimates, custody proofs
+and safe execution. Live liquidation remains disabled.

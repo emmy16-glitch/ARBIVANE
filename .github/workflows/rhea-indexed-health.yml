@@ -1,0 +1,65 @@
+name: NEAR Rhea checkpoint health bridge (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Stage 14 full-index GitHub Actions run with a checkpoint artifact'
+        required: true
+        type: string
+      from_finding:
+        description: 'Finding cursor (index into saved debt-bearing accounts)'
+        required: true
+        default: '0'
+        type: string
+      max_findings:
+        description: 'Bounded debt accounts to inspect (1 to 20)'
+        required: true
+        default: '8'
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  indexed-paper-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download a completed index checkpoint artifact from this repository
+        uses: actions/download-artifact@v4
+        with:
+          name: near-rhea-debt-index-readonly
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: stage17-input
+      - name: Recheck indexed borrower positions at EXACT checkpoint block (public views only)
+        id: indexed
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_INDEX_CHECKPOINT_PATH: stage17-input/output/rhea-debt-index.checkpoint.json
+          RHEA_INDEX_FINDING_CURSOR: ${{ inputs.from_finding }}
+          RHEA_INDEX_MAX_FINDINGS: ${{ inputs.max_findings }}
+          RHEA_INDEX_MAX_FEEDS: '16'
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:indexed-health | tee rhea-indexed-health-evidence.json
+      - name: Record that this diagnostic does NOT attest liquidation eligibility
+        if: always()
+        run: |
+          echo "Index-to-health bridge: ${{ steps.indexed.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Inspect actual JSON: a green runner does not prove current prices, contract math parity, funding, liquidation eligibility, or realized profit.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'A partial, cancelled, or schema-invalid Stage 14 checkpoint remains incomplete evidence.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-indexed-paper-health
+          path: rhea-indexed-health-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
