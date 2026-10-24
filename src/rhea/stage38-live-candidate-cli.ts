@@ -1,5 +1,6 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from './rpc.ts';
+import {PacedNearReadOnlyRpc} from './paced-readonly-rpc.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 import type {SweepCheckpoint} from './full-active-pyth-sweep.ts';
 import {qualifyStage38Candidates} from './stage38-live-candidate-pipeline.ts';
@@ -15,7 +16,7 @@ const n=(key:string,def:string)=>{
   !e.RHEA_STAGE38_STAGE32_REPORT_FILE)throw Error('STAGE38_VERIFIED_READONLY_ARTIFACTS_REQUIRED');
  const source=JSON.parse(await readFile(e.RHEA_STAGE38_SOURCE_FILE,'utf8')) as CompletePagedIndex;
  const prior=JSON.parse(await readFile(e.RHEA_STAGE38_STAGE32_REPORT_FILE,'utf8')) as SweepCheckpoint;
- const results=await qualifyStage38Candidates(new NearReadOnlyRpc(e.NEAR_RPC_URL),source,prior,{
+ const results=await qualifyStage38Candidates(new PacedNearReadOnlyRpc(new NearReadOnlyRpc(e.NEAR_RPC_URL),Number(e.RHEA_RPC_SPACING_MS??'700')),source,prior,{
   startFinding:n('RHEA_STAGE38_START_FINDING','332'),maxFindings:n('RHEA_STAGE38_MAX_FINDINGS','80'),
   maxRiskCandidates:12,concurrency:2,
   lendingContract:e.RHEA_LENDING_CONTRACT??'',pythOracle:e.RHEA_ORACLE_CONTRACT??'',
