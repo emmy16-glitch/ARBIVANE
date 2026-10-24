@@ -75,6 +75,7 @@ export function attestFinalMainnetLiquidation(
  if(!Array.isArray(payload.actions)||payload.actions.length!==3)
   throw Error('NOT_THREE_ACTION_LIQUIDATION');
  const [b,l,w]=payload.actions.map((x:unknown)=>object(x,'LENDING_ACTION'));
+ if(!b||!l||!w)throw Error('MISSING_LIQUIDATION_ACTION');
  const borrow=object(b.Borrow,'BORROW');
  const liquidate=object(l.Liquidate,'LIQUIDATE');
  const withdrawal=object(w.Withdraw,'WITHDRAW');
