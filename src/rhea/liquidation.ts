@@ -63,6 +63,12 @@ export function assessPaperLiquidation(account: RheaAccount, market: RheaMarket,
   const adjustedCollateral = [...s.updated.values()].reduce((v, p) => v + p.adjustedUsdE6, 0n);
   const adjustedDebt = [...r.updated.values()].reduce((v, p) => v + p.adjustedUsdE6, 0n);
   if (adjustedDebt === 0n || adjustedCollateral >= adjustedDebt) reasons.push("FINAL_HEALTH_NOT_BELOW_ONE");
+  // The fourth on-chain liquidation invariant requires health to strictly IMPROVE.
+  // Compare exact adjusted ratios (not rounded displayed basis points).
+  if (adjustedDebt > 0n && account.adjustedDebtUsdE6 > 0n &&
+      adjustedCollateral * account.adjustedDebtUsdE6 <= account.adjustedCollateralUsdE6 * adjustedDebt) {
+    reasons.push("FINAL_HEALTH_NOT_IMPROVED");
+  }
   return {
     mode: "PAPER_RULES_ONLY", satisfiesDocumentedRules: reasons.length === 0, reasons,
     repaidUsdE6: repaidUsd.toString(), seizedUsdE6: seizedUsd.toString(),

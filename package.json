@@ -17,7 +17,8 @@
     "probe:rhea:aggregate": "node --experimental-strip-types src/rhea/aggregate-probe-cli.ts",
     "probe:rhea:metadata": "node --experimental-strip-types src/rhea/market-metadata-cli.ts",
     "probe:rhea:coverage": "node --experimental-strip-types src/rhea/coverage-cli.ts",
-    "probe:rhea:borrowers": "node --experimental-strip-types src/rhea/borrower-audit-cli.ts"
+    "probe:rhea:borrowers": "node --experimental-strip-types src/rhea/borrower-audit-cli.ts",
+    "audit:rhea:source": "EXECUTION_ENABLED=false node --experimental-strip-types src/rhea/source-audit-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

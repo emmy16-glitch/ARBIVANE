@@ -175,3 +175,24 @@ sample matches. Source details: [Stage 7 notes](docs/RHEA_STAGE7_BORROWERS.md).
 
 No signing functionality, transaction submission, collateral custody, or real
 profit extraction was added in Stage 7.
+
+## Stage 8 — reference-source differential math (strictly offline)
+
+The Stage 8 suite fixes a fourth protocol rule that was missing from the Stage 2
+paper-liquidation checker: **a liquidation must strictly improve the borrower's
+health factor** while leaving it below 100%. An independent 27-decimal source
+formula model now checks share conversion and rounding against a pinned **2022**
+Burrow contract source revision. It explicitly reports precision disagreements
+with our existing conservative micro-USD approximation.
+
+Run the *synthetic example only*:
+
+```bash
+npm run audit:rhea:source
+```
+
+The report never asserts currently deployed contract parity, profit, or trade
+eligibility. This stage is **not** a NEAR WASM execution test; current Rhea
+pricing, USN debt, modern isolated markets, source-to-code-hash provenance,
+and liquidator financing remain unresolved. See
+[Stage 8 source-math evidence](docs/RHEA_STAGE8_SOURCE_MATH.md).

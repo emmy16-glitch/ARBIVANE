@@ -106,3 +106,15 @@ See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
 - Count missing-price collateral/debt exposure without treating shares as USD.
 - Check reference fixtures against indicative arithmetic; never grant parity.
 - **Not complete:** exhaustive borrower enumeration, on-chain source verification, USN authoritative valuation, deployed liquidation math, custody safety, TEE, real execution.
+
+### Stage 8 — historical source arithmetic and full four-rule guard (implemented, no deployment)
+- [x] Pin and study a **historical** public Burrow contract source commit for mathematical references.
+- [x] Add the previously missing liquidation safety invariant: borrower health must strictly improve.
+- [x] Implement a separate 27-decimal upstream-formula model of ratio rounding, share accounting and balance valuation.
+- [x] Add an offline differential comparison that reports exact rounding divergence without clearing financial risk.
+- [x] Add regression fixtures and an offline example CLI; all outputs mark live parity and execution approval false.
+- [ ] Match the currently deployed mainnet contract's WASM hash to an auditable source revision.
+- [ ] Validate today's Pyth/default/derived pricing paths and all legacy debt exposures.
+- [ ] Validate complete liquidation pool mutations and receipt-reconciled execution in an isolated sandbox before any funds.
+
+See [Stage 8 source-math verification](RHEA_STAGE8_SOURCE_MATH.md).
