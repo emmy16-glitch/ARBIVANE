@@ -1,0 +1,51 @@
+name: Rhea Stage35 live atomic-reference sizing (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage35-atomic-reference-sizing.yml'
+  pull_request:
+    paths:
+      - 'src/rhea/stage35-atomic-reference-sizing.ts'
+      - 'src/rhea/stage35-atomic-reference-sizing-cli.ts'
+      - 'tests/rhea-stage35-reference-sizing.test.mjs'
+      - '.github/workflows/rhea-stage35-atomic-reference-sizing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-sizing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Source math test before live NEAR sizing
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types --test tests/rhea-stage35-reference-sizing.test.mjs
+      - name: Price and size tiny paper-only Rhea liquidation at SAME finalized block
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: godlike.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage35-atomic-reference-sizing-cli.ts > stage35-sizing.json
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and .chain == "NEAR_MAINNET" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .contractRouteParityVerified == false and .rawTokenDenominationsVerified == false and .sandboxStateReplaySucceeded == false and .gasAndSwapNetProfitVerified == false and .walletCapitalVerified == false and .mainnetWalletApproved == false and (.status | IN("PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE","NO_SAFE_SOURCE_SCENARIO","NO_CURRENT_REFERENCE_RISK","BLOCKED_READONLY_OBSERVATION_ERROR"))' stage35-sizing.json
+          jq '{borrowerAccountId,blockHeight,status,referenceRulesPass,referenceInitialHealthBps,referenceAfterHealthBps,consideredPairs,reasonCode,executionEnabled}' stage35-sizing.json >> "$GITHUB_STEP_SUMMARY"
+          echo "Reference math is NOT a contract transaction, profit guarantee or mainnet liquidation eligibility." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage35-reference-sizing
+          path: stage35-sizing.json
+          retention-days: 14
+          if-no-files-found: warn
