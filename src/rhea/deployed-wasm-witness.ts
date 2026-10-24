@@ -22,8 +22,9 @@ export interface Stage24Report {
  mode:'RHEA_STAGE24_DEPLOYED_WASM_WITNESS';chain:'NEAR_MAINNET';
  status:'DEPLOYED_CODE_BYTES_ATTESTED_SOURCE_UNVERIFIED';
  blockHeight:string;lending:CodeWitness;oracle:CodeWitness;
+ configuredOracle:CodeWitness|null;
  lendingConfigOracleAccountId:string|null;oracleAccountPointerStatus:
-  'EXPLICIT_MATCH'|'NOT_EXPOSED_IN_CONFIG';
+  'EXPLICIT_MATCH'|'DISTINCT_CONFIGURED_ORACLE'|'NOT_EXPOSED_IN_CONFIG';
  pythOracleEnabled:boolean|null;
  liquidationMethodSurfaceObserved:boolean;
  sourceWasmReproduciblyMatched:false;deployedLiquidationRulesVerified:false;
@@ -114,17 +115,28 @@ export async function inspectStage24DeployedWasm(
  const pointer=config.oracle_account_id;
  if(pointer!==undefined&&pointer!==null&&(typeof pointer!=='string'||!ACCOUNT.test(pointer)))
   throw Error('INVALID_CONFIG_ORACLE_POINTER');
- if(typeof pointer==='string'&&pointer!==args.oracleContract)throw Error('CONFIG_ORACLE_MISMATCH');
+ // The legacy lending oracle and the aggregate/Pyth price reader may be distinct contracts.
+ // Observe their separate code identities rather than treating the operator's reader as the configured execution oracle.
  const pyth=config.enable_pyth_oracle;
  if(pyth!==undefined&&typeof pyth!=='boolean')throw Error('INVALID_PYTH_ORACLE_FLAG');
  const [lending,oracle]=await Promise.all([
   attestWasmBytes(args.lendingContract,height,identity.lendingCodeHash,lendingRead.codeBase64,lendingRead.rpcCodeHash),
   attestWasmBytes(args.oracleContract,height,identity.oracleCodeHash,oracleRead.codeBase64,oracleRead.rpcCodeHash),
  ]);
+ let configuredOracle:CodeWitness|null=null;
+ if(typeof pointer==='string'&&pointer!==args.oracleContract){
+  if(pointer===args.lendingContract)throw Error('INVALID_CONFIG_ORACLE_SELF_POINTER');
+  const account=await rpc.viewAccount(pointer,Number(height));
+  if(account.blockHeight!==height)throw Error('CONFIGURED_ORACLE_CROSS_BLOCK');
+  const code=await fetchFinalizedWasm(rpcUrl,pointer,height,fetcher);
+  configuredOracle=await attestWasmBytes(pointer,height,account.codeHash,code.codeBase64,code.rpcCodeHash);
+ }
  return {mode:'RHEA_STAGE24_DEPLOYED_WASM_WITNESS',chain:'NEAR_MAINNET',
   status:'DEPLOYED_CODE_BYTES_ATTESTED_SOURCE_UNVERIFIED',blockHeight:height,lending,oracle,
+  configuredOracle,
   lendingConfigOracleAccountId:typeof pointer==='string'?pointer:null,
-  oracleAccountPointerStatus:typeof pointer==='string'?'EXPLICIT_MATCH':'NOT_EXPOSED_IN_CONFIG',
+  oracleAccountPointerStatus:typeof pointer==='string'?
+   (pointer===args.oracleContract?'EXPLICIT_MATCH':'DISTINCT_CONFIGURED_ORACLE'):'NOT_EXPOSED_IN_CONFIG',
   pythOracleEnabled:typeof pyth==='boolean'?pyth:null,
   liquidationMethodSurfaceObserved:lending.executeExportPresent,
   sourceWasmReproduciblyMatched:false,deployedLiquidationRulesVerified:false,
@@ -135,5 +147,6 @@ export async function inspectStage24DeployedWasm(
    'NO_STATEFUL_TRANSACTION_REPLAY','NO_REAL_FINANCING_GAS_OR_NET_PROFIT_PROOF',
    'WALLET_LIMITS_AND_INDEPENDENT_RELEASE_NOT_APPROVED',
    ...(typeof pointer==='string'?[]:['ORACLE_CONFIG_POINTER_NOT_EXPLICIT']),
+   ...(typeof pointer==='string'&&pointer!==args.oracleContract?['AGGREGATE_PRICE_READER_DIFFERS_FROM_CONFIGURED_ORACLE']:[]),
    ...(lending.executeExportPresent?[]:['EXECUTE_METHOD_NOT_EXPORTED'])]};
 }
