@@ -88,10 +88,10 @@ async function main(){
  await writeFile('stage37-sandbox-execution.json',JSON.stringify(report,null,2)+'\n');
  // Read actual AFTER state even if a callback says "success": detect false
  // positives, left-over borrow liabilities and zero seized FT inventory.
- const [borrowerAfter,actorAfter,repayFtAfter,seizeFtAfter]=await Promise.all([
-  lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
-  ...[snapshot()],
- ]).then(([borrower,row])=>[borrower,...row]);
+ const [borrowerAfter,actorBalancesAfter]=await Promise.all([
+  lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),snapshot(),
+ ]);
+ const [actorAfter,repayFtAfter,seizeFtAfter]=actorBalancesAfter;
  const settlement=attestStage41SandboxSettlement({
   plan,positionId:proposal.positionId,receipt:report,
   borrowerBefore:sandboxBorrower,borrowerAfter,
