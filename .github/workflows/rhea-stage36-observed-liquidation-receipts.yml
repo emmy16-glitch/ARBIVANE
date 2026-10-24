@@ -1,0 +1,46 @@
+name: Rhea Stage36 historical finalized liquidation receipt proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage36-observed-liquidation-receipts.yml'
+  pull_request:
+    paths:
+      - 'src/rhea/stage36-mainnet-receipt-audit.ts'
+      - 'src/rhea/stage36-mainnet-receipt-cli.ts'
+      - 'tests/rhea-stage36-mainnet-receipt-audit.test.mjs'
+      - '.github/workflows/rhea-stage36-observed-liquidation-receipts.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-mainnet-witness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify callback-failure treatment with deterministic transaction fixture
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types --test tests/rhea-stage36-mainnet-receipt-audit.test.mjs
+      - name: Read historic finalized Pyth liquidator transaction on mainnet
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage36-mainnet-receipt-cli.ts > stage36-finalized-historical-liquidation.json
+          jq -e '.mode == "RHEA_STAGE36_FINALIZED_PYTH_LIQUIDATION_RECEIPT_WITNESS" and .chain == "NEAR_MAINNET" and .maySign == false and .mayBroadcast == false and .netProfitVerified == false and (.status | IN("FAILED_EXECUTION_CONFIRMED","SUCCESSFUL_CALLBACK_WITHOUT_PROFIT_PROOF","BLOCKED_ARCHIVAL_TRANSACTION_UNAVAILABLE"))' stage36-finalized-historical-liquidation.json
+          jq '{status,transactionHash,method,borrowerAccountId,callbackRejectionCategory,failedReceiptCount,callbackReceipts,netProfitVerified}' stage36-finalized-historical-liquidation.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'A success on the initial call cannot override failed async receipts. No ARBIVANE transaction sent.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage36-observed-finalized-liquidation
+          path: stage36-finalized-historical-liquidation.json
+          retention-days: 14
+          if-no-files-found: warn
