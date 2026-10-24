@@ -79,7 +79,6 @@ jobs:
             stage39-positive-stage35-evidence.json
             stage39-sandbox-execution.json
             stage37-sandbox-execution.json
-
             stage41-sandbox-balance-settlement.json
           retention-days: 14
           if-no-files-found: warn
