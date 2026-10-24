@@ -63,7 +63,7 @@ test('shard merge rejects inconsistent block, missed ranges and cross-shard acco
  assert.throws(()=>mergeDebtShards([a,{...b,seenAccountIds:[...b.seenAccountIds.slice(0,4),a.seenAccountIds[0]]}],2),/DUPLICATE/);
 });
 test('invalid shard planner indices rejected before network work',()=>{
- for(const bad of [[10,-1,2],[10,2,2],[10,0,0],[10,0,17],[-2,0,3]])assert.throws(()=>shardRange(...bad),/INVALID/);
+ for(const bad of [[10,-1,2],[10,2,2],[10,0,0],[10,0,129],[-2,0,3]])assert.throws(()=>shardRange(...bad),/INVALID/);
 });
 
 test('full-market shards run once on a main workflow update and do not overload public RPC',async()=>{
@@ -73,4 +73,33 @@ test('full-market shards run once on a main workflow update and do not overload 
  assert.equal(yaml.split("github.event_name == 'workflow_dispatch' || github.event_name == 'push'").length-1,2);
  assert.ok(yaml.includes('max-parallel: 2'));
  assert.ok(yaml.includes("RHEA_DETAIL_CONCURRENCY: '2'"));
+});
+
+test('96 shard boundaries cover every original NEAR account index exactly once',()=>{
+ const total=72768,count=96;let next=0;
+ for(let i=0;i<count;i++){const r=shardRange(total,i,count);assert.equal(r.startIndex,next);
+  assert.ok(r.maxAccounts>0&&r.maxAccounts<=758);next+=r.maxAccounts;}
+ assert.equal(next,total);assert.throws(()=>shardRange(total,0,129),/INVALID/);
+});
+test('96-way shard merger never accepts a forged cross-shard borrower',()=>{
+ const parts=Array.from({length:96},(_,i)=>shard(960,i,96));
+ parts[7].findings.push({accountId:parts[7].seenAccountIds[0],classification:'DEBT_SHARES_DISCOVERED_UNVALUED',
+  positions:[{positionId:'7',debtAssetIds:[D],collateralRecorded:true}]});
+ const a=mergeDebtShards(parts,96);assert.equal(a.scannedAccounts,960);assert.equal(a.debtAccounts,1);
+ assert.throws(()=>mergeDebtShards(parts.slice(0,-1),96),/MISSING/);
+ const bad=parts.map(p=>({...p,findings:[...p.findings]}));
+ bad[8].findings.push({accountId:parts[7].seenAccountIds[0],classification:'DEBT_SHARES_DISCOVERED_UNVALUED',
+  positions:[{positionId:'8',debtAssetIds:[D],collateralRecorded:true}]});
+ assert.throws(()=>mergeDebtShards(bad,96),/INVALID_SHARD_FINDING/);
+});
+test('index workflow and health workflow both require 96 micro-shards',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const scan=await readFile(new URL('../.github/workflows/rhea-sharded-index.yml',import.meta.url),'utf8');
+ const health=await readFile(new URL('../.github/workflows/rhea-sharded-health.yml',import.meta.url),'utf8');
+ assert.ok(scan.includes("ids=$(jq -nc '[range(0;96)]')"));
+ assert.ok(scan.includes('fromJson(needs.preflight.outputs.ids)'));
+ assert.ok(scan.includes('TOTAL * SHARD / 96'));
+ assert.ok(scan.includes('RHEA_BACKFILL_CHECKPOINT_PATH: shard-'));
+ assert.ok(scan.includes("RHEA_SHARD_COUNT: '96'"));
+ assert.ok(health.includes("RHEA_SHARD_COUNT: '96'"));
 });
