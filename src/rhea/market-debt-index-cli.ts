@@ -30,20 +30,35 @@ async function main(){
     startIndex:numberEnv('RHEA_BACKFILL_FROM_INDEX','0'),
     maxAccounts:numberEnv('RHEA_BACKFILL_MAX_ACCOUNTS','100000'),
     pageSize:numberEnv('RHEA_BACKFILL_PAGE_SIZE','50'),
-    concurrency:numberEnv('RHEA_BACKFILL_CONCURRENCY','6'),
-    maxRetries:numberEnv('RHEA_BACKFILL_MAX_RETRIES','3'),
+    concurrency:numberEnv('RHEA_BACKFILL_CONCURRENCY','2'),
+    batchDelayMs:numberEnv('RHEA_BACKFILL_BATCH_DELAY_MS','1000'),
+    maxRetries:numberEnv('RHEA_BACKFILL_MAX_RETRIES','7'),
+    rateLimitBaseDelayMs:numberEnv('RHEA_BACKFILL_RATE_LIMIT_DELAY_MS','5000'),
     expectedLendingCodeHash:env.RHEA_EXPECTED_LENDING_CODE_HASH||undefined,
   };
-  const {checkpoint,summary}=await backfillRheaDebtIndex(new NearReadOnlyRpc(url),opts,prior,async(state,s)=>{
+  let latest:DebtBackfillCheckpoint|undefined;
+  let latestSummary:ReturnType<typeof import('./market-debt-index.ts').summarizeDebtBackfill>|undefined;
+  let checkpoint:DebtBackfillCheckpoint,summary:NonNullable<typeof latestSummary>;
+  try{
+  ({checkpoint,summary}=await backfillRheaDebtIndex(new NearReadOnlyRpc(url),opts,prior,async(state,s)=>{
+    latest=state;latestSummary=s;
     await save(checkpointPath,state);
     // Privacy-conscious CI logs: do not echo borrower identifiers in progress.
     console.error(JSON.stringify({mode:'NEAR_RHEA_BACKFILL_PROGRESS',blockHeight:s.blockHeight,scanned:s.scannedAccounts,
       total:s.totalAccounts,debtAccounts:s.debtAccounts,nextIndex:s.nextIndex,invalid:s.invalidAccounts}));
-  });
+  }));
+  }catch(error){
+    // Preserve the last fully committed batch and an explicitly incomplete report.
+    if(latest&&latestSummary){
+      await save(checkpointPath,latest);
+      await save(reportPath,{status:'INTERRUPTED_UNAPPROVED',summary:latestSummary,findings:latest.findings});
+    }
+    throw error;
+  }
   await save(checkpointPath,checkpoint);
   await save(reportPath,{summary,findings:checkpoint.findings});
   console.log(JSON.stringify(summary,null,2));
-  if(summary.status==='SCHEMA_ERRORS_UNVERIFIED')proc.exitCode=2;
+  if(summary.status==='SCHEMA_ERRORS_UNVERIFIED'||summary.status==='BORROWER_DEBT_MISSING_UNVERIFIED')proc.exitCode=2;
 }
 main().catch(error=>{
   console.error(JSON.stringify({mode:'NEAR_RHEA_SAME_BLOCK_BACKFILL',status:'PROBE_ERROR',executionEnabled:false,

@@ -282,3 +282,7 @@ Synthetic test cases that contain thousands of borrowers do **not** establish
 real mainnet counts. Use the GitHub Actions **NEAR Rhea full market debt index**
 workflow to gather live evidence, and inspect its JSON artifact and outcome.
 See [Stage 14 architecture and instructions](docs/RHEA_STAGE14_FULL_INDEX.md).
+
+### Stage 14.1 live backfill reliability
+
+The first complete-index attempt stopped after **5,100 / 72,768** NEAR account indices because the public RPC returned **HTTP 429**. The follow-up adds shared backoff, bounded page pacing, `Retry-After`, and cross-run **same-block-only** artifact checkpoint restoration. An observed positive lending-pool debt balance with zero discovered borrower positions at **full** completion now produces an explicit `BORROWER_DEBT_MISSING_UNVERIFIED` status. Neither CI success nor a partial count constitutes a verified debt market index. See [`docs/RHEA_STAGE14_FULL_INDEX.md`](docs/RHEA_STAGE14_FULL_INDEX.md). Trading is disabled.

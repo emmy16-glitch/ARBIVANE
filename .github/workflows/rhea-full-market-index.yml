@@ -10,14 +10,21 @@ on:
         description: 'Accounts to scan (up to 250000; current Rhea account count is much lower)'
         required: true
         default: '100000'
+      resume_run_id:
+        description: 'Optional previous full-market workflow run ID to resume exactly the same block'
+        required: false
+        default: ''
   pull_request:
     paths:
       - 'src/rhea/market-debt-index*'
       - 'src/rhea/debt-discovery.ts'
+      - 'src/rhea/rpc.ts'
+      - 'tests/rhea-rpc.test.mjs'
       - 'tests/rhea-full-market-index.test.mjs'
       - '.github/workflows/rhea-full-market-index.yml'
 permissions:
   contents: read
+  actions: read
 jobs:
   full-market-backfill:
     runs-on: ubuntu-latest
@@ -27,6 +34,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
+      - name: Recover previous GitHub Actions checkpoint (optional, same NEAR block only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: near-rhea-debt-index-readonly
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+          path: .
       - name: Full NEAR mainnet Rhea account index at ONE finalized block (views only)
         id: backfill
         env:
@@ -36,9 +51,13 @@ jobs:
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_BACKFILL_FROM_INDEX: ${{ github.event_name == 'workflow_dispatch' && inputs.from_index || '0' }}
           RHEA_BACKFILL_MAX_ACCOUNTS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_accounts || '100000' }}
+          RHEA_BACKFILL_RESUME: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_run_id != '' }}
           RHEA_BACKFILL_PAGE_SIZE: '50'
-          RHEA_BACKFILL_CONCURRENCY: '6'
-          RHEA_BACKFILL_MAX_RETRIES: '3'
+          RHEA_BACKFILL_CONCURRENCY: '2'
+          RHEA_BACKFILL_BATCH_DELAY_MS: '1250'
+          # Less than 2 page requests per second, with shared throttle and Retry-After support.
+          RHEA_BACKFILL_MAX_RETRIES: '7'
+          RHEA_BACKFILL_RATE_LIMIT_DELAY_MS: '5000'
           RHEA_BACKFILL_CHECKPOINT_PATH: output/rhea-debt-index.checkpoint.json
           RHEA_BACKFILL_REPORT_PATH: output/rhea-debt-index.report.json
         run: |
@@ -54,6 +73,7 @@ jobs:
           else
             echo 'No complete summary was produced. Inspect the checkpoint, logs, and errors.' >> "$GITHUB_STEP_SUMMARY"
           fi
+          echo 'For a failed run, manually use workflow_dispatch resume_run_id and the SAME from_index/max_accounts; historical NEAR block availability is required.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Borrowed shares are NOT liquidatable positions. Execution and price parity remain disabled.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()

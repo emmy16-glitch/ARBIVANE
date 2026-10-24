@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { backfillRheaDebtIndex, summarizeDebtBackfill } from '../src/rhea/market-debt-index.ts';
+import { backfillRheaDebtIndex, summarizeDebtBackfill, retryWaitMs } from '../src/rhea/market-debt-index.ts';
 const HASH='2'.repeat(43);
 const TOKEN='wrap.near',DEBT='usn';
 const assets=[
@@ -10,7 +10,7 @@ const assets=[
 const borrower=(i)=>({account_id:`account${i}.near`,positions:{
  [`position-${i}`]:{borrowed:i%3===0?[{token_id:DEBT,shares:'2'}]:[], collateral:i%3===0?[{token_id:TOKEN,shares:'2'}]:[]}
 }});
-const config={lendingContract:'contract.main.burrow.near',startIndex:0,maxAccounts:10,pageSize:2,concurrency:3,maxRetries:1};
+const config={lendingContract:'contract.main.burrow.near',startIndex:0,maxAccounts:10,pageSize:2,concurrency:3,maxRetries:1,rateLimitBaseDelayMs:0};
 function fixture(length=10,{modified=(r)=>r,failMethod='',wrongBlock='',hash=HASH}={}) {
  const rows=Array.from({length},(_,i)=>modified(borrower(i),i));
  const calls=[];
@@ -101,7 +101,7 @@ test('transient rate limiting retries only when opted into bounded retries',asyn
 });
 test('invalid configuration rejected before performing any chain reads',async()=>{
  const bad=[{...config,concurrency:13},{...config,concurrency:0},{...config,pageSize:51},
-  {...config,maxAccounts:250001},{...config,startIndex:-1},{...config,maxRetries:5},{...config,lendingContract:'bad id'}];
+  {...config,maxAccounts:250001},{...config,startIndex:-1},{...config,maxRetries:9},{...config,lendingContract:'bad id'}];
  for(const c of bad){const {rpc,calls}=fixture(10);await assert.rejects(()=>backfillRheaDebtIndex(rpc,c));assert.equal(calls.length,0);}
 });
 test('modified or malformed resume checkpoint is rejected before making RPC reads',async()=>{
@@ -114,11 +114,27 @@ test('modified or malformed resume checkpoint is rejected before making RPC read
   {...checkpoint,completeSnapshot:true,invalidAccounts:1}];
  for(const cp of bad){const f=fixture(10);await assert.rejects(()=>backfillRheaDebtIndex(f.rpc,config,cp));assert.equal(f.calls.length,0);}
 });
-test('empty protocol is a complete observed index but not a liquidation opportunity',async()=>{
+test('empty account index with outstanding lending debt is flagged as inconsistent',async()=>{
  const f=fixture(0);const {summary}=await backfillRheaDebtIndex(f.rpc,config);
- assert.equal(summary.status,'COMPLETE_INDEX_UNAPPROVED');assert.equal(summary.debtAccounts,0);
+ assert.equal(summary.status,'BORROWER_DEBT_MISSING_UNVERIFIED');assert.equal(summary.debtAccounts,0);
  assert.equal(summary.completeSnapshot,true);assert.equal(summary.executionEnabled,false);
+ assert.equal(summary.borrowedPoolBalancePositive,true);
+ assert.ok(summary.warnings.includes('POOL_HAS_OUTSTANDING_DEBT_BUT_NO_BORROWER_POSITIONS_DETECTED'));
 });
+test('no outstanding lending pool debt and no borrowers is a complete index, not an opportunity',async()=>{
+ const f=fixture(0);const old=f.rpc.view;
+ f.rpc.view=async(...args)=>args[1]==='get_assets_paged'?{blockHeight:'101',value:assets.map(([id,a])=>[id,{...a,borrowed:{shares:'0',balance:'0'}}])}:old(...args);
+ const {summary}=await backfillRheaDebtIndex(f.rpc,config);
+ assert.equal(summary.status,'COMPLETE_INDEX_UNAPPROVED');assert.equal(summary.borrowedPoolBalancePositive,false);
+});
+test('rate-limit retry backoff and server Retry-After both have protective bounds',()=>{
+ const limited=Object.assign(new Error('NEAR RPC HTTP 429'),{retryAfterMs:60_000});
+ assert.ok(retryWaitMs(limited,0)>=60_000);
+ assert.ok(retryWaitMs(limited,6)<=120_000);
+ assert.ok(retryWaitMs(new Error('NEAR RPC HTTP 429'),3,5_000)>=40_000);
+ assert.ok(retryWaitMs(new Error('fetch failed'),0)<=1000);
+});
+
 test('pagination failure aborts the scan without producing a false complete report',async()=>{
  const f=fixture(10);const old=f.rpc.view;
  f.rpc.view=async(...a)=>a[1]==='get_accounts_paged'?{blockHeight:'101',value:[]} :old(...a);

@@ -19,6 +19,10 @@ export interface DebtBackfillOptions {
   pageSize: number;
   concurrency: number;
   maxRetries: number;
+  /** Lowest retry delay for a throttled RPC request. Tests may override. */
+  rateLimitBaseDelayMs?: number;
+  /** Delay after each concurrent page batch: protects public NEAR RPC rate limits. */
+  batchDelayMs?: number;
   expectedLendingCodeHash?: string;
 }
 export interface DebtBackfillCheckpoint {
@@ -42,11 +46,13 @@ export interface DebtBackfillCheckpoint {
   seenAccountIds: string[];
   findings: DebtAccountFinding[];
   completeSnapshot: boolean;
+  /** Strong consistency signal from the same block pool balance read. */
+  borrowedPoolBalancePositive?: boolean;
 }
 export interface DebtBackfillSummary {
   mode: 'NEAR_RHEA_SAME_BLOCK_BACKFILL';
   chain: 'NEAR_MAINNET';
-  status: 'COMPLETE_INDEX_UNAPPROVED' | 'PARTIAL_WINDOW_UNAPPROVED' | 'SCHEMA_ERRORS_UNVERIFIED';
+  status: 'COMPLETE_INDEX_UNAPPROVED' | 'PARTIAL_WINDOW_UNAPPROVED' | 'SCHEMA_ERRORS_UNVERIFIED' | 'BORROWER_DEBT_MISSING_UNVERIFIED';
   executionEnabled: false;
   liquidationParityVerified: false;
   priceParityVerified: false;
@@ -61,6 +67,7 @@ export interface DebtBackfillSummary {
   invalidAccounts: number;
   schemaReasons: Record<string, number>;
   completeSnapshot: boolean;
+  borrowedPoolBalancePositive: boolean;
   warnings: string[];
 }
 const validInt=(value:number,min:number,max:number):boolean=>Number.isSafeInteger(value)&&value>=min&&value<=max;
@@ -79,7 +86,9 @@ function assertOptions(o:DebtBackfillOptions):void {
   if(!validInt(o.maxAccounts,1,250_000))throw Error('maxAccounts must be 1..250000');
   if(!validInt(o.pageSize,1,50))throw Error('pageSize must be 1..50');
   if(!validInt(o.concurrency,1,12))throw Error('concurrency must be 1..12');
-  if(!validInt(o.maxRetries,0,4))throw Error('maxRetries must be 0..4');
+  if(!validInt(o.maxRetries,0,8))throw Error('maxRetries must be 0..8');
+  if(o.rateLimitBaseDelayMs!==undefined&&!validInt(o.rateLimitBaseDelayMs,0,120000))throw Error('invalid rateLimitBaseDelayMs');
+  if(o.batchDelayMs!==undefined&&!validInt(o.batchDelayMs,0,10000))throw Error('batchDelayMs must be 0..10000');
   if(o.expectedLendingCodeHash!==undefined&&!HASH.test(o.expectedLendingCodeHash))throw Error('invalid code hash pin');
 }
 function reason(error:unknown):string {
@@ -92,12 +101,23 @@ function reason(error:unknown):string {
 }
 const isRetryable=(error:unknown):boolean=>error instanceof Error &&
   /HTTP 429|HTTP 5\d\d|fetch failed|timeout|timed out|aborted/i.test(error.message);
-async function retry<T>(op:()=>Promise<T>,maxRetries:number):Promise<T> {
+/** NEAR RPC 429 responses can carry Retry-After; never log raw provider response bodies. */
+export function retryWaitMs(error:unknown,attempt:number,base429=5000):number {
+  if(!(error instanceof Error) || !Number.isInteger(attempt) || attempt<0 || attempt>8)throw Error('invalid retry delay input');
+  const hinted=(error as Error & {retryAfterMs?:unknown}).retryAfterMs;
+  const base=/HTTP 429/i.test(error.message) ? base429*2**attempt : 300*2**attempt;
+  const jitter=100+Math.floor(Math.random()*400);
+  return Math.min(120_000,Math.max(base,typeof hinted==='number'&&Number.isFinite(hinted)?hinted:0)+jitter);
+}
+const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
+async function retry<T>(op:()=>Promise<T>,maxRetries:number,base429:number,onThrottle?:(ms:number)=>void):Promise<T> {
   for(let attempt=0;;attempt++) {
     try{return await op();}
     catch(error){
       if(attempt>=maxRetries||!isRetryable(error))throw error;
-      await new Promise<void>(resolve=>setTimeout(resolve,150*2**attempt));
+      const delay=retryWaitMs(error,attempt,base429);
+      if(/HTTP 429/i.test(error instanceof Error?error.message:''))onThrottle?.(delay);
+      await sleep(delay);
     }
   }
 }
@@ -113,7 +133,8 @@ function assertCheckpoint(input:DebtBackfillCheckpoint,o:DebtBackfillOptions):vo
     !Array.isArray(input.seenAccountIds)||input.seenAccountIds.length!==input.scannedAccounts||
     !Array.isArray(input.findings)||input.findings.length>input.scannedAccounts||
     typeof input.schemaReasons!=='object'||input.schemaReasons===null||Array.isArray(input.schemaReasons)||
-    input.codeHashPinProvided!==(o.expectedLendingCodeHash!==undefined)) throw Error('checkpoint does not match same-block scan configuration');
+    input.codeHashPinProvided!==(o.expectedLendingCodeHash!==undefined)||
+    (input.borrowedPoolBalancePositive!==undefined&&typeof input.borrowedPoolBalancePositive!=='boolean')) throw Error('checkpoint does not match same-block scan configuration');
   const ids=new Set<string>();
   for(const id of input.seenAccountIds){if(typeof id!=='string'||!ID.test(id)||ids.has(id))throw Error('checkpoint includes invalid/duplicate account');ids.add(id);}
   const seenFindings=new Set<string>();
@@ -130,14 +151,16 @@ export function summarizeDebtBackfill(s:DebtBackfillCheckpoint):DebtBackfillSumm
   const accounts=s.findings.length;
   const debtPositions=s.findings.reduce((n,f)=>n+f.positions.length,0);
   const debtAssetIds=[...new Set(s.findings.flatMap(f=>f.positions.flatMap(p=>p.debtAssetIds)))].sort();
+  const missingBorrowers=s.completeSnapshot && !!s.borrowedPoolBalancePositive && accounts===0;
   return {mode:s.mode,chain:s.chain,
-    status:s.invalidAccounts>0?'SCHEMA_ERRORS_UNVERIFIED':s.completeSnapshot?'COMPLETE_INDEX_UNAPPROVED':'PARTIAL_WINDOW_UNAPPROVED',
+    status:s.invalidAccounts>0?'SCHEMA_ERRORS_UNVERIFIED':missingBorrowers?'BORROWER_DEBT_MISSING_UNVERIFIED':s.completeSnapshot?'COMPLETE_INDEX_UNAPPROVED':'PARTIAL_WINDOW_UNAPPROVED',
     executionEnabled:false,liquidationParityVerified:false,priceParityVerified:false,
     blockHeight:s.blockHeight,lendingCodeHash:s.lendingCodeHash,totalAccounts:s.totalAccounts,
     scannedAccounts:s.scannedAccounts,nextIndex:s.nextIndex,debtAccounts:accounts,debtPositions,debtAssetIds,
-    invalidAccounts:s.invalidAccounts,schemaReasons:{...s.schemaReasons},completeSnapshot:s.completeSnapshot,
+    invalidAccounts:s.invalidAccounts,schemaReasons:{...s.schemaReasons},completeSnapshot:s.completeSnapshot,borrowedPoolBalancePositive:!!s.borrowedPoolBalancePositive,
     warnings:['DEBT_SHARES_ARE_NOT_LIQUIDATION_OPPORTUNITIES','INDEX_BACKFILL_PINNED_TO_A_SINGLE_NEAR_BLOCK',
       'POSITION_HEALTH_ORACLE_PROFIT_AND_LIQUIDATION_PARITY_UNVERIFIED','NO_WALLET_SIGNING_OR_EXECUTION',
+      ...(missingBorrowers?['POOL_HAS_OUTSTANDING_DEBT_BUT_NO_BORROWER_POSITIONS_DETECTED']:[]),
       ...(!s.codeHashPinProvided?['DEPLOYED_CODE_HASH_NOT_INDEPENDENTLY_ATTESTED']:[])],
   };
 }
@@ -148,17 +171,26 @@ export async function backfillRheaDebtIndex(
 ):Promise<{checkpoint:DebtBackfillCheckpoint;summary:DebtBackfillSummary}> {
   assertOptions(o);
   if(resume)assertCheckpoint(resume,o);
-  const initial=await retry(()=>rpc.viewAccount(o.lendingContract,resume?Number(resume.blockHeight):undefined),o.maxRetries);
+  const base429=o.rateLimitBaseDelayMs??5000;
+  let throttleUntil=0;
+  const throttledRetry=<T>(op:()=>Promise<T>)=>retry(async()=>{
+    const remain=throttleUntil-Date.now();if(remain>0)await sleep(remain);
+    return op();
+  },o.maxRetries,base429,delay=>{throttleUntil=Math.max(throttleUntil,Date.now()+delay);});
+  const initial=await throttledRetry(()=>rpc.viewAccount(o.lendingContract,resume?Number(resume.blockHeight):undefined));
   const height=Number(initial.blockHeight);
   if(!validInt(height,1,Number.MAX_SAFE_INTEGER))throw Error('invalid finalized block');
   if(o.expectedLendingCodeHash&&initial.codeHash!==o.expectedLendingCodeHash)throw Error('PINNED_LENDING_CODE_HASH_MISMATCH');
   if(resume&&(initial.blockHeight!==resume.blockHeight||initial.codeHash!==resume.lendingCodeHash))throw Error('CHECKPOINT_BLOCK_OR_CODE_CHANGED');
   const [assets,totalView]=await Promise.all([
-    retry(()=>rpc.view<unknown>(o.lendingContract,'get_assets_paged',{},height),o.maxRetries),
-    retry(()=>rpc.view<unknown>(o.lendingContract,'get_num_accounts',{},height),o.maxRetries),
+    throttledRetry(()=>rpc.view<unknown>(o.lendingContract,'get_assets_paged',{},height)),
+    throttledRetry(()=>rpc.view<unknown>(o.lendingContract,'get_num_accounts',{},height)),
   ]);
   if(assets.blockHeight!==String(height)||totalView.blockHeight!==String(height))throw Error('inconsistent block on market metadata');
   const pools=parseParityPools(assets.value);
+  const borrowedPoolBalancePositive=[...pools.values()].some(p=>p.borrowed.balance>0n || p.borrowed.shares>0n);
+  if(resume&&resume.borrowedPoolBalancePositive!==undefined&&resume.borrowedPoolBalancePositive!==borrowedPoolBalancePositive)
+    throw Error('CHECKPOINT_POOL_BORROWED_BALANCE_CHANGED');
   const total=accountCount(totalView.value);
   if(o.startIndex>total)throw Error('starting index exceeds account count');
   if(resume&&resume.totalAccounts!==total)throw Error('CHECKPOINT_MARKET_COUNT_CHANGED');
@@ -167,8 +199,9 @@ export async function backfillRheaDebtIndex(
     lendingContract:o.lendingContract,blockHeight:String(height),lendingCodeHash:initial.codeHash,
     codeHashPinProvided:!!o.expectedLendingCodeHash,totalAccounts:total,startIndex:o.startIndex,
     targetEndIndex:Math.min(total,o.startIndex+o.maxAccounts),nextIndex:o.startIndex,
-    scannedAccounts:0,invalidAccounts:0,schemaReasons:{},seenAccountIds:[],findings:[],completeSnapshot:false,
+    scannedAccounts:0,invalidAccounts:0,schemaReasons:{},seenAccountIds:[],findings:[],completeSnapshot:false,borrowedPoolBalancePositive,
   };
+  state.borrowedPoolBalancePositive=borrowedPoolBalancePositive;
   const seen=new Set(state.seenAccountIds);
   // Resolve multiple bounded pages concurrently, then commit the results in index order.
   // Batch checkpointing means a failed batch can be safely retried from its beginning.
@@ -180,8 +213,8 @@ export async function backfillRheaDebtIndex(
       jobs.push({index:at,limit});at+=limit;
     }
     const pages=await Promise.all(jobs.map(async job=>{
-      const v=await retry(()=>rpc.view<unknown>(o.lendingContract,'get_accounts_paged',
-        {from_index:job.index,limit:job.limit},height),o.maxRetries);
+      const v=await throttledRetry(()=>rpc.view<unknown>(o.lendingContract,'get_accounts_paged',
+        {from_index:job.index,limit:job.limit},height));
       if(v.blockHeight!==String(height)||!Array.isArray(v.value)||v.value.length!==job.limit)
         throw Error('INCONSISTENT_BLOCK_OR_PAGE_LENGTH');
       return v.value;
@@ -199,6 +232,8 @@ export async function backfillRheaDebtIndex(
     }
     state.completeSnapshot=state.startIndex===0&&state.nextIndex===total&&state.invalidAccounts===0;
     if(onCheckpoint)await onCheckpoint(structuredClone(state),summarizeDebtBackfill(state));
+    if(o.batchDelayMs&&state.nextIndex<state.targetEndIndex)
+      await new Promise<void>(resolve=>setTimeout(resolve,o.batchDelayMs));
   }
   state.completeSnapshot=state.startIndex===0&&state.nextIndex===total&&state.invalidAccounts===0;
   return {checkpoint:state,summary:summarizeDebtBackfill(state)};

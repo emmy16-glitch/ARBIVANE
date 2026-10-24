@@ -3,6 +3,22 @@ export interface NearViewResult<T = unknown> {
   value: T;
 }
 export type FetchLike = typeof fetch;
+/** Fetch error with machine-readable status and bounded retry hint. */
+export class NearRpcHttpError extends Error {
+  readonly retryAfterMs?:number;
+  constructor(status:number,retryAfter:string|null|undefined){
+    super(`NEAR RPC HTTP ${status}`);this.name='NearRpcHttpError';
+    if(status===429||status===503){
+      let ms:number|undefined;
+      if(retryAfter && /^\d{1,5}$/.test(retryAfter))ms=Number(retryAfter)*1000;
+      else if(retryAfter){const at=Date.parse(retryAfter);if(Number.isFinite(at))ms=Math.max(0,at-Date.now());}
+      if(ms!==undefined)this.retryAfterMs=Math.min(120000,Math.max(0,ms));
+    }
+  }
+}
+function failHttp(response:Response):never {
+  throw new NearRpcHttpError(response.status,response.headers?.get?.('retry-after'));
+}
 
 /** Read-only NEAR JSON-RPC adapter. No keys, wallet, or transaction methods. */
 export class NearReadOnlyRpc {
@@ -32,7 +48,7 @@ export class NearReadOnlyRpc {
       body: JSON.stringify({jsonrpc: "2.0", id: this.#nextId++, method: "query", params}),
       signal: AbortSignal.timeout(12_000),
     });
-    if (!resp.ok) throw new Error(`NEAR RPC HTTP ${resp.status}`);
+    if (!resp.ok) failHttp(resp);
     const envelope: unknown = await resp.json();
     if (!envelope || typeof envelope !== "object") throw new Error("invalid RPC response");
     const response = envelope as Record<string, unknown>;
@@ -63,7 +79,7 @@ export class NearReadOnlyRpc {
       body: JSON.stringify({ jsonrpc: "2.0", id: this.#nextId++, method: "query", params }),
       signal: AbortSignal.timeout(12_000),
     });
-    if (!resp.ok) throw new Error(`NEAR RPC HTTP ${resp.status}`);
+    if (!resp.ok) failHttp(resp);
     const parsed: unknown = await resp.json();
     if (!parsed || typeof parsed !== "object") throw new Error("invalid RPC response");
     const envelope = parsed as Record<string, unknown>;

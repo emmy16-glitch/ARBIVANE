@@ -46,3 +46,27 @@ The GitHub Action `rhea-full-market-index.yml` runs for changed indexer PRs or m
 ## Critical unresolved execution blockers
 
 Even a full, correct index cannot tell whether *thousands of debt accounts exist* until the actual run finishes. A debt account may be safe, frozen, undercollateralized, inactive, or missing a trustworthy price. Exact current Rhea oracle conversion, share mutations, liquidation-health parity, legacy USN debt pricing, financing, competitor priority and post-execution profit are **not verified**. All real-money actions remain disabled.
+
+## First real scan and rate-limit correction (24 October 2026)
+
+Initial PR #17 full-market action scanned 5,100 / 72,768 accounts on
+NEAR mainnet at pinned block `221352712` and recorded **zero debt hits**
+in that incomplete window. It then failed with **NEAR RPC HTTP 429**. The
+failed run is not a market-wide debt count, nor proof of zero borrowers.
+The follow-up patch defaults the actual RPC workflow to at most two concurrent
+page calls, one-second minimum spacing between batches, and increasing
+rate-limit backoff before failing. These are throughput/safety controls
+and do not guarantee that public RPC budgets will permit a complete read.
+The reported final totals must be read from the completed workflow artifact.
+
+## Stage 14.1 — Rate limit recovery and exact-block checkpoint restore (24 October 2026)
+
+The initial live PR #17 workflow ([run 40071508836](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40071508836)) scanned **5,100 of 72,768** registered account indices at finalized NEAR block **221352712** and then failed with **HTTP 429** from the public FastNEAR RPC. Zero debt accounts were reported in **that incomplete range only**. There was **no valid full-market debt count**, and CI's original safety/unit job being green did not change that fact.
+
+Stage 14.1 makes the public-RPC backfill less aggressive: 50-account pages, two parallel page reads, and a 1,250 ms delay between batches. Transient HTTP 429 uses the server's `Retry-After` header if provided, exponentially increasing delays with randomized jitter otherwise, a shared throttle barrier, and at most seven retries. These delays can still exhaust a workflow's time budget; **they do not bypass server quotas**. Use a legitimately provisioned, reliable archival NEAR RPC if free public rate limits remain insufficient.
+
+Every written JSON checkpoint is attached as a GitHub Actions artifact, including when a run fails. To resume, go to **Actions → NEAR Rhea full market debt index → Run workflow**, set `resume_run_id` to the previous run's numeric ID, and keep `from_index` and `max_accounts` identical. The workflow retrieves that run's artifact and sets `RHEA_BACKFILL_RESUME=true`. Resume **requires access to the exact historical finalized block** used by the checkpoint. A provider without historical state will fail; it cannot silently merge another block's data. In that case start a new run from index zero or use a trustworthy archival provider. Checkpoint assets and code-hash invariants are rechecked on resume. Public borrower identifiers in the artifact must be treated as protocol analytics data, not private financial profiles.
+
+If a **complete** account-index scan reports zero borrower debts while the same-block lending pools show nonzero borrowed shares/balances, the report now returns `BORROWER_DEBT_MISSING_UNVERIFIED`. This is a diagnostic incompatibility, not a successful debt count. Live opportunities, collateral health, oracle values, liquidation contract parity, pricing of legacy USN, and profitability remain unverified. Signing and execution stay disabled.
+
+A successful automated CI test run proves only local code properties. Review the backfill job's JSON `status`, `completeSnapshot`, `invalidAccounts`, `debtAccounts`, `debtPositions`, and `blockHeight` before making any claim about live Rhea debt activity.
