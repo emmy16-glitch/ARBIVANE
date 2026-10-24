@@ -40,7 +40,9 @@
     "probe:rhea:deployed-wasm": "node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts",
     "probe:rhea:liquidation-route": "node --experimental-strip-types src/rhea/liquidation-route-cli.ts",
     "probe:rhea:liquidation-entry": "node --experimental-strip-types src/rhea/liquidation-entry-cli.ts",
-    "probe:rhea:current-health": "node --experimental-strip-types src/rhea/current-borrower-health-cli.ts"
+    "probe:rhea:current-health": "node --experimental-strip-types src/rhea/current-borrower-health-cli.ts",
+    "probe:rhea:replay-admission": "node --experimental-strip-types src/rhea/replay-admission-cli.ts",
+    "probe:rhea:sandbox-state-import": "node --experimental-strip-types scripts/stage27-sandbox-state-import.mjs"
   },
   "devDependencies": {
     "typescript": "5.8.3"

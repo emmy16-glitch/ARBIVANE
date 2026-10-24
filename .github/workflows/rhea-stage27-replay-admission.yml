@@ -1,0 +1,57 @@
+name: NEAR Rhea Stage27 replay admission and unit sanity (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/replay-admission.ts'
+      - 'src/rhea/replay-admission-cli.ts'
+      - 'src/rhea/current-borrower-health.ts'
+      - 'scripts/stage27-sandbox-state-import.mjs'
+      - 'tests/rhea-stage27-replay-admission.test.mjs'
+      - '.github/workflows/rhea-stage27-replay-admission.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/replay-admission.ts'
+      - 'src/rhea/replay-admission-cli.ts'
+      - '.github/workflows/rhea-stage27-replay-admission.yml'
+permissions:
+  contents: read
+jobs:
+  fail-closed-replay-admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Observe fresh candidate and reject implausible USD27 reference notional
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_CONFIGURED_ORACLE: priceoracle.near
+          RHEA_AGGREGATE_PRICE_READER: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: tmp-owner.main.burrow.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_CONFIGURED_ORACLE_CODE_HASH: 4sUttxKK4gJpWr1mhfNddBt497ZiXsRMbTYvCeQQbjR2
+          RHEA_EXPECTED_AGGREGATE_READER_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/replay-admission-cli.ts > stage27-replay-gate.json
+          jq -e '.gate.mode == "RHEA_STAGE27_REPLAY_ADMISSION_GATE" and .gate.contractTransactionReplayed == false and .gate.maySign == false and .gate.mayBroadcast == false and .gate.executionEnabled == false and .gate.realizedProfitUsd == null and .gate.status == "BLOCKED_VALUE_SANITY" and .gate.implausiblyValuedPositions >= 1 and (.health.executedTransactions == 0)' stage27-replay-gate.json
+      - name: Declare sandbox-replay limitation
+        if: always()
+        run: |
+          echo 'Reference USD E27 valuation is inconsistent with realistic trading size and is blocked.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'CI has no signer, no transactions, no mainnet state import or replicated NEAR VM execution.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Optional local sandbox import script is separate; full storage parity and stateful replay remain incomplete.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage27-live-replay-admission
+          path: stage27-replay-gate.json
+          if-no-files-found: warn
+          retention-days: 7
