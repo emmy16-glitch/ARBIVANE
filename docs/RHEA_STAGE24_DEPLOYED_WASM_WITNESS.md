@@ -1,0 +1,11 @@
+# Stage 24 — Finalized-block deployed Wasm attestation (read only)
+
+Stage 23 proved **observed code-hash identity**, not reproducible bytecode verification. Stage 24 queries NEAR mainnet `view_code` for both `contract.main.burrow.near` and `aggregate-oracle.near` at the **same pinned finalized block**, computes SHA-256 over the returned Wasm bytes, encodes the digest in NEAR base58, and requires matches with both the query's hash and Stage 23's `view_account` code hashes. The read is bounded; malformed/truncated/invalid modules and cross-block views fail closed.
+
+The built-in Wasm module decoder inspects **exports only**, without instantiation. The lending contract's `execute` export (if present) is a *public method name*, not proof that the current binary follows the archived four liquidation checks. Some live lending configs do not expose an explicit oracle contract pointer. Stage 24 records `NOT_EXPOSED_IN_CONFIG` in that case rather than inventing an oracle linkage. An explicit mismatched pointer is rejected; the Pyth enable flag is reported only if present and boolean.
+
+**This stage does not attest source-to-Wasm reproducibility, branches inside liquidation, transaction-level execution, oracle valuation semantics, gas costs, financing, competition or real net profit.** Every output says `executionEnabled:false`, `mayBroadcast:false`. The diagnostic does not use a wallet, prepare a signed transaction or move money.
+
+To run a bounded mainnet witness: `EXECUTION_ENABLED=false NEAR_NETWORK=mainnet NEAR_RPC_URL=https://rpc.mainnet.fastnear.com RHEA_LENDING_CONTRACT=contract.main.burrow.near RHEA_ORACLE_CONTRACT=aggregate-oracle.near npm run probe:rhea:deployed-wasm`.
+
+Next research gate: reproducibly rebuild against a current audited release, compare bytes and source branch coverage to deployed Wasm, and independently replay liquidation against a faithful pinned-state fork. Keep an independent approval gate for wallets and any live risk.
