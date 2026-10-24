@@ -1,0 +1,68 @@
+name: NEAR Rhea detailed debt to paper health (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Completed Stage 14.2 sharded NEAR index run ID'
+        required: true
+        type: string
+      finding_cursor:
+        description: 'First discovered debt account to inspect'
+        required: true
+        default: '0'
+        type: string
+  workflow_run:
+    workflows: ['NEAR Rhea sharded borrower index (read only)']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verified-shard-health:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download shard artifacts from this repository
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event_name == 'workflow_dispatch' && inputs.source_run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          pattern: near-rhea-shard-[0-9]*
+          path: downloaded-shards
+      - name: Reconcile NEAR block and calculate paper health evidence
+        id: evidence
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_SHARD_ROOT: downloaded-shards
+          RHEA_SHARD_COUNT: '12'
+          RHEA_INDEX_FINDING_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.finding_cursor || '0' }}
+          RHEA_INDEX_MAX_FINDINGS: '8'
+          RHEA_INDEX_MAX_FEEDS: '16'
+          RHEA_STAGE18_REPORT_PATH: rhea-stage18-evidence.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:sharded-health
+      - name: Disclose research-only state
+        if: always()
+        run: |
+          echo "Stage 18 shard bridge outcome: ${{ steps.evidence.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Only a complete 12-shard, one-block read-only market index may enter the health bridge.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Old-block Pyth quotes may be stale. Paper health is not liquidation eligibility or profit.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No wallet, signing or transaction.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage18-shard-health-readonly
+          path: rhea-stage18-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
