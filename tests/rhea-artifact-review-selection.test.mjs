@@ -35,3 +35,13 @@ test('rejects invalid run identifiers, unsafe meta records, or missing provenanc
  assert.throws(()=>selectNextShardReview(RUN,{artifacts:[shard(0,{workflow_run:null})]},[]),/PROVENANCE/);
  assert.throws(()=>selectNextShardReview(RUN,{artifacts:[shard(0)]},[],129),/SOURCE_RUN/);
 });
+
+test('review workflow uses active GitHub expressions and shell variables',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const yaml=await readFile(new URL('../.github/workflows/rhea-progressive-shard-review.yml',import.meta.url),'utf8');
+ assert.equal(yaml.includes(String.fromCharCode(92)+'${'),false);
+ assert.ok(yaml.includes('${{ github.token }}'));
+ assert.ok(yaml.includes('${{ steps.pick.outputs.run }}'));
+ assert.ok(yaml.includes('repos/${GITHUB_REPOSITORY}/actions/runs/'));
+ assert.ok(yaml.includes("cron: '23 * * * *'"));
+});
