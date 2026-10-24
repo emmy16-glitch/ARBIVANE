@@ -45,3 +45,11 @@ test('review workflow uses active GitHub expressions and shell variables',async(
  assert.ok(yaml.includes('repos/${GITHUB_REPOSITORY}/actions/runs/'));
  assert.ok(yaml.includes("cron: '23 * * * *'"));
 });
+
+test('automatic lookup filters all main-branch workflow runs by the exact index workflow name',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const yaml=await readFile(new URL('../.github/workflows/rhea-progressive-shard-review.yml',import.meta.url),'utf8');
+ assert.ok(yaml.includes('actions/runs?event=push&branch=main&per_page=100'));
+ assert.ok(yaml.includes('select(.name == "NEAR Rhea sharded borrower index (read only)")'));
+ assert.ok(!yaml.includes('actions/workflows/rhea-sharded-index.yml/runs?'));
+});
