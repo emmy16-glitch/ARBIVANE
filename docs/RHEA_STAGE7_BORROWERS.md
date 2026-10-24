@@ -4,8 +4,7 @@
 
 ## Research basis
 
-The original Burrow liquidation bot scans `get_accounts_paged` and expects each
-account to expose `account_id`, `borrowed`, `collateral` and `supplied` share maps.
+The original Burrow liquidation bot scans `get_accounts_paged` and expects early accounts to expose `account_id`, `borrowed`, `collateral` and `supplied` share maps. Rhea SDK currently also models array-based account asset balances and isolated `positions` with independent collateral/debt maps. Both are parsed conservatively.
 Rhea's current Go SDK still provides `GetAccountTyped` and `GetAccountAllPositionsTyped`,
 but current deployment equivalence must be tested rather than assumed.
 
@@ -62,3 +61,10 @@ assets need token-specific ratios or other valuation paths.
 The scheduled GitHub Action is an **advisory** read-only experiment. A green
 workflow is not evidence of profitable or safe transactions. Inspect its
 `rhea-borrower-evidence.json` artifact and status explicitly.
+
+### Live advisory compatibility finding
+The first Stage 7 GitHub advisory run rejected the old share-map assumption
+(`invalid borrowed`). The parser now explicitly supports the account asset-balance
+array structure used by Rhea's modern SDK, as well as isolated positions.
+No silent general-object fallback is permitted. Retest the on-chain response
+before considering the sampling portion compatible.

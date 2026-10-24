@@ -25,10 +25,27 @@ test('reject duplicate borrowers and ambiguous account id shape',()=>{
  assert.throws(()=>summarizeBorrowers([{...rows[0],accountId:'other.near'}],ids,['usn']),/ambiguous account/);
 });
 test('reject incomplete or ambiguous account and market structures',()=>{
- assert.throws(()=>summarizeBorrowers([{account_id:'bad.near',borrowed:{usn:'1'}}],ids,['usn']),/invalid collateral/);
+ assert.throws(()=>summarizeBorrowers([{account_id:'bad.near',borrowed:{usn:'1'}}],ids,['usn']),/missing collateral/);
  assert.throws(()=>summarizeBorrowers(rows,['usn','usn'],['usn']),/invalid market assets/);
  assert.throws(()=>summarizeBorrowers(rows,ids,['missing']),/missing metadata set inconsistent/);
  assert.throws(()=>summarizeBorrowers(Array(201).fill(rows[0]),ids,['usn']),/sample over limit/);
+});
+test('Rhea SDK account rows with array balances and isolated positions count exposure correctly',()=>{
+ const records=[{
+  account_id:'isolated.near',
+  supplied:[{token_id:'wrap.near',shares:'20',balance:'20'}],
+  positions:{'0':{borrowed:[{token_id:'usn',shares:'9',balance:'9'}], collateral:[{token_id:'wrap.near',shares:'15',balance:'15'}],supplied:[]},
+             '1':{borrowed:[{token_id:'usn',shares:'3',balance:'3'}],collateral:[{token_id:'token.burrow.near',shares:'8',balance:'8'}],supplied:[]}}
+ }];
+ const report=summarizeBorrowers(records,ids,['usn','token.burrow.near']);
+ assert.equal(report.unpricedDebt,1);assert.equal(report.unpricedCollateral,1);
+ assert.equal(report.assets.find(x=>x.assetId==='usn').borrowedShares,'12');
+ assert.equal(report.assets.find(x=>x.assetId==='wrap.near').suppliedAccounts,1);
+ assert.equal(report.assets.find(x=>x.assetId==='token.burrow.near').collateralAccounts,1);
+});
+test('Rhea account arrays reject duplicate token rows and position truncation',()=>{
+ assert.throws(()=>summarizeBorrowers([{account_id:'isolate.near',positions:{'0':{borrowed:[{token_id:'usn',shares:'1'},{token_id:'usn',shares:'2'}]}}}],ids,['usn']),/duplicate position borrowed asset/);
+ assert.throws(()=>summarizeBorrowers([{account_id:'isolate.near',positions:[]}],ids,['usn']),/isolated positions/);
 });
 const hash='3'.repeat(43),otherHash='4'.repeat(43);
 const assets=ids.map(id=>[id,{supplied:{balance:'100',shares:'100'},borrowed:{balance:'10',shares:'10'},config:{can_borrow:false}}]);

@@ -41,15 +41,49 @@ function parseUint(x:unknown,name:string,max:bigint):bigint {
   const val=BigInt(String(x)); if(val>max)throw Error(`invalid ${name}`);return val;
 }
 function mapShares(raw:unknown, pool:Set<string>, name:string):Map<string,bigint>{
-  const row=obj(raw,name);if(Object.keys(row).length>256)throw Error('position cap exceeded');
+  if (raw===undefined || raw===null) throw Error(`missing ${name} position field`);
   const out=new Map<string,bigint>();
-  for(const [assetId,shares] of Object.entries(row)){
-    if(!ID.test(assetId)||!pool.has(assetId))throw Error(`unknown ${name} asset`);
+  const add=(assetId:unknown,shares:unknown)=>{
+    if(typeof assetId!=='string'||!ID.test(assetId)||!pool.has(assetId))throw Error(`unknown ${name} asset`);
     if(typeof shares!=='string')throw Error(`${name} shares must be string`);
     const v=parseUint(shares,`${name} shares`,10n**78n-1n);
-    if(v>0n)out.set(assetId,v);
+    if(v>0n)out.set(assetId,(out.get(assetId)??0n)+v);
+  };
+  if(Array.isArray(raw)){
+    if(raw.length>256)throw Error('position cap exceeded');
+    const seen=new Set<string>();
+    for(const part of raw){
+      const record=obj(part,`${name} row`);
+      const assetId=record.token_id??record.tokenId;
+      if(typeof assetId==='string'&&seen.has(assetId))throw Error(`duplicate ${name} asset within position`);
+      if(typeof assetId==='string')seen.add(assetId);
+      add(assetId,record.shares);
+    }
+  }else{
+    const row=obj(raw,name);if(Object.keys(row).length>256)throw Error('position cap exceeded');
+    for(const [assetId,shares] of Object.entries(row))add(assetId,shares);
   }
   return out;
+}
+function mergeShares(target:Map<string,bigint>,source:Map<string,bigint>){
+ for(const [id,v] of source)target.set(id,(target.get(id)??0n)+v);
+}
+function collectAccountPositions(r:Record<string,unknown>,pool:Set<string>){
+ const hasPositions=r.positions!==undefined&&r.positions!==null;
+ const borrowed=mapShares(r.borrowed??(hasPositions?{}:undefined),pool,'borrowed');
+ const collateral=mapShares(r.collateral??(hasPositions?{}:undefined),pool,'collateral');
+ const supplied=mapShares(r.supplied??{},pool,'supplied');
+ if(hasPositions){
+  const positions=obj(r.positions,'isolated positions');
+  if(Object.keys(positions).length>64)throw Error('too many isolated positions');
+  for(const entry of Object.values(positions)){
+   const position=obj(entry,'isolated position');
+   mergeShares(borrowed,mapShares(position.borrowed??[],pool,'position borrowed'));
+   mergeShares(collateral,mapShares(position.collateral??[],pool,'position collateral'));
+   mergeShares(supplied,mapShares(position.supplied??[],pool,'position supplied'));
+  }
+ }
+ return {borrowed,collateral,supplied};
 }
 export function summarizeBorrowers(rows:unknown[], listedAssets:string[], missingMetadata:string[]){
   if(!Array.isArray(rows)||rows.length>200)throw Error('sample over limit');
@@ -64,7 +98,7 @@ export function summarizeBorrowers(rows:unknown[], listedAssets:string[], missin
     const id=r.account_id??r.accountId;
     if(typeof id!=='string'||!ID.test(id)||seen.has(id))throw Error('invalid or duplicate borrower ID');
     seen.add(id);
-    const debt=mapShares(r.borrowed,pool,'borrowed'), collateral=mapShares(r.collateral,pool,'collateral'), supplied=mapShares(r.supplied??{},pool,'supplied');
+    const {borrowed:debt,collateral,supplied}=collectAccountPositions(r,pool);
     if(debt.size)debtAccounts++;
     if([...debt.keys()].some(x=>missing.has(x)))unpricedDebt++;
     if([...collateral.keys()].some(x=>missing.has(x)))unpricedCollateral++;
