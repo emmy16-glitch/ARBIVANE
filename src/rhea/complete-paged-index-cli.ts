@@ -1,5 +1,4 @@
-import {readFile,readdir,writeFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {readFile,writeFile} from 'node:fs/promises';
 import {verifyCompletePagedIndex} from './complete-paged-index.ts';
 const proc=(globalThis as typeof globalThis&{process:{env:Record<string,string|undefined>;exitCode:number}}).process;
 (async()=>{
@@ -8,12 +7,10 @@ const proc=(globalThis as typeof globalThis&{process:{env:Record<string,string|u
  const num=Number(e.RHEA_TOTAL_ACCOUNTS),shardCount=Number(e.RHEA_SHARD_COUNT);
  if(!Number.isSafeInteger(shardCount)||shardCount!==4)throw Error('EXPECTED_FOUR_SHARDS');
  const root=e.RHEA_SHARD_ROOT??'shards';
- const dirs=await readdir(root);
  const cps=[];
  for(let i=0;i<shardCount;i++){
   const dir='rhea-full-paged-shard-'+i;
-  if(!dirs.includes(dir))throw Error('MISSING_SHARD_ARTIFACT_'+i);
-  cps.push(JSON.parse(await readFile(join(root,dir,'shard-'+i+'.json'),'utf8')));
+  cps.push(JSON.parse(await readFile(root+'/'+dir+'/shard-'+i+'.json','utf8')));
  }
  const report=verifyCompletePagedIndex(cps,{
   blockHeight:e.RHEA_PINNED_BLOCK??'',
@@ -21,7 +18,7 @@ const proc=(globalThis as typeof globalThis&{process:{env:Record<string,string|u
   totalAccounts:num,shardCount,
  });
  const destination=e.RHEA_AGGREGATED_REPORT_PATH??'rhea-full-paged-index.json';
- await writeFile(destination,JSON.stringify(report,null,2)+'\n',{mode:0o600});
+ await writeFile(destination,JSON.stringify(report,null,2)+'\n',{mode:0o600,encoding:'utf8'});
  // Print only bounded summary; full borrower identifiers stay inside the artifact.
  const {findings,...summary}=report;
  console.log(JSON.stringify(summary,null,2));
