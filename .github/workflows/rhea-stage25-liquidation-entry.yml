@@ -1,0 +1,54 @@
+name: NEAR Rhea stage25 real-liquidation entry evidence (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/liquidation-entry-evidence.ts'
+      - 'src/rhea/liquidation-research-action.ts'
+      - 'src/rhea/liquidation-entry-cli.ts'
+      - '.github/workflows/rhea-stage25-liquidation-entry.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/liquidation-entry-evidence.ts'
+      - 'src/rhea/liquidation-entry-cli.ts'
+      - '.github/workflows/rhea-stage25-liquidation-entry.yml'
+permissions:
+  contents: read
+jobs:
+  live-qualification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Recheck Stage 22 paper-risk borrower at a NEW finalized NEAR block
+        env:
+          NEAR_NETWORK: mainnet
+          EXECUTION_ENABLED: 'false'
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_CONFIGURED_ORACLE: priceoracle.near
+          RHEA_AGGREGATE_PRICE_READER: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: tmp-owner.main.burrow.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_CONFIGURED_ORACLE_CODE_HASH: 4sUttxKK4gJpWr1mhfNddBt497ZiXsRMbTYvCeQQbjR2
+          RHEA_EXPECTED_AGGREGATE_READER_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/liquidation-entry-cli.ts > stage25-live-liquidation-entry.json
+          jq -e '.mode == "RHEA_STAGE25_MAINNET_LIQUIDATION_ENTRY_READ_ONLY" and .oracleConfigMatches == true and .executionEnabled == false and .mayBroadcast == false and .latestHealthVerified == false and .realNetProfitVerified == false and .liquidatorFundsVerified == false' stage25-live-liquidation-entry.json
+      - name: Record limitations
+        if: always()
+        run: |
+          echo 'Observed debt and exported liquidation methods do NOT prove executable liquidation, price health, wallet liquidity, or net realized profit.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This job NEVER signs, broadcasts, or transfers any NEAR/tokens.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage25-live-entry-readonly
+          path: stage25-live-liquidation-entry.json
+          if-no-files-found: warn
+          retention-days: 7
