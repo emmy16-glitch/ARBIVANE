@@ -77,9 +77,16 @@ test('fresh same-block mainnet witness is always research only',async()=>{
  assert.equal(report.deployedLiquidationRulesVerified,false);
  assert.ok(calls.filter(x=>x[0]==='rpc').every(x=>x[2].block_id===Number(H)&&x[2].request_type==='view_code'));
 });
-test('oracle config mismatch, code mismatch and cross-block code are fail closed',async()=>{
- const a=fixture({config:{oracle_account_id:'unknown-oracle.near'}});
- await assert.rejects(inspectStage24DeployedWasm(a.rpc,'https://rpc.mainnet.fastnear.com',{lendingContract:L,oracleContract:O},a.fetcher),/CONFIG_ORACLE_MISMATCH/);
+test('distinct configured oracle is independently hashed, not mistaken for price reader',async()=>{
+ const a=fixture({config:{oracle_account_id:'different-oracle.near',enable_pyth_oracle:true}});
+ const report=await inspectStage24DeployedWasm(a.rpc,'https://rpc.mainnet.fastnear.com',{lendingContract:L,oracleContract:O},a.fetcher);
+ assert.equal(report.oracleAccountPointerStatus,'DISTINCT_CONFIGURED_ORACLE');
+ assert.equal(report.configuredOracle.accountId,'different-oracle.near');
+ assert.equal(report.configuredOracle.codeBytesHashMatched,true);
+ assert.ok(report.blockers.includes('AGGREGATE_PRICE_READER_DIFFERS_FROM_CONFIGURED_ORACLE'));
+ assert.equal(report.sourceWasmReproduciblyMatched,false);
+});
+test('wrong code hashes and cross-block responses are fail closed',async()=>{
  const b=fixture({badCodeHash:true});
  await assert.rejects(inspectStage24DeployedWasm(b.rpc,'https://rpc.mainnet.fastnear.com',{lendingContract:L,oracleContract:O},b.fetcher),/WASM_HASH_MISMATCH/);
  const c=fixture({badBlock:true});
