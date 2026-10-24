@@ -1,0 +1,60 @@
+name: Rhea Stage33 live blocked-price diagnosis (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage33-oracle-failure-diagnostics.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  diagnosis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download verified entire-market debt evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Download four Stage32 completed Pyth screening shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rhea-stage32-repriced-shard-*
+          run-id: '40129110340'
+          github-token: ${{ github.token }}
+          path: shards
+      - name: Recheck current Pyth health and classify unknown RPC failure reasons
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE33_SOURCE_RUN: '40128285853'
+          RHEA_STAGE33_SOURCE_FILE: source/rhea-full-paged-index.json
+          RHEA_STAGE33_SHARD_DIR: shards
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage33-diagnostics-cli.ts > stage33-summary.json
+          jq -e '.mode == "RHEA_STAGE33_ORACLE_FAILURE_DIAGNOSTICS" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .liquidationEligibilityVerified == false and .profitVerified == false and .probed <= 16 and (.probed == .paperAtRiskNow + .healthyNow + .blockedNow + .noDebtNow)' stage33-summary.json
+          jq -r '"Stage33 sampled "+(.probed|tostring)+" borrowers, found "+(.paperAtRiskNow|tostring)+" reference at-risk and "+(.blockedNow|tostring)+" still blocked; reasons: "+(.reasonCounts|tojson)' stage33-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'A PAPER-at-risk account is NOT verified liquidatable. No keys or transactions.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage33-oracle-failure-diagnostics
+          path: |
+            stage33-oracle-diagnostics.json
+            stage33-summary.json
+          if-no-files-found: warn
+          retention-days: 14
