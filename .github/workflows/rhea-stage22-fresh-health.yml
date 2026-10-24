@@ -1,0 +1,80 @@
+name: NEAR Rhea fresh borrower health (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Full market sharded source run containing a completed shard artifact'
+        type: string
+        required: true
+        default: '40087656497'
+      shard_id:
+        description: 'Observed detailed position shard 0 through 95'
+        type: string
+        required: true
+        default: '0'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage22-fresh-health.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  refresh-paper-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Validate strictly scoped source artifact
+        env:
+          SOURCE_RUN: ${{ inputs.source_run_id || '40087656497' }}
+          SHARD: ${{ inputs.shard_id || '0' }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[1-9][0-9]{0,17}$ ]] || exit 2
+          [[ "$SHARD" =~ ^(0|[1-9][0-9]?)$ ]] || exit 2
+          [ "$SHARD" -le 95 ] || exit 2
+          echo "SOURCE_RUN=$SOURCE_RUN" >> "$GITHUB_ENV"
+          echo "SHARD=$SHARD" >> "$GITHUB_ENV"
+      - name: Download completed source shard
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.source_run_id || '40087656497' }}
+          name: near-rhea-shard-${{ inputs.shard_id || '0' }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: downloaded-shard
+      - name: Revalidate borrower and Pyth quotes on fresh finalized NEAR block
+        id: research
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_OBSERVED_SHARD_FILE: downloaded-shard/shard-${{ inputs.shard_id || '0' }}.json
+          RHEA_OBSERVED_SHARD_ID: ${{ inputs.shard_id || '0' }}
+          RHEA_OBSERVED_SHARD_COUNT: '96'
+          RHEA_INDEX_FINDING_CURSOR: '0'
+          RHEA_INDEX_MAX_FINDINGS: '4'
+          RHEA_INDEX_MAX_FEEDS: '16'
+          RHEA_INDEX_MAX_AGE_MS: '60000'
+          RHEA_FRESH_REVIEW_REPORT_PATH: stage22-fresh-paper-health.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:fresh-borrowers
+      - name: Explain strict refusal to execute
+        if: always()
+        run: |
+          echo "Fresh NEAR paper research: ${{ steps.research.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Revalidation on a newer block is not evidence of executable liquidation. Wallet execution remains DISABLED.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage22-fresh-health-readonly
+          path: stage22-fresh-paper-health.json
+          if-no-files-found: warn
+          retention-days: 7
