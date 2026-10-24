@@ -286,3 +286,7 @@ See [Stage 14 architecture and instructions](docs/RHEA_STAGE14_FULL_INDEX.md).
 ### Stage 14.1 live backfill reliability
 
 The first complete-index attempt stopped after **5,100 / 72,768** NEAR account indices because the public RPC returned **HTTP 429**. The follow-up adds shared backoff, bounded page pacing, `Retry-After`, and cross-run **same-block-only** artifact checkpoint restoration. An observed positive lending-pool debt balance with zero discovered borrower positions at **full** completion now produces an explicit `BORROWER_DEBT_MISSING_UNVERIFIED` status. Neither CI success nor a partial count constitutes a verified debt market index. See [`docs/RHEA_STAGE14_FULL_INDEX.md`](docs/RHEA_STAGE14_FULL_INDEX.md). Trading is disabled.
+
+## Stage 15 — Read-only isolated position paper health
+
+`npm run probe:rhea:paper-health` checks discovered isolated positions using exact on-chain share and balance evidence, Stage 13 lending-owned Pyth price quotes and historical Burrow 27-decimal valuation. It outputs `PAPER_AT_RISK_UNAPPROVED`, `PAPER_HEALTHY_UNAPPROVED` or `BLOCKED` — **not** actual NEAR liquidation eligibility. No position is executable and no expected profit is produced. A manual/advisory GitHub Action stores results. The full-market borrower indexing workflow remains separate. See [Stage 15 paper health model](docs/RHEA_STAGE15_PAPER_HEALTH.md).

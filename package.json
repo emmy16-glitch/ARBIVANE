@@ -24,7 +24,8 @@
     "probe:rhea:debt-index": "node --experimental-strip-types src/rhea/debt-discovery-cli.ts",
     "probe:rhea:triage": "node --experimental-strip-types src/rhea/candidate-triage-cli.ts",
     "probe:rhea:price-evidence": "node --experimental-strip-types src/rhea/price-evidence-cli.ts",
-    "probe:rhea:full-debt-index": "node --experimental-strip-types src/rhea/market-debt-index-cli.ts"
+    "probe:rhea:full-debt-index": "node --experimental-strip-types src/rhea/market-debt-index-cli.ts",
+    "probe:rhea:paper-health": "node --experimental-strip-types src/rhea/health-screen-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

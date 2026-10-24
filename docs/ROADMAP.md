@@ -158,3 +158,14 @@ position-aware debt findings and zero execution permission. Live debt totals
 remain unknown until the full scan completes. NEAR Lake future integration is
 reserved for event-based incremental indexing and reconciliation, not claimed
 implemented. See [Stage 14 design](RHEA_STAGE14_FULL_INDEX.md).
+
+### Stage 15 — Position-scoped paper health screen (implemented; not trade-ready)
+- [x] Compose Stage 11-13 borrower, position and price evidence at one finalized NEAR block.
+- [x] Compare detailed shares to historical upstream pool conversion using BigInt; block on mismatch.
+- [x] Evaluate historical 27-decimal collateral and debt adjustments and indicative health per isolated position.
+- [x] Explicit missing/stale/invalid quote blockers, bounded RPC reads and advisory CI artifact.
+- [ ] Independently prove **deployed** Rhea health/oracle/liquidation parity and derivative prices.
+- [ ] Obtain a complete source-backed market debt index; confirm any observed risk against authoritative live code.
+- [ ] Establish liquidator solvency, costs, timing, competition and fund-safety policies before trade execution.
+
+See [Stage 15 notes](RHEA_STAGE15_PAPER_HEALTH.md).
