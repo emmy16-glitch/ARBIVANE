@@ -149,3 +149,12 @@ Bounded account-index scans with an exact nextOffset, isolated-position debt-sha
 - [x] Offline regression tests and advisory on-chain CI workflow.
 - [ ] Verify production lending price transformation, derivative ratios and exact
   deployed liquidation/health parity. This remains a critical **blocking gate**.
+
+### Stage 14 (implemented: read-only full-market backfill)
+
+NEAR RPC finalized-block complete-account-index scanner with bounded concurrent
+pagination, checkpoint/resume only at the identical block and verified code hash,
+position-aware debt findings and zero execution permission. Live debt totals
+remain unknown until the full scan completes. NEAR Lake future integration is
+reserved for event-based incremental indexing and reconciliation, not claimed
+implemented. See [Stage 14 design](RHEA_STAGE14_FULL_INDEX.md).
