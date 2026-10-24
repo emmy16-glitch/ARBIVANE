@@ -65,3 +65,12 @@ test('shard merge rejects inconsistent block, missed ranges and cross-shard acco
 test('invalid shard planner indices rejected before network work',()=>{
  for(const bad of [[10,-1,2],[10,2,2],[10,0,0],[10,0,17],[-2,0,3]])assert.throws(()=>shardRange(...bad),/INVALID/);
 });
+
+test('full-market shards run once on a main workflow update and do not overload public RPC',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const yaml=await readFile(new URL('../.github/workflows/rhea-sharded-index.yml',import.meta.url),'utf8');
+ assert.ok(yaml.includes('  push:\n    branches: [main]'));
+ assert.equal(yaml.split("github.event_name == 'workflow_dispatch' || github.event_name == 'push'").length-1,2);
+ assert.ok(yaml.includes('max-parallel: 2'));
+ assert.ok(yaml.includes("RHEA_DETAIL_CONCURRENCY: '2'"));
+});

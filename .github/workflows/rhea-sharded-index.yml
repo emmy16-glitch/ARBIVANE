@@ -1,12 +1,19 @@
 name: NEAR Rhea sharded borrower index (read only)
 on:
   workflow_dispatch:
+  # Trigger one real detailed-position backfill on main when THIS workflow changes.
+  # Pull requests run only the cheap preflight and schema witness.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-sharded-index.yml'
   pull_request:
     paths:
       - 'src/rhea/debt-schema-witness*'
       - 'src/rhea/market-shards*'
       - 'src/rhea/market-shard-snapshot-cli.ts'
       - 'src/rhea/merge-shards-cli.ts'
+      - 'src/rhea/detailed-debt-index*'
       - 'tests/rhea-sharded-index.test.mjs'
       - '.github/workflows/rhea-sharded-index.yml'
 permissions:
@@ -73,10 +80,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   shards:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     needs: preflight
     strategy:
       fail-fast: false
+      # Limit public RPC pressure across GitHub runners.
+      max-parallel: 2
       matrix:
         id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     runs-on: ubuntu-latest
@@ -105,7 +114,7 @@ jobs:
           RHEA_EXPECTED_LENDING_CODE_HASH: ${{ needs.preflight.outputs.hash }}
           RHEA_BACKFILL_PINNED_BLOCK: ${{ needs.preflight.outputs.block }}
           RHEA_BACKFILL_PAGE_SIZE: '50'
-          RHEA_DETAIL_CONCURRENCY: '3'
+          RHEA_DETAIL_CONCURRENCY: '2'
           RHEA_BACKFILL_BATCH_DELAY_MS: '300'
           RHEA_BACKFILL_MAX_RETRIES: '7'
           RHEA_BACKFILL_RATE_LIMIT_DELAY_MS: '5000'
@@ -127,7 +136,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   reconcile:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     needs: [preflight, shards]
     runs-on: ubuntu-latest
     timeout-minutes: 3
