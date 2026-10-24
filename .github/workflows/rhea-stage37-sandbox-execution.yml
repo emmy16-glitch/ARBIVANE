@@ -86,12 +86,16 @@ jobs:
         run: |
           set -euo pipefail
           node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs | tee stage37-sandbox-execution.json
+ stage41-sandbox-balance-settlement.json
           jq -e '.mode == "ARBIVANE_STAGE37_SANDBOX_RESULT" and .chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .realProfitVerified == false and .mayBroadcastMainnet == false' stage37-sandbox-execution.json
+ stage41-sandbox-balance-settlement.json
           jq '{status,attemptedTransaction,receiptCount,failedReceiptCount,blockers}' stage37-sandbox-execution.json >> "$GITHUB_STEP_SUMMARY"
+          if test -s stage41-sandbox-balance-settlement.json; then jq '{status,borrowerDebtDecreaseInternal,borrowerCollateralDecreaseInternal,actorSeizeFtIncreaseAtomic,positiveNetProfitVerified}' stage41-sandbox-balance-settlement.json >> "$GITHUB_STEP_SUMMARY"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: rhea-stage37-actual-sandbox-execution
           path: stage37-sandbox-execution.json
+ stage41-sandbox-balance-settlement.json
           if-no-files-found: warn
           retention-days: 14
