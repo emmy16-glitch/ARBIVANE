@@ -194,3 +194,12 @@ scenario scoring. Manual GitHub Actions workflow and comprehensive mocks added.
 Pending: reliable complete real debt index, current deployed Rhea contract parity,
 production price coverage, real competition/funding/fee estimates, custody proofs
 and safe execution. Live liquidation remains disabled.
+
+
+### Stage 18 — Verified detailed-shard health bridge
+
+- [x] Reconcile all detailed borrower shards, code-hash pins, same-block account coverage and unique registry IDs.
+- [x] Recheck indexed borrowers from \`get_account_all_positions\` even when the paged account row omits its debt.
+- [x] Validate detailed share-to-balance arithmetic, block metadata, direct-Pyth quotes and old-block freshness before paper-health labels.
+- [x] Add a bounded manual or successful-main-scan-triggered GitHub Actions artifact bridge.
+- [ ] Obtain complete live market shard evidence, verify deployed Rhea Wasm health and liquidation parity, and prove funding, liquidity, costs and net profit.
