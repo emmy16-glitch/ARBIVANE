@@ -257,3 +257,16 @@ position-aware detail checks and lending-owned Pyth metadata classification.
 matched the contract detail. It never reports eligibility, approved prices,
 health, executable profit or gas funding. See
 [Stage 12 triage protocol](docs/RHEA_STAGE12_TRIAGE.md).
+
+## Stage 13 — Oracle evidence for read-only debt positions
+
+`npm run probe:rhea:price-evidence` runs bounded Stage 12 position triage,
+then checks the lending-owned direct Pyth feed IDs and observed aggregate-oracle
+quote freshness and uncertainty at the **same finalized block**. Only quote
+metadata is returned. Unverified position details, defaults, missing feeds,
+expired quotes and budget limits fail closed. This is **not** liquidation
+eligibility, on-chain price parity, financial health, or profit estimation.
+See [Stage 13 read-only price evidence](docs/RHEA_STAGE13_ORACLE_EVIDENCE.md).
+
+**Safety invariant:** `executionEnabled=false`, `liquidationParityVerified=false`,
+`priceParityVerified=false`, `executable=false`, and `estimatedProfit=null`.
