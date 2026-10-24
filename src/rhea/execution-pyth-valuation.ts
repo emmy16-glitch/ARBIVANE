@@ -121,6 +121,7 @@ export interface ExecutionPythValuationOptions {
  lendingContract:string;pythOracle:string;borrowerAccountId:string;
  expectedLendingCodeHash:string;expectedPythOracleCodeHash:string;
  nowMs:number;maxConfidenceBps:number;sanityMaxUsd:string;maxConcurrency:number;
+ pinnedBlockHeight?:number;
 }
 export interface ExecutionPythValuationReport {
  mode:'RHEA_ACTIVE_EXECUTE_WITH_PYTH_VALUATION';chain:'NEAR_MAINNET';
@@ -144,7 +145,8 @@ function validateOptions(o:ExecutionPythValuationOptions):bigint{
   ![o.expectedLendingCodeHash,o.expectedPythOracleCodeHash].every(x=>HASH.test(x))||
   !Number.isSafeInteger(o.nowMs)||Math.abs(Date.now()-o.nowMs)>30000||
   !Number.isSafeInteger(o.maxConfidenceBps)||o.maxConfidenceBps<1||o.maxConfidenceBps>300||
-  !Number.isSafeInteger(o.maxConcurrency)||o.maxConcurrency<1||o.maxConcurrency>16)throw Error('INVALID_ACTIVE_PYTH_OPTIONS');
+  !Number.isSafeInteger(o.maxConcurrency)||o.maxConcurrency<1||o.maxConcurrency>16||
+ (o.pinnedBlockHeight!==undefined&&(!Number.isSafeInteger(o.pinnedBlockHeight)||o.pinnedBlockHeight<1)))throw Error('INVALID_ACTIVE_PYTH_OPTIONS');
  const cap=uint(o.sanityMaxUsd,'SANITY_CAP_USD');
  if(cap<100n||cap>100_000_000n)throw Error('INVALID_SANITY_CAP');
  return cap;
@@ -161,7 +163,7 @@ export async function inspectActivePythValuation(
  rpc:Pick<NearReadOnlyRpc,'viewAccount'|'view'>,o:ExecutionPythValuationOptions,
 ):Promise<ExecutionPythValuationReport>{
  const cap=validateOptions(o);
- const latest=await rpc.viewAccount(o.lendingContract);
+ const latest=await rpc.viewAccount(o.lendingContract,o.pinnedBlockHeight);
  if(!UINT.test(latest.blockHeight)||!Number.isSafeInteger(Number(latest.blockHeight))||latest.codeHash!==o.expectedLendingCodeHash)
   throw Error('ACTIVE_PYTH_LENDING_CODE_DRIFT');
  const block=Number(latest.blockHeight),height=latest.blockHeight;

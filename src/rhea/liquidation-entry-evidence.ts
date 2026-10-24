@@ -10,6 +10,7 @@ export interface EntryOptions {
  borrowerAccountId:string;liquidatorAccountId?:string;
  expectedLendingCodeHash:string;expectedConfiguredOracleCodeHash:string;
  expectedAggregatePriceReaderCodeHash:string;
+ pinnedBlockHeight?:number;
 }
 export interface LiquidationEntryEvidence {
  mode:'RHEA_STAGE25_MAINNET_LIQUIDATION_ENTRY_READ_ONLY';
@@ -54,7 +55,9 @@ export async function inspectLiveLiquidationEntry(
   throw Error('STAGE25_CONTRACTS_NOT_DISTINCT');
  if(o.liquidatorAccountId!==undefined&&(!ID.test(o.liquidatorAccountId)||
    o.liquidatorAccountId===o.borrowerAccountId))throw Error('INVALID_STAGE25_LIQUIDATOR');
- const latest=await rpc.viewAccount(o.lendingContract);
+ if(o.pinnedBlockHeight!==undefined&&(!Number.isSafeInteger(o.pinnedBlockHeight)||o.pinnedBlockHeight<1))
+  throw Error('INVALID_STAGE34_PINNED_BLOCK');
+ const latest=await rpc.viewAccount(o.lendingContract,o.pinnedBlockHeight);
  if(!/^[1-9][0-9]{0,15}$/.test(latest.blockHeight)||!Number.isSafeInteger(Number(latest.blockHeight))||
    latest.codeHash!==o.expectedLendingCodeHash)throw Error('LENDING_CODE_CHANGED_OR_INVALID_FINAL_BLOCK');
  const height=Number(latest.blockHeight);
