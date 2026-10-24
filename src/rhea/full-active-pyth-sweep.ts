@@ -101,8 +101,8 @@ export async function sweepIndexedDebtWithActivePyth(
  // hashes cannot bypass the original full-index validation.
  if(cp.nextFinding===end){
   const empty=await refreshIndexedBorrowerCandidates(rpc,source,{
-   ...o,fromFinding:end,maxFindings:1},evaluate);
-  if(empty.processed!==0&&end===source.debtAccounts)throw Error('STAGE32_END_CURSOR_INCONSISTENT');
+   ...o,fromFinding:source.debtAccounts,maxFindings:1},evaluate);
+  if(empty.processed!==0)throw Error('STAGE32_END_CURSOR_INCONSISTENT');
   return progress(cp);
  }
  for(;cp.nextFinding<end;){
