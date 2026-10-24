@@ -1,0 +1,158 @@
+name: NEAR Rhea sharded borrower index (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/debt-schema-witness*'
+      - 'src/rhea/market-shards*'
+      - 'src/rhea/market-shard-snapshot-cli.ts'
+      - 'src/rhea/merge-shards-cli.ts'
+      - 'tests/rhea-sharded-index.test.mjs'
+      - '.github/workflows/rhea-sharded-index.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      block: ${{ steps.snapshot.outputs.block }}
+      hash: ${{ steps.snapshot.outputs.hash }}
+      total: ${{ steps.snapshot.outputs.total }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Check read-only NEAR finalized snapshot
+        id: snapshot
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:shard-snapshot | tail -n 1 > snapshot.json
+          echo "block=$(jq -r '.blockHeight' snapshot.json)" >> "$GITHUB_OUTPUT"
+          echo "hash=$(jq -r '.lendingCodeHash' snapshot.json)" >> "$GITHUB_OUTPUT"
+          echo "total=$(jq -r '.totalAccounts' snapshot.json)" >> "$GITHUB_OUTPUT"
+          jq '{mode,blockHeight,totalAccounts,borrowedPoolBalancePositive,executionEnabled}' snapshot.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: near-rhea-snapshot-preflight
+          path: snapshot.json
+          retention-days: 7
+  witness:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Independently compare registry rows with detailed isolated-position view
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_WITNESS_ACCOUNTS: '24'
+          RHEA_WITNESS_PINNED_BLOCK: ${{ needs.preflight.outputs.block }}
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:borrower-witness | tee witness-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-borrower-witness
+          path: witness-report.json
+          if-no-files-found: warn
+          retention-days: 7
+  shards:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        id: [0, 1, 2, 3, 4, 5]
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Calculate nonoverlapping account range
+        env:
+          TOTAL: ${{ needs.preflight.outputs.total }}
+          SHARD: ${{ matrix.id }}
+        run: |
+          set -euo pipefail
+          start=$(( TOTAL * SHARD / 6 ))
+          end=$(( TOTAL * (SHARD + 1) / 6 ))
+          echo "RHEA_BACKFILL_FROM_INDEX=$start" >> "$GITHUB_ENV"
+          echo "RHEA_BACKFILL_MAX_ACCOUNTS=$((end - start))" >> "$GITHUB_ENV"
+      - name: Enumerate this NEAR account shard, exact common block
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: ${{ needs.preflight.outputs.hash }}
+          RHEA_BACKFILL_PINNED_BLOCK: ${{ needs.preflight.outputs.block }}
+          RHEA_BACKFILL_PAGE_SIZE: '50'
+          RHEA_BACKFILL_CONCURRENCY: '1'
+          RHEA_BACKFILL_BATCH_DELAY_MS: '750'
+          RHEA_BACKFILL_MAX_RETRIES: '7'
+          RHEA_BACKFILL_RATE_LIMIT_DELAY_MS: '5000'
+          RHEA_BACKFILL_CHECKPOINT_PATH: rhea-debt-index.checkpoint.json
+          RHEA_BACKFILL_REPORT_PATH: rhea-debt-index.report.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:full-debt-index | tee shard-summary.json
+          cp rhea-debt-index.checkpoint.json 'shard-${{ matrix.id }}.json'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-shard-${{ matrix.id }}
+          path: |
+            shard-${{ matrix.id }}.json
+            rhea-debt-index.checkpoint.json
+            rhea-debt-index.report.json
+            shard-summary.json
+          if-no-files-found: warn
+          retention-days: 7
+  reconcile:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: [preflight, shards, witness]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: near-rhea-shard-*
+          path: shards
+      - name: Merge only matching, complete same-block account shards
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          RHEA_SHARD_COUNT: '6'
+          RHEA_SHARD_ROOT: shards
+          RHEA_MERGED_REPORT_PATH: rhea-complete-index-evidence.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:merge-shards
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-shard-verified-aggregate
+          path: rhea-complete-index-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
