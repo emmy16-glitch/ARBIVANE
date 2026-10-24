@@ -22,6 +22,17 @@ function u128(v:unknown,label:string):bigint {
   if(n > U128) throw Error(`${label}: overflows u128`);
   return n;
 }
+function borrowerCount(value:unknown):number {
+  if(typeof value === 'number') {
+    if(!Number.isSafeInteger(value)||value<0||value>20_000_000)throw Error('invalid total borrower count');
+    return value;
+  }
+  // NEAR contracts may serialize u32 as JSON integer; a legacy RPC may return
+  // a digit string. Share balances still require exact u128 strings.
+  const count=u128(value,'total borrowers');
+  if(count>20_000_000n)throw Error('invalid total borrower count');
+  return Number(count);
+}
 function name(v:unknown,label:string):string {
   if(typeof v !== 'string' || !ID.test(v)) throw Error(`${label}: invalid account ID`);
   return v;
@@ -165,8 +176,7 @@ export async function probeDeployedShares(rpc:NearReadOnlyRpc,cfg:DeployedParity
   ]);
   if(assets.blockHeight!==String(height)||count.blockHeight!==String(height))throw Error('inconsistent pinned block');
   const pools=parseParityPools(assets.value);
-  const total=Number(u128(count.value,'total borrowers'));
-  if(!Number.isSafeInteger(total)||total>20_000_000)throw Error('invalid total borrower count');
+  const total=borrowerCount(count.value);
   const sampleLimit=Math.min(total,cfg.maxAccounts);
   let examined=0,checked=0,checkedPositions=0,mismatched=0,mismatchCount=0,schemaFailures=0;
   let anyDebt=false;

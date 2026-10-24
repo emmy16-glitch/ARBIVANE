@@ -81,3 +81,5 @@ version; separately establish active Pyth price valuation, legacy USN position l
 share mutations and post-liquidation health checks using same-block reference data.
 Only after independent custody and financing proofs should transaction execution be
 considered.
+
+**Initial live probe correction:** The first advisory run returned an on-chain `get_num_accounts` JSON number, not a numeric string. The strict parser now accepts bounded, safe-integer `u32`-style numbers for the account count only, retaining exact string-only `u128` validation for all share and token balances.

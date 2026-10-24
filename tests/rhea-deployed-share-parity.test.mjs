@@ -18,7 +18,7 @@ function mock(extra={}){
  async view(id,m,args,h){events.push(['view',id,m,args,h]);
   let value;
   if(m==='get_assets_paged')value=raw;
-  else if(m==='get_num_accounts')value='2';
+  else if(m==='get_num_accounts')value=2;
   else if(m==='get_accounts_paged')value=[page,{account_id:'bob.near',borrowed:{},collateral:{}}];
   else if(m==='get_account')value=detailed;
   else throw Error('unexpected '+m);
@@ -113,4 +113,15 @@ test('unknown onchain share format blocks sampled parity',async()=>{
  const {rpc}=mock({patch:async(args,old)=>args[1]==='get_accounts_paged'?{blockHeight:'101',value:[{account_id:'alice.near',borrowed:{'unknown.near':'1'},collateral:{}},{account_id:'bob.near',borrowed:{},collateral:{}}]}:old()});
  const r=await probeDeployedShares(rpc,settings);
  assert.equal(r.status,'UNSUPPORTED_ACCOUNT_SCHEMA');assert.equal(r.checkedAccounts,0);
+});
+
+test('stringified account count remains valid for legacy-compatible RPCs',async()=>{
+ const {rpc}=mock({patch:async(args,old)=>args[1]==='get_num_accounts'?{blockHeight:'101',value:'2'}:old()});
+ const r=await probeDeployedShares(rpc,settings);assert.equal(r.totalAccounts,2);
+});
+test('fractional and negative numeric account counts fail closed',async()=>{
+ for(const value of [-1,1.5,Number.MAX_SAFE_INTEGER]){
+  const {rpc}=mock({patch:async(args,old)=>args[1]==='get_num_accounts'?{blockHeight:'101',value}:old()});
+  await assert.rejects(()=>probeDeployedShares(rpc,settings),/invalid total borrower count/);
+ }
 });
