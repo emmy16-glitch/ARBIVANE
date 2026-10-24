@@ -35,12 +35,18 @@ async function main(){
     maxRetries:numberEnv('RHEA_BACKFILL_MAX_RETRIES','7'),
     rateLimitBaseDelayMs:numberEnv('RHEA_BACKFILL_RATE_LIMIT_DELAY_MS','5000'),
     expectedLendingCodeHash:env.RHEA_EXPECTED_LENDING_CODE_HASH||undefined,
+
   };
+  const pinned=env.RHEA_BACKFILL_PINNED_BLOCK?numberEnv('RHEA_BACKFILL_PINNED_BLOCK','0'):undefined;
+  if(pinned!==undefined&&pinned<1)throw Error('invalid pinned block');
+  class SnapshotReadOnlyRpc extends NearReadOnlyRpc {
+    async viewAccount(contractId:string,blockId?:number){return super.viewAccount(contractId,blockId??pinned);}
+  }
   let latest:DebtBackfillCheckpoint|undefined;
   let latestSummary:ReturnType<typeof import('./market-debt-index.ts').summarizeDebtBackfill>|undefined;
   let checkpoint:DebtBackfillCheckpoint,summary:NonNullable<typeof latestSummary>;
   try{
-  ({checkpoint,summary}=await backfillRheaDebtIndex(new NearReadOnlyRpc(url),opts,prior,async(state,s)=>{
+  ({checkpoint,summary}=await backfillRheaDebtIndex(new SnapshotReadOnlyRpc(url),opts,prior,async(state,s)=>{
     latest=state;latestSummary=s;
     await save(checkpointPath,state);
     // Privacy-conscious CI logs: do not echo borrower identifiers in progress.

@@ -14,14 +14,6 @@ on:
         description: 'Optional previous full-market workflow run ID to resume exactly the same block'
         required: false
         default: ''
-  pull_request:
-    paths:
-      - 'src/rhea/market-debt-index*'
-      - 'src/rhea/debt-discovery.ts'
-      - 'src/rhea/rpc.ts'
-      - 'tests/rhea-rpc.test.mjs'
-      - 'tests/rhea-full-market-index.test.mjs'
-      - '.github/workflows/rhea-full-market-index.yml'
 permissions:
   contents: read
   actions: read

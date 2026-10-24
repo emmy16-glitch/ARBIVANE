@@ -6,6 +6,6 @@ declare module 'node:fs/promises' {
   export function mkdir(path: string, options: {recursive: boolean}): Promise<string | undefined>;
 }
 declare module 'node:path' {
-  export function resolve(path: string): string;
   export function dirname(path: string): string;
+  export function resolve(...paths: string[]): string;
 }
