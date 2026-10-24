@@ -39,7 +39,7 @@ export interface Stage38Result {
 function number(v:unknown,min:number,max:number):boolean {
  return typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 }
-async function evaluateActualCandidate(
+export async function evaluateActualCandidate(
  input:Pick<NearReadOnlyRpc,'view'|'viewAccount'>,
  borrower:string,o:Stage38Options,
 ):Promise<SourceLiquidationSizing>{
