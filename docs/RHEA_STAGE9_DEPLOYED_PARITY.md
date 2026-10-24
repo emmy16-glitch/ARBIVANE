@@ -98,3 +98,21 @@ unsupported detailed row). The categories do not relax any guardrail or
 authorize a transaction. Inspect the JSON report and adapt only to a
 verified, source-backed current schema; do not assume the historical
 `get_account` view is compatible with modern isolated positions.
+
+### Stage 9 follow-up live diagnostic (24 October 2026)
+
+On PR #11 at finalized block `221344597`, bounded JSON-only logging identified
+**38 accounts with isolated positions** and **2 accounts missing the old
+paged top-level collateral/borrowed fields** among the 40 examined accounts.
+No account was successfully differential-tested (`checkedAccounts=0`).
+This demonstrates a *schema mismatch* between historical Burrow source-based
+share math and the current Rhea position model, **not** a liquidation failure or
+an oracle-readiness proof. The tool continues to report
+`UNSUPPORTED_ACCOUNT_SCHEMA`, `deployedLiquidationParityVerified=false`,
+and `executionEnabled=false`.
+
+Safety/typecheck workflow [run 40066397376](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40066397376)
+passed 139 tests. The advisory read-only workflow [run 40066397393](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40066397393)
+completed as a CI job **despite** the Stage 9 probe exiting with code 2.
+The next engineering milestone must examine Rhea's deployed isolated-position
+model and exact contract implementation before extending this parity check.
