@@ -118,3 +118,6 @@ See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
 - [ ] Validate complete liquidation pool mutations and receipt-reconciled execution in an isolated sandbox before any funds.
 
 See [Stage 8 source-math verification](RHEA_STAGE8_SOURCE_MATH.md).
+
+## Stage 9: Deployed borrower share differential
+Implemented: strictly block-pinned share-to-amount comparisons to the deployed `get_account` view on a bounded borrower sample; on-chain code hash observations and optional pins; explicit incompatible and mismatch outcomes. **Liquidation, oracle, custody and bytecode parity still not verified.**
