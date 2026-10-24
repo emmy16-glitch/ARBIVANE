@@ -2,7 +2,7 @@
 
 **Autonomous Risk-Based Intelligence, Verification And NEAR Execution**
 
-> **Status: Stage 10 read-only isolated position verification. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
+> **Status: Stage 11 read-only isolated position verification. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
 
 ARBIVANE is a proposed NEAR-first autonomous DeFi liquidation system. It is designed to observe a market, validate current protocol state, calculate conservative economics, reject unsafe/competitive opportunities, execute only when on-chain authorization is enforceable, reconcile final actual balances, then optionally convert and transfer realized proceeds via NEAR Intents.
 
@@ -244,3 +244,7 @@ All reports permanently say `liquidationParityVerified=false` and
 `executionEnabled=false`. Matching shares is **not** verification of the deployed
 Wasm, live oracle valuation, liquidation preconditions, or profits.
 Read [Stage 10 evidence](docs/RHEA_STAGE10_ISOLATED_POSITIONS.md) for the outstanding review gates.
+
+## Stage 11 — bounded read-only debt discovery
+
+`npm run probe:rhea:debt-index` scans operator-selected finalized-block account-index windows, detecting **nonzero debt shares per isolated position** with exact resume offsets. It does not calculate liquidation eligibility, prices or profits. Invalid borrower schemas are explicitly counted, never assumed debt-free. The optional [manual GitHub workflow](.github/workflows/rhea-debt-discovery.yml) runs a limited window and saves an evidence report. See [Stage 11 limitations and instructions](docs/RHEA_STAGE11_DEBT_DISCOVERY.md). Execution remains disabled.
