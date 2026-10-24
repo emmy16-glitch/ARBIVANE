@@ -87,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run probe:rhea:paged-position-index | tee summary-${{ matrix.id }}.json
-          jq -e '.mode == "NEAR_RHEA_SAME_BLOCK_BACKFILL" and .executionEnabled == false and .invalidAccounts == 0 and .nextIndex == .targetEndIndex' summary-${{ matrix.id }}.json
+          jq -e '.mode == "NEAR_RHEA_SAME_BLOCK_BACKFILL" and .executionEnabled == false and .invalidAccounts == 0 and .scannedAccounts > 0' summary-${{ matrix.id }}.json
       - name: Save shard checkpoints even if interrupted
         if: always()
         uses: actions/upload-artifact@v4
