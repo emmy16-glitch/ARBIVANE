@@ -7,7 +7,7 @@ import type {SandboxReplayPlan,SandboxResult} from './stage37-sandbox-liquidatio
  */
 const U128=(1n<<128n)-1n;
 const UINT=/^(0|[1-9][0-9]{0,38})$/;
-const ID=/^[a-z0-9._:-]{1,100}$/;
+const ID=/^[A-Za-z0-9._:-]{1,100}$/;
 const TOKEN=/^[a-z0-9._-]{2,64}$/;
 function obj(value:unknown,label:string):Record<string,unknown>{
  if(value===null||typeof value!=='object'||Array.isArray(value))
