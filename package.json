@@ -44,7 +44,8 @@
     "probe:rhea:replay-admission": "node --experimental-strip-types src/rhea/replay-admission-cli.ts",
     "probe:rhea:sandbox-state-import": "node --experimental-strip-types scripts/stage27-sandbox-state-import.mjs",
     "probe:rhea:configured-valuation": "node --experimental-strip-types src/rhea/configured-oracle-valuation-cli.ts",
-    "probe:rhea:active-pyth-valuation": "node --experimental-strip-types src/rhea/execution-pyth-valuation-cli.ts"
+    "probe:rhea:active-pyth-valuation": "node --experimental-strip-types src/rhea/execution-pyth-valuation-cli.ts",
+    "probe:rhea:paged-position-index": "node --experimental-strip-types src/rhea/paged-position-index-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
