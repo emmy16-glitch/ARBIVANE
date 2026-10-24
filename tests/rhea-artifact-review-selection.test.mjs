@@ -53,3 +53,11 @@ test('automatic lookup filters all main-branch workflow runs by the exact index 
  assert.ok(yaml.includes('select(.name == "NEAR Rhea sharded borrower index (read only)")'));
  assert.ok(!yaml.includes('actions/workflows/rhea-sharded-index.yml/runs?'));
 });
+
+test('selector writes pure JSON and malformed output fails the GitHub job',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const w=await readFile(new URL('../.github/workflows/rhea-progressive-shard-review.yml',import.meta.url),'utf8');
+ assert.ok(w.includes('node --experimental-strip-types src/rhea/artifact-review-selector-cli.ts > selected-shard.json'));
+ assert.ok(!w.includes('npm run probe:rhea:select-shard-review > selected-shard.json'));
+ assert.ok(w.includes("jq -e 'type == \"object\""));
+});

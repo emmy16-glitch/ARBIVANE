@@ -54,7 +54,9 @@ jobs:
           RHEA_REVIEW_SOURCE_RUN_ID="$run" \
             RHEA_REVIEW_SOURCE_ARTIFACTS_PATH=source-artifacts.json \
             RHEA_REVIEWED_NAMES_PATH=reviewed-names.txt \
-            npm run probe:rhea:select-shard-review > selected-shard.json
+            node --experimental-strip-types src/rhea/artifact-review-selector-cli.ts > selected-shard.json
+          # Invalid JSON must FAIL the job, never masquerade as no artifact.
+          jq -e 'type == "object" and (.sourceRunId | type == "number") and .executionEnabled == false and .marketCoverageVerified == false and (.shardId == null or (.shardId | type == "number"))' selected-shard.json > /dev/null
           if jq -e '.shardId != null' selected-shard.json > /dev/null; then
             echo "run=$run" >> "$GITHUB_OUTPUT"
             echo "shard=$(jq -r '.shardId' selected-shard.json)" >> "$GITHUB_OUTPUT"
