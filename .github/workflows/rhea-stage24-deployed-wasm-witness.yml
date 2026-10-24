@@ -1,0 +1,49 @@
+name: NEAR Rhea deployed Wasm witness (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/deployed-wasm-witness.ts'
+      - 'src/rhea/deployed-wasm-witness-cli.ts'
+      - 'src/rhea/liquidation-contract-preflight.ts'
+      - '.github/workflows/rhea-stage24-deployed-wasm-witness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/deployed-wasm-witness.ts'
+      - 'src/rhea/deployed-wasm-witness-cli.ts'
+      - '.github/workflows/rhea-stage24-deployed-wasm-witness.yml'
+permissions:
+  contents: read
+jobs:
+  deployed-wasm-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify on-chain Wasm code digest, exports and same-block lending config
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts > stage24-deployed-wasm-witness.json
+          jq -e '.lending.codeBytesHashMatched == true and .oracle.codeBytesHashMatched == true and .lending.blockHeight == .oracle.blockHeight and .lending.blockHeight == .blockHeight and .sourceWasmReproduciblyMatched == false and .deployedLiquidationRulesVerified == false and .transactionDryRunPerformed == false and .mayBroadcast == false and .executionEnabled == false' stage24-deployed-wasm-witness.json
+      - name: Record strictly read-only interpretation
+        if: always()
+        run: |
+          echo 'Matched deployed Wasm bytes and inspected exports do NOT prove executable liquidation semantics or audited source parity.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No signing keys, no transaction construction, no liquidations, and no realized profit.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage24-deployed-wasm-readonly
+          path: stage24-deployed-wasm-witness.json
+          if-no-files-found: warn
+          retention-days: 7
