@@ -98,10 +98,30 @@ export function summarizeStage37SandboxOutcome(
   (x as Record<string,unknown>).outcome&&typeof (x as Record<string,unknown>).outcome==='object'&&
   typeof ((x as Record<string,unknown>).outcome as Record<string,unknown>).status==='object');
  if(!allValid)throw Error('SANDBOX_MALFORMED_RECEIPTS');
+ const receiptDefs=result.receipts;
+ if(!Array.isArray(receiptDefs)||receiptDefs.length===0)
+  throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
+ const callbacks=new Set<string>();
+ for(const x of receiptDefs){
+  if(!x||typeof x!=='object')continue;
+  const row=x as Record<string,unknown>;
+  if(typeof row.receipt_id!=='string'||!row.receipt||typeof row.receipt!=='object')continue;
+  const action=(row.receipt as Record<string,unknown>).Action;
+  if(!action||typeof action!=='object')continue;
+  const actions=(action as Record<string,unknown>).actions;
+  if(Array.isArray(actions)&&actions.some(a=>a&&typeof a==='object'&&
+   (a as Record<string,unknown>).FunctionCall&&
+   typeof (a as Record<string,unknown>).FunctionCall==='object'&&
+   ((a as Record<string,unknown>).FunctionCall as Record<string,unknown>).method_name==='callback_execute_with_pyth'))
+   callbacks.add(row.receipt_id);
+ }
+ const outcomeIds=new Set(receipts.map(x=>(x as Record<string,unknown>).id));
+ if(callbacks.size===0||[...callbacks].some(id=>!outcomeIds.has(id)))
+  throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_ATTESTED');
  const status=result.status;
  const final=result.final_execution_status==='FINAL';
  const overallFail=!!status&&typeof status==='object'&&Object.prototype.hasOwnProperty.call(status,'Failure');
- if(!final||(!overallFail&&failed>0)||(!overallFail&&result.status===undefined))
+ if(!final||(overallFail&&failed===0)||(!overallFail&&failed>0)||result.status===undefined)
   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
  const gas=receipts.reduce((n,x)=>{
   const y=(x as {outcome:{gas_burnt:unknown}}).outcome.gas_burnt;
