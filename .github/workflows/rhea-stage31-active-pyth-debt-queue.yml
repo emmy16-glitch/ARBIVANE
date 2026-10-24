@@ -1,5 +1,9 @@
 name: Rhea Stage31 active Pyth borrower queue (read only)
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage31-active-pyth-debt-queue.yml'
   workflow_run:
     workflows:
       - Rhea complete mainnet bulk borrower scan (read only)
@@ -18,7 +22,7 @@ permissions:
   actions: read
 jobs:
   reprice-borrowers:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -30,7 +34,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: rhea-full-paged-verified-market
-          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.scan_run_id }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.event_name == 'workflow_dispatch' && inputs.scan_run_id || '40128285853' }}
           github-token: ${{ github.token }}
           path: input
       - name: Refresh priced borrowers from source findings, never broadcast
