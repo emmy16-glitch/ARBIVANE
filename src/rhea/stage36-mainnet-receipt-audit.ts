@@ -40,7 +40,7 @@ export interface ExecutedLiquidationReceipt {
  seizedTokenId:string;seizedInternalAmount:string;
  callbackRejectionCategory:'BORROWED_ASSET_DISALLOWED'|'OTHER_CONTRACT_REJECTION'|null;
  overallFinalExecutionStatus:'FINAL';
- gasBurntTgasRaw:string;
+ gasBurntGasUnits:string;
  mainnetLiquidationTransactionSucceeded:boolean;
  borrowerDebtDeltaVerified:false;liquidatorCollateralDeltaVerified:false;
  tokenUnitEquivalenceVerified:false;netProfitVerified:false;
@@ -144,7 +144,7 @@ export function attestFinalMainnetLiquidation(
   borrowedInternalAmount:borrowedAmount,repaidTokenId:repaidToken,
   repaidInternalAmount:repaidAmount,seizedTokenId:seizedToken,
   seizedInternalAmount:seizedAmount,callbackRejectionCategory:category,
-  overallFinalExecutionStatus:'FINAL',gasBurntTgasRaw:totalGas.toString(),
+  overallFinalExecutionStatus:'FINAL',gasBurntGasUnits:totalGas.toString(),
   mainnetLiquidationTransactionSucceeded:!overallFailed,
   borrowerDebtDeltaVerified:false,liquidatorCollateralDeltaVerified:false,
   tokenUnitEquivalenceVerified:false,netProfitVerified:false,
