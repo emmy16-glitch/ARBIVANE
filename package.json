@@ -32,7 +32,8 @@
     "probe:rhea:shard-snapshot": "node --experimental-strip-types src/rhea/market-shard-snapshot-cli.ts",
     "probe:rhea:merge-shards": "node --experimental-strip-types src/rhea/merge-shards-cli.ts",
     "probe:rhea:detailed-debt-index": "node --experimental-strip-types src/rhea/detailed-debt-index-cli.ts",
-    "probe:rhea:sharded-health": "node --experimental-strip-types src/rhea/sharded-health-cli.ts"
+    "probe:rhea:sharded-health": "node --experimental-strip-types src/rhea/sharded-health-cli.ts",
+    "probe:rhea:observed-shard": "node --experimental-strip-types src/rhea/observed-shard-health-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

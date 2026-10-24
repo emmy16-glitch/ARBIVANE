@@ -1,0 +1,81 @@
+name: NEAR Rhea partial-shard debt evidence (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'GitHub Actions run ID with a persisted detailed-position shard artifact'
+        required: true
+        type: string
+      shard_id:
+        description: 'Shard index 0 through 95 from the same NEAR index run'
+        required: true
+        default: '0'
+        type: string
+      finding_cursor:
+        description: 'First observed debt-bearing account within this shard'
+        required: true
+        default: '0'
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  partial-shard-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Validate bounded shard and run input
+        env:
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SHARD: ${{ inputs.shard_id }}
+          CURSOR: ${{ inputs.finding_cursor }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[1-9][0-9]{0,17}$ ]] || exit 2
+          [[ "$SHARD" =~ ^(0|[1-9][0-9]?)$ ]] || exit 2
+          [ "$SHARD" -le 95 ] || exit 2
+          [[ "$CURSOR" =~ ^(0|[1-9][0-9]*)$ ]] || exit 2
+          echo "CHECKED_SHARD=$SHARD" >> "$GITHUB_ENV"
+      - name: Download this repository's persisted detailed shard checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: near-rhea-shard-${{ inputs.shard_id }}
+          run-id: ${{ inputs.source_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: observed-shard
+      - name: Validate artifact and recheck real borrower positions at one NEAR block
+        id: validate
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_OBSERVED_SHARD_FILE: observed-shard/shard-${{ inputs.shard_id }}.json
+          RHEA_OBSERVED_SHARD_ID: ${{ inputs.shard_id }}
+          RHEA_OBSERVED_SHARD_COUNT: '96'
+          RHEA_INDEX_FINDING_CURSOR: ${{ inputs.finding_cursor }}
+          RHEA_INDEX_MAX_FINDINGS: '8'
+          RHEA_INDEX_MAX_FEEDS: '16'
+          RHEA_OBSERVED_REPORT_PATH: stage20-observed-shard.json
+        run: |
+          set -euo pipefail
+          npm run probe:rhea:observed-shard
+      - name: Explain explicitly limited evidence
+        if: always()
+        run: |
+          echo "Read-only partial-shard check: ${{ steps.validate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'This examines observed debt in one source shard ONLY, not the whole NEAR Rhea market.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Historical Pyth quotes may be stale or unavailable; no real profit or liquidation eligibility is proved.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: near-rhea-stage20-partial-evidence
+          path: stage20-observed-shard.json
+          if-no-files-found: warn
+          retention-days: 7

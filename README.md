@@ -325,3 +325,8 @@ verified market count, and no current liquidatable borrowers are claimed.
 ### Stage 18: verified NEAR shard-to-health bridge
 
 Use \`npm run probe:rhea:sharded-health\` to reconcile a complete set of \`get_account_all_positions\` shard checkpoints at one pinned NEAR block and recheck discovered borrowers using the *detailed* view rather than the paged registry's incomplete debt fields. The read-only GitHub workflow can run automatically after successful main-branch sharded scans or be manually dispatched. No liquidation eligibility, executable profit or trading authorization. See [Stage 18 documentation](docs/RHEA_STAGE18_SHARD_HEALTH.md).
+
+
+### Stage 20 — NEAR partially observed detailed-debt shard research
+
+Stage 20 adds strict read-only review of **one** saved detailed-position shard, even when the overall 96-shard market backfill is incomplete. It independently checks the pinned NEAR contract/code hash and block; bounded borrowers then pass through the existing paper health bridge. Observed counts are not total market counts, live liquidation eligibility, or profit. See [Stage 20 documentation](docs/RHEA_STAGE20_OBSERVED_SHARD.md) and the manual `NEAR Rhea partial-shard debt evidence (read only)` GitHub Actions workflow. No execution, signing, or PDF.
