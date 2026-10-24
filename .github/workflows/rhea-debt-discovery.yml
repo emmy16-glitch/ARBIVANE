@@ -1,0 +1,51 @@
+name: Manual Rhea debt discovery (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      from_index:
+        description: 'Account index to start scanning (0 to 20000000)'
+        required: true
+        default: '0'
+      max_accounts:
+        description: 'Accounts to examine (1 to 1000)'
+        required: true
+        default: '200'
+permissions:
+  contents: read
+jobs:
+  read-only-debt-window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Scan one bounded finalized-block range, no transactions
+        id: discovery
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_DISCOVERY_FROM_INDEX: ${{ inputs.from_index }}
+          RHEA_DISCOVERY_MAX_ACCOUNTS: ${{ inputs.max_accounts }}
+          RHEA_DISCOVERY_PAGE_SIZE: '25'
+          RHEA_DISCOVERY_MAX_FINDINGS: '20'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:debt-index | tee rhea-debt-discovery.json
+      - name: Record advisory state
+        if: always()
+        run: |
+          echo "Read-only discovery step: ${{ steps.discovery.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Read the JSON status, invalidAccounts, nextOffset, and blockHeight; this is never a liquidation approval.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Account indices can change across finalized blocks between separate runs. No transaction or wallet integration.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-debt-window-evidence
+          path: rhea-debt-discovery.json
+          if-no-files-found: warn
+          retention-days: 7

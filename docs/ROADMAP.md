@@ -126,3 +126,8 @@ Implemented: strictly block-pinned share-to-amount comparisons to the deployed `
 ### Stage 10 — isolated-position differential, not execution approval
 
 Read-only `get_account_all_positions` validation, position-scoped shares, pinned finalized blocks and adverse schema tests. A live advisory probe reports its true JSON status separately from the green CI wrapper. Follow-up: prove deployed Wasm provenance, inspect any unsupported position schema, validate dynamic interest accrual, price composition and mutation rules; leave signing and money movement disabled.
+
+
+### Stage 11 — Rhea debt discovery (read-only implementation)
+
+Bounded account-index scans with an exact nextOffset, isolated-position debt-share reporting, schema-error counters and manually dispatched public-RPC evidence. These findings are **unvalued**, not liquidatable opportunities. Later work requires same-block detail checks and independently verified deployed-Wasm liquidation parity before custody or execution.
