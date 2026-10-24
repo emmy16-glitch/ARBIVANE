@@ -1,0 +1,64 @@
+name: Rhea Stage31 active Pyth borrower queue (read only)
+on:
+  workflow_run:
+    workflows:
+      - Rhea complete mainnet bulk borrower scan (read only)
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      scan_run_id:
+        description: 'Successful FULL market-scan GitHub Actions run ID'
+        required: true
+      from_finding:
+        description: 'Debt finding cursor (not account index)'
+        required: true
+        default: '0'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reprice-borrowers:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download verified full-scan artifact (same repository only)
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.scan_run_id }}
+          github-token: ${{ github.token }}
+          path: input
+      - name: Refresh priced borrowers from source findings, never broadcast
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE31_VERIFIED_INDEX_PATH: input/rhea-full-paged-index.json
+          RHEA_STAGE31_FROM_FINDING: ${{ github.event_name == 'workflow_dispatch' && inputs.from_finding || '0' }}
+          RHEA_STAGE31_MAX_FINDINGS: '12'
+          RHEA_STAGE31_CONCURRENCY: '2'
+          RHEA_STAGE31_REPORT_PATH: stage31-priced-debt-queue.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/active-pyth-debt-queue-cli.ts > stage31-summary.json
+          jq -e '.mode == "RHEA_STAGE31_ACTIVE_PYTH_DEBT_QUEUE" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .transactionReplayPerformed == false and .profitVerified == false and .processed <= 12' stage31-summary.json
+          jq -r '"Reviewed "+(.processed|tostring)+" indexed debt accounts. Paper-risk accounts: "+(.paperAtRisk|tostring)+", blocked: "+(.blocked|tostring)+", next debt finding cursor: "+(.nextFinding|tostring)+", remaining: "+(.remainingFindings|tostring)' stage31-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'Candidates are PAPER ONLY; further execution eligibility, financing and on-chain replay are required.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage31-priced-debt-queue
+          path: |
+            stage31-summary.json
+            stage31-priced-debt-queue.json
+          if-no-files-found: warn
+          retention-days: 14
