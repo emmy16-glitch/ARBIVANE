@@ -1,5 +1,6 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from './rpc.ts';
+import {ResilientNearReadOnlyRpc} from './resilient-readonly-rpc.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 import type {SweepCheckpoint} from './full-active-pyth-sweep.ts';
 import {diagnoseStage32BlockedAndRisk} from './stage33-diagnostics.ts';
@@ -14,7 +15,7 @@ const proc=(globalThis as typeof globalThis&{process:{env:Record<string,string|u
  const shards:SweepCheckpoint[]=[];
  for(let i=0;i<4;i++)shards.push(JSON.parse(await readFile(
   e.RHEA_STAGE33_SHARD_DIR+'/rhea-stage32-repriced-shard-'+i+'/stage32-reprice-checkpoint.json','utf8')) as SweepCheckpoint);
- const report=await diagnoseStage32BlockedAndRisk(new NearReadOnlyRpc(e.NEAR_RPC_URL),
+ const report=await diagnoseStage32BlockedAndRisk(new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(e.NEAR_RPC_URL)),
   source,shards,{
    baseCursor:12,maxBlockedPerShard:3,maxCandidates:16,concurrency:2,
    lendingContract:e.RHEA_LENDING_CONTRACT??'',pythOracle:e.RHEA_ORACLE_CONTRACT??'',
