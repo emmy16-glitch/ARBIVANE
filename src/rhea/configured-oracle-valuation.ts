@@ -32,7 +32,7 @@ export interface ConfiguredValuationReport {
  lendingCodeHash:string;configuredOracleCodeHash:string;
  configuredOraclePriceViewReturned:boolean;
  pricePublishAgeMs:number|null;legacyOraclePriceRecencySeconds:number|null;
- quotedTokens:number;candidatePositions:number;
+ quotedTokens:number;missingQuotedTokenIds:string[];candidatePositions:number;
  positions:Array<{positionId:string;status:'PAPER_AT_RISK_UNAPPROVED'|'PAPER_HEALTHY_UNAPPROVED'|'BLOCKED';
  reason:string|null;adjustedCollateralE27:string|null;adjustedDebtE27:string|null;
  healthFactorBps:string|null;legs:ConfiguredValueLeg[];}>;
@@ -129,7 +129,7 @@ export async function inspectConfiguredOracleDenomination(
   executionEnabled:false as const,maySign:false as const,mayBroadcast:false as const,
   candidatePositions:positions.length};
  if(!positions.length)return {...base,status:'NO_DEBT' as const,configuredOraclePriceViewReturned:false,
-  pricePublishAgeMs:null,legacyOraclePriceRecencySeconds:null,quotedTokens:0,positions:[],
+  pricePublishAgeMs:null,legacyOraclePriceRecencySeconds:null,quotedTokens:0,missingQuotedTokenIds:[],positions:[],
   valueUnitsReconciledToLegacyPriceShape:false,
   blockers:['NO_CURRENT_BORROWER_DEBT','CURRENT_EXECUTION_ORACLE_BRANCH_UNATTESTED']};
  let parsed:ReturnType<typeof parsePrices>;
@@ -140,7 +140,7 @@ export async function inspectConfiguredOracleDenomination(
  }catch(e){
   if(e instanceof Error&&/CROSS_BLOCK/.test(e.message))throw e;
   return {...base,status:'CONFIGURED_ORACLE_QUOTES_UNAVAILABLE',configuredOraclePriceViewReturned:false,
-   pricePublishAgeMs:null,legacyOraclePriceRecencySeconds:null,quotedTokens:0,
+   pricePublishAgeMs:null,legacyOraclePriceRecencySeconds:null,quotedTokens:0,missingQuotedTokenIds:ids,
    positions:positions.map(p=>blocked(p.positionId,'LEGACY_PRICE_VIEW_MISSING_INVALID_OR_STALE')),
    valueUnitsReconciledToLegacyPriceShape:false,blockers:[
     'CONFIGURED_ORACLE_GET_PRICE_DATA_UNAVAILABLE_OR_INVALID',
@@ -206,7 +206,8 @@ export async function inspectConfiguredOracleDenomination(
  const failed=rows.filter(r=>r.status==='BLOCKED').length;
  return {...base,status:failed?'INCOMPLETE_REFERENCE_VALUATION':'REFERENCE_VALUE_RECONCILED_UNAPPROVED',
   configuredOraclePriceViewReturned:true,pricePublishAgeMs:parsed.ageMs,
-  legacyOraclePriceRecencySeconds:parsed.recency,quotedTokens:parsed.prices.size,positions:rows,
+  legacyOraclePriceRecencySeconds:parsed.recency,quotedTokens:parsed.prices.size,
+  missingQuotedTokenIds:ids.filter(id=>!parsed.prices.has(id)),positions:rows,
   valueUnitsReconciledToLegacyPriceShape:failed===0,blockers:[
    ...(failed?['MISSING_OR_INVALID_LEGACY_ORACLE_PRICE_OR_SHARE_PARITY']:[]),
    'CONFIGURED_ORACLE_VIEW_NOT_EXECUTION_TIME_LIQUIDATION_PRICE_PROOF',
