@@ -15,7 +15,8 @@
     "scan:indicative": "node --experimental-strip-types src/rhea/assess-cli.ts",
     "probe:rhea": "node --experimental-strip-types src/rhea/probe-cli.ts",
     "probe:rhea:aggregate": "node --experimental-strip-types src/rhea/aggregate-probe-cli.ts",
-    "probe:rhea:metadata": "node --experimental-strip-types src/rhea/market-metadata-cli.ts"
+    "probe:rhea:metadata": "node --experimental-strip-types src/rhea/market-metadata-cli.ts",
+    "probe:rhea:coverage": "node --experimental-strip-types src/rhea/coverage-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"

@@ -6,6 +6,7 @@ on:
       - 'src/rhea/**'
       - 'tests/rhea-probe.test.mjs'
       - 'tests/rhea-market-metadata.test.mjs'
+      - 'tests/rhea-coverage.test.mjs'
       - '.github/workflows/rhea-readonly-probe.yml'
 permissions:
   contents: read
@@ -56,12 +57,25 @@ jobs:
         run: |
           set -o pipefail
           npm run probe:rhea:metadata | tee rhea-metadata-evidence.json
+      - name: Inspect lending pool exposure and missing metadata (Stage 6, advisory)
+        id: coverage
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+        run: |
+          set -o pipefail
+          npm run probe:rhea:coverage | tee rhea-coverage-evidence.json
       - name: Record probe outcome (advisory, not a safety approval)
         if: always()
         run: |
           echo "Legacy method probe outcome: ${{ steps.probe.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pyth sample feed probe outcome: ${{ steps.aggregate.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Lending metadata probe outcome: ${{ steps.metadata.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Stage 6 pool exposure outcome: ${{ steps.coverage.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Pyth sample feed mapping is NOT validated against Rhea's current lending contract." >> "$GITHUB_STEP_SUMMARY"
           echo "This is RPC schema evidence only. Never infer transaction correctness or financial safety." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
@@ -72,5 +86,6 @@ jobs:
             rhea-probe-evidence.json
             rhea-aggregate-evidence.json
             rhea-metadata-evidence.json
+            rhea-coverage-evidence.json
           if-no-files-found: warn
           retention-days: 7

@@ -88,3 +88,14 @@ See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
 - [ ] Verify source/code-hash matching before funding or any form of execution.
 
 **No live liquidation, transfer, wallet signing, or safe-trading designation exists.**
+
+
+### Stage 6 implementation (read-only)
+
+- [x] Classify unpriced lending assets using same-block global pool balances and configuration flags.
+- [x] Add strict derivative-token ratio price **diagnostics**, without using them as execution valuations.
+- [x] Add provenance-aware, non-authorizing valuation reference comparisons.
+- [x] Add advisory on-chain coverage workflow and explicit issue #7 follow-up.
+- [ ] Verify current deployed-contract price semantics and exact liquidation arithmetic with independently audited source.
+- [ ] Independently resolve all four missing assets and close issue #7 based on actual borrower positions, source and RPC evidence.
+- [ ] Build an enforceable NEAR policy/treasury contract; no funds before a security review.
