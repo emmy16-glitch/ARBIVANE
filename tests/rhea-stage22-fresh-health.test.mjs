@@ -22,7 +22,7 @@ const opts={lendingContract:lending,oracleContract:oracle,shardId:0,shardCount:2
 function rpc({freshId='alice.near',freshCodeHash=HASH,newBorrowing=detail,priceTimeMs=now-2000}={}){
  const calls=[];
  return {calls,client:{
-  async viewAccount(account,block){calls.push(['account',account,block]);return {blockHeight:String(block??FRESH_HEIGHT),codeHash:account===lending?freshCodeHash:HASH};},
+  async viewAccount(account,block){calls.push(['account',account,block]);return {blockHeight:String(block??FRESH_HEIGHT),codeHash:account===lending&&block!==SOURCE_HEIGHT?freshCodeHash:HASH};},
   async view(account,method,args,block){calls.push(['view',method,block,args]);let value;
    if(method==='get_assets_paged')value=assets;
    else if(method==='get_num_accounts')value=4;
