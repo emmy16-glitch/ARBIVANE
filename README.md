@@ -248,3 +248,12 @@ Read [Stage 10 evidence](docs/RHEA_STAGE10_ISOLATED_POSITIONS.md) for the outsta
 ## Stage 11 — bounded read-only debt discovery
 
 `npm run probe:rhea:debt-index` scans operator-selected finalized-block account-index windows, detecting **nonzero debt shares per isolated position** with exact resume offsets. It does not calculate liquidation eligibility, prices or profits. Invalid borrower schemas are explicitly counted, never assumed debt-free. The optional [manual GitHub workflow](.github/workflows/rhea-debt-discovery.yml) runs a limited window and saves an evidence report. See [Stage 11 limitations and instructions](docs/RHEA_STAGE11_DEBT_DISCOVERY.md). Execution remains disabled.
+
+## Stage 12 — Borrower debt evidence triage (read only)
+
+`npm run probe:rhea:triage` composes the Stage 11 index scanner with same-block
+position-aware detail checks and lending-owned Pyth metadata classification.
+`DEBT_SET_OBSERVED_UNPRICED` means **only** that the observed debt token set
+matched the contract detail. It never reports eligibility, approved prices,
+health, executable profit or gas funding. See
+[Stage 12 triage protocol](docs/RHEA_STAGE12_TRIAGE.md).

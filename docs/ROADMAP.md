@@ -131,3 +131,13 @@ Read-only `get_account_all_positions` validation, position-scoped shares, pinned
 ### Stage 11 — Rhea debt discovery (read-only implementation)
 
 Bounded account-index scans with an exact nextOffset, isolated-position debt-share reporting, schema-error counters and manually dispatched public-RPC evidence. These findings are **unvalued**, not liquidatable opportunities. Later work requires same-block detail checks and independently verified deployed-Wasm liquidation parity before custody or execution.
+
+## Stage 12 — Debt-position candidate triage (read only)
+
+- [x] Join bounded debt discovery with same-finalized-block position-aware details.
+- [x] Validate borrowed token scope, token IDs, unique position IDs and exact integer shares.
+- [x] Surface missing on-chain Pyth metadata and derived/default-price sources explicitly.
+- [x] Distinguish unavailable detail reads and budget exhaustion from debt-free positions.
+- [x] Publish a strictly advisory read-only CI experiment and regression tests.
+- [ ] Verify deployed share and health calculations, actual asset prices, USN valuation and solvency.
+- [ ] Complete independent execution/custody/financing verification before funds move.
