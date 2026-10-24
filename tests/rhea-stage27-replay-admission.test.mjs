@@ -90,7 +90,7 @@ test('optional sandbox probe never creates mainnet transaction and requires full
  assert.ok(s.includes("contractTransactionReplayed:false"));
  assert.ok(!s.includes('broadcast_tx'));
  assert.ok(!s.includes('transact()'));
- assert.ok(!s.includes('withData:false'));
+ assert.ok(!/withData\s*:\s*false\s*[,}]/.test(s));
 });
 test('CI executes only read-only proof and never treats matching quote as approval',async()=>{
  const s=await readFile(new URL('../.github/workflows/rhea-stage27-replay-admission.yml',import.meta.url),'utf8');
