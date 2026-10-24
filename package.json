@@ -37,7 +37,8 @@
     "probe:rhea:select-shard-review": "node --experimental-strip-types src/rhea/artifact-review-selector-cli.ts",
     "probe:rhea:fresh-borrowers": "node --experimental-strip-types src/rhea/fresh-borrower-health-cli.ts",
     "probe:rhea:liquidation-preflight": "node --experimental-strip-types src/rhea/liquidation-preflight-cli.ts",
-    "probe:rhea:deployed-wasm": "node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts"
+    "probe:rhea:deployed-wasm": "node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts",
+    "probe:rhea:liquidation-route": "node --experimental-strip-types src/rhea/liquidation-route-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
