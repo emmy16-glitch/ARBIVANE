@@ -83,3 +83,15 @@ test('empty isolated market never reports a successful sampled check',async()=>{
  const {rpc}=fake({'get_accounts_paged':()=>({blockHeight:'101',value:[{account_id:'alice.near',positions:{}},{account_id:'bob.near',positions:{}}]})});
  const r=await probeRheaIsolatedPositions(rpc,opts);assert.equal(r.status,'NO_ELIGIBLE_POSITIONS');
 });
+test('large account sets are sampled across separated index windows, not only oldest accounts',async()=>{
+ const {rpc}=fake();const old=rpc.view;const indexes=[];
+ rpc.view=async(id,method,args,height)=>{
+  if(method==='get_num_accounts')return {blockHeight:'101',value:1000};
+  if(method==='get_accounts_paged'){indexes.push(args.from_index);return {blockHeight:'101',value:Array.from({length:args.limit},(_,i)=>({account_id:`user-${args.from_index+i}.near`,positions:{}}))};}
+  return old(id,method,args,height);
+ };
+ const r=await probeRheaIsolatedPositions(rpc,{...opts,maxAccounts:30,pageSize:10});
+ assert.equal(r.sampleMethod,'DETERMINISTIC_SPREAD_WINDOWS');assert.equal(r.sampledWindows,3);
+ assert.deepEqual(indexes,[0,495,990]);
+ assert.equal(r.examinedAccounts,30);assert.equal(r.status,'NO_ELIGIBLE_POSITIONS');
+});

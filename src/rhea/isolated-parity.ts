@@ -108,6 +108,7 @@ export interface IsolatedProbeReport {
  executionEnabled:false;liquidationParityVerified:false;priceParityVerified:false;
  blockHeight:string;observedLendingCodeHash:string;observedOracleCodeHash:string;
  examinedAccounts:number;matchedAccounts:number;comparedLegs:number;totalAccounts:number;
+ sampleMethod:'DETERMINISTIC_SPREAD_WINDOWS'|'FIRST_N_WHEN_SMALL';sampledWindows:number;
  rejectedAccounts:number;positionMismatches:number;schemaReasons:Record<string,number>;
  warnings:string[];
 }
@@ -133,8 +134,11 @@ export async function probeRheaIsolatedPositions(rpc:NearReadOnlyRpc,cfg:Isolate
  const reasons:Record<string,number>={};let examined=0,matched=0,rejected=0,diffs=0,legs=0,called=0,unavailable=0;
  const mark=(code:string)=>{reasons[code]=(reasons[code]??0)+1;};
  const seen=new Set<string>();
- for(let start=0;start<max;start+=cfg.pageSize){
-  const size=Math.min(cfg.pageSize,max-start);
+ const windows=Math.ceil(max/cfg.pageSize);
+ const spaced=total>max*2 && windows>1;
+ for(let window=0;window<windows;window++){
+  const size=Math.min(cfg.pageSize,max-window*cfg.pageSize);
+  const start=spaced?Math.floor((total-size)*window/(windows-1)):window*cfg.pageSize;
   const page=await rpc.view<unknown>(cfg.lendingContract,'get_accounts_paged',{from_index:start,limit:size},height);
   if(page.blockHeight!==String(height)||!Array.isArray(page.value)||page.value.length!==size)throw Error('borrower page inconsistent');
   for(const raw of page.value){examined++;
@@ -158,8 +162,9 @@ export async function probeRheaIsolatedPositions(rpc:NearReadOnlyRpc,cfg:Isolate
  const status:IsolatedProbeReport['status']=unavailable?'VIEW_UNAVAILABLE':rejected?'UNSUPPORTED_POSITION_SCHEMA':diffs?'POSITION_MISMATCH':matched?'SAMPLED_POSITION_MATCH_UNAPPROVED':'NO_ELIGIBLE_POSITIONS';
  return {mode:'READ_ONLY_ISOLATED_POSITION_DIFFERENTIAL',status,executionEnabled:false,liquidationParityVerified:false,priceParityVerified:false,
    blockHeight:String(height),observedLendingCodeHash:lending.codeHash,observedOracleCodeHash:oracle.codeHash,
-   examinedAccounts:examined,matchedAccounts:matched,comparedLegs:legs,totalAccounts:total,rejectedAccounts:rejected,
+   examinedAccounts:examined,matchedAccounts:matched,comparedLegs:legs,totalAccounts:total,
+   sampleMethod:spaced?'DETERMINISTIC_SPREAD_WINDOWS':'FIRST_N_WHEN_SMALL',sampledWindows:windows,rejectedAccounts:rejected,
    positionMismatches:diffs,schemaReasons:reasons,
-   warnings:['HISTORICAL_SOURCE_NOT_DEPLOYED_CODE_PROVENANCE','FIRST_N_ACCOUNTS_NOT_REPRESENTATIVE','NO_PRICE_OR_LIQUIDATION_PARITY','NO_EXECUTION_AUTHORIZATION',
+   warnings:['HISTORICAL_SOURCE_NOT_DEPLOYED_CODE_PROVENANCE','DETERMINISTIC_INDEX_SAMPLE_NOT_RANDOM_OR_COMPLETE','NO_PRICE_OR_LIQUIDATION_PARITY','NO_EXECUTION_AUTHORIZATION',
      ...(!cfg.expectedLendingCodeHash||!cfg.expectedOracleCodeHash?['CODE_HASH_PINS_NOT_APPROVED']:[])]};
 }

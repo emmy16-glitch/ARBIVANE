@@ -39,9 +39,10 @@ balances, missing detailed view and cross-block RPC inconsistency. It refuses to
 merge different positions, or assume the absence of an account field means a
 zero-sized debt. Reports aggregate failure categories without borrower IDs.
 
-The bounded default sample covers the first 40 listed accounts and at most
-8 detailed isolated borrowers. It is **not statistically representative** and
-not evidence of no competition or real profit.
+The bounded default sample covers up to 100 accounts, selected in evenly spaced
+index windows across the live account set, and at most 8 detailed isolated
+borrowers. It is **not random, statistically representative, or complete**,
+and never supports a claim that missing debt/competition is absent.
 
 ## Run (READ-ONLY)
 
@@ -67,3 +68,13 @@ wrapper workflow. Verify the JSON `status` field explicitly.
 3. Resolve the USN debt and missing price metadata in GitHub issue #7, and verify every price feed, derived token ratio and fresh oracle policy.
 4. Prove liquidator financing, NEAR asynchronous receipt/failure handling, enforceable contract custody, gas/slippage limits and independent security review.
 5. Only then consider a **separate** tiny-capital execution pilot; none is enabled by this stage.
+
+## First live result and subsequent sampling correction
+
+The first Stage 10 probe on PR #13 scanned the first 40 accounts at block
+`221345897`, yielding `NO_ELIGIBLE_POSITIONS` and zero comparisons, even
+though the strict parser found no malformed records. Stage 7 independently
+found zero borrowers among its first 25 accounts. This is a sample-selection
+limitation, **not** a proof that the contract has no debt. The follow-up
+implementation samples up to 100 accounts using bounded, deterministic spread
+windows over the full index range. Inspect the new CI artifact for exact status.

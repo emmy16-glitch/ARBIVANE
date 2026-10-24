@@ -110,7 +110,7 @@ jobs:
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
-          RHEA_STAGE10_MAX_ACCOUNTS: '40'
+          RHEA_STAGE10_MAX_ACCOUNTS: '100'
           RHEA_STAGE10_PAGE_SIZE: '10'
           RHEA_STAGE10_MAX_DETAILS: '8'
         run: |
