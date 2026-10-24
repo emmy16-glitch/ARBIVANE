@@ -31,7 +31,7 @@ jobs:
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
         run: |
           set -euo pipefail
-          npm run probe:rhea:shard-snapshot > snapshot.json
+          node --experimental-strip-types src/rhea/market-shard-snapshot-cli.ts > snapshot.json
           jq -e '.mode == "NEAR_SHARD_SNAPSHOT" and .executionEnabled == false and .borrowedPoolBalancePositive == true and .lendingCodeHash == "6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa" and .totalAccounts >= 4 and .totalAccounts <= 250000' snapshot.json
           echo "block=$(jq -r '.blockHeight' snapshot.json)" >> "$GITHUB_OUTPUT"
           echo "hash=$(jq -r '.lendingCodeHash' snapshot.json)" >> "$GITHUB_OUTPUT"
@@ -86,7 +86,7 @@ jobs:
           RHEA_PAGED_REPORT_PATH: report-${{ matrix.id }}.json
         run: |
           set -euo pipefail
-          npm run probe:rhea:paged-position-index | tee summary-${{ matrix.id }}.json
+          node --experimental-strip-types src/rhea/paged-position-index-cli.ts | tee summary-${{ matrix.id }}.json
           jq -e '.mode == "NEAR_RHEA_SAME_BLOCK_BACKFILL" and .executionEnabled == false and .invalidAccounts == 0 and .scannedAccounts > 0' summary-${{ matrix.id }}.json
       - name: Save shard checkpoints even if interrupted
         if: always()
