@@ -94,6 +94,16 @@ The additional `npm run probe:rhea:coverage` diagnostic reads pool balances and 
 
 **Stage 6 does not establish full deployed-contract health-factor or liquidation parity. Real-money execution remains off.**
 
+## Stage 29 — corrected active Pyth price units
+
+The read-only `npm run probe:rhea:active-pyth-valuation` command fixes the Stage
+26/28 unit failure by using lending-owned token decimals, fraction digits,
+`extra_decimals`, and configured derivative ratio calls with fresh Pyth quotes.
+A live same-block check corrected the former 97.27% false-risk result to 136.27%
+and plausible E27 values. See
+[Stage 29 evidence](docs/RHEA_STAGE29_ACTIVE_PYTH_VALUATION.md). This rejects the
+observed borrower as a candidate; it does not enable signing or prove profit.
+
 ## Not financial advice / not production-ready
 
 Tests use fabricated positions (including Rhea's own published numerical example) and mocked-RPC responses. A passing unit test does not prove current Rhea liquidation math, true execution profitability, compliance with hackathon rules, deployed contract security, or that an external transfer can succeed. Do not fund, connect secrets, or deploy an autonomous executor based on this stage.

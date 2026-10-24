@@ -1,0 +1,52 @@
+name: NEAR Rhea active Pyth valuation (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/execution-pyth-valuation.ts'
+      - 'src/rhea/execution-pyth-valuation-cli.ts'
+      - 'tests/rhea-stage29-execution-pyth-valuation.test.mjs'
+      - '.github/workflows/rhea-stage29-active-pyth-valuation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/execution-pyth-valuation.ts'
+      - 'src/rhea/execution-pyth-valuation-cli.ts'
+      - '.github/workflows/rhea-stage29-active-pyth-valuation.yml'
+permissions:
+  contents: read
+jobs:
+  active-pyth-valuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Reconstruct active execution-time price units at one finalized block
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: tmp-owner.main.burrow.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/execution-pyth-valuation-cli.ts > stage29-active-pyth-valuation.json
+          jq -e '.chain == "NEAR_MAINNET" and .mode == "RHEA_ACTIVE_EXECUTE_WITH_PYTH_VALUATION" and .pythEnabled == true and .legacyOracleEnabled == false and .priceConstructionMatchesCurrentSdk == true and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .transactionReplayVerified == false and .profitVerified == false and (.status | IN("NO_DEBT", "ACTIVE_PYTH_VALUE_RECONCILED_UNAPPROVED", "INCOMPLETE_ACTIVE_PYTH_VALUATION"))' stage29-active-pyth-valuation.json
+      - name: Record safety boundary
+        if: always()
+        run: |
+          echo 'Correct active price units reject the prior false candidate; this is not a liquidation transaction.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No wallet, signing, financing, swap, broadcast, or realized-profit claim.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage29-active-pyth-valuation
+          path: stage29-active-pyth-valuation.json
+          if-no-files-found: warn
+          retention-days: 7
