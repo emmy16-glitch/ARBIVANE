@@ -1,0 +1,13 @@
+# Stage 25 — Path toward first real liquidation
+
+Current observed anchor (from Stage 22 GitHub artifact): `tmp-owner.main.burrow.near` at NEAR block 221384405 was **paper at risk** (health factor 9727 bps) with a regular position. **This is historical, not an executable opportunity.** The account name does not indicate ownership by ARBIVANE.
+
+We inspected the archived [burrowHQ liquidation bot](https://github.com/burrowHQ/burrowland-liquidation-bot). It constructs an `Execute` message with `Borrow`, `Liquidate`, and optional `Withdraw` and historically sends it via `priceoracle.near.oracle_call`. The older [NearDeFi/burrowland source](https://github.com/NearDeFi/burrowland/blob/main/contract/src/actions.rs) defines `Action::Liquidate { account_id, in_assets, out_assets }` with four checks, but its 2023-era implementation is **not attested** to the deployed lending binary. The current mainnet Wasm (Stage 24) also exports `execute_with_pyth` and `callback_execute_with_pyth`. Do not assume the historical oracle-call wrapper is the current allowed, profitable or atomic route. No source parity is claimed.
+
+Stage 25 adds (1) a pinned-code, fresh-finalized-block read-only entry probe for the *specific* former candidate, the configured legacy oracle, aggregate price reader and protocol configuration, and optional liquidator account observation; (2) strictly limited historical action drafts with BigInt paper budgets and zero sign/broadcast capabilities. The two oracle identities remain separate. Whitelist visibility is an observation, **not proof whitelist membership is required or confers liquidation permission**.
+
+For live checks, GitHub workflow pins deployed Wasm hashes observed in Stage 24. A protocol upgrade must fail closed and trigger re-attestation. The CI probe supplies **no liquidator account** or credentials, and cannot verify a funded trading wallet. `get_account` may show supplied tokens when a user provides a public liquidator account ID, but that view alone cannot establish an available repay balance or executable action. It remains non-authorizing.
+
+**Blocking before real trades:** refreshed on-chain borrower risk *through the execution-time price branch*; independent deployed action semantics; actual source/Wasm parity or equivalent verified replay; funding/capital accessible at the correct lending pool; guaranteed repay, collateral and swap quotes; gas and storage; failure-safe account custody, maximum notional and daily loss; funded trading wallet under user control; independent explicit authorization. Then begin with one deliberately small mainnet transaction only after its cost and risk are authorized.
+
+No PDF. No transactions. No private keys requested in source, environment or issue comments.
