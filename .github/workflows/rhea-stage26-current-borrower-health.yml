@@ -1,0 +1,54 @@
+name: NEAR Rhea Stage26 fresh borrower health (read only)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/rhea/current-borrower-health.ts'
+      - 'src/rhea/current-borrower-health-cli.ts'
+      - 'tests/rhea-stage26-current-health.test.mjs'
+      - '.github/workflows/rhea-stage26-current-borrower-health.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/current-borrower-health.ts'
+      - 'src/rhea/current-borrower-health-cli.ts'
+      - '.github/workflows/rhea-stage26-current-borrower-health.yml'
+permissions:
+  contents: read
+jobs:
+  verify-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Recalculate on-chain recent-source paper health at one fresh block
+        env:
+          NEAR_NETWORK: mainnet
+          EXECUTION_ENABLED: 'false'
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_CONFIGURED_ORACLE: priceoracle.near
+          RHEA_AGGREGATE_PRICE_READER: aggregate-oracle.near
+          RHEA_BORROWER_ACCOUNT_ID: tmp-owner.main.burrow.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_CONFIGURED_ORACLE_CODE_HASH: 4sUttxKK4gJpWr1mhfNddBt497ZiXsRMbTYvCeQQbjR2
+          RHEA_EXPECTED_AGGREGATE_READER_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/current-borrower-health-cli.ts > stage26-fresh-health.json
+          jq -e '.chain == "NEAR_MAINNET" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .deployedLiquidationRulesVerified == false and .transactionReplayVerified == false and .netProfitVerified == false and (.positions == (.paperAtRisk+.paperHealthy+.blockedPositions))' stage26-fresh-health.json
+      - name: Record no authorization
+        if: always()
+        run: |
+          echo 'Fresh quotes and reference health are not verified contract execution prices or trade eligibility.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This workflow only queries. No wallet, simulated stateful transaction, or broadcast.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-stage26-fresh-borrower-health
+          path: stage26-fresh-health.json
+          if-no-files-found: warn
+          retention-days: 7
