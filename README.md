@@ -270,3 +270,15 @@ See [Stage 13 read-only price evidence](docs/RHEA_STAGE13_ORACLE_EVIDENCE.md).
 
 **Safety invariant:** `executionEnabled=false`, `liquidationParityVerified=false`,
 `priceParityVerified=false`, `executable=false`, and `estimatedProfit=null`.
+
+## Stage 14 — NEAR full-market debt index (read only)
+
+`npm run probe:rhea:full-debt-index` runs a bounded, concurrency-controlled
+backfill of Rhea's actual NEAR on-chain account index at **one finalized block**.
+It outputs observed debt-bearing account counts, isolated position counts,
+resumable same-block checkpoints and explicit schema error counts. No wallet,
+trade, liquidation, price certification or expected profit is produced.
+Synthetic test cases that contain thousands of borrowers do **not** establish
+real mainnet counts. Use the GitHub Actions **NEAR Rhea full market debt index**
+workflow to gather live evidence, and inspect its JSON artifact and outcome.
+See [Stage 14 architecture and instructions](docs/RHEA_STAGE14_FULL_INDEX.md).
