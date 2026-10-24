@@ -1,0 +1,75 @@
+{
+  "healthReport": {
+    "mode": "READ_ONLY_RHEA_PAPER_HEALTH",
+    "status": "PAPER_HEALTH_EVIDENCE_UNAPPROVED",
+    "blockHeight": "221350001",
+    "lendingCodeHash": "2222222222222222222222222222222222222222222",
+    "oracleCodeHash": "3333333333333333333333333333333333333333333",
+    "positionsSeen": 1,
+    "paperAtRisk": 1,
+    "paperHealthy": 0,
+    "blockedPositions": 0,
+    "records": [
+      {
+        "accountId": "synthetic.near",
+        "positionId": "isolated-1",
+        "mode": "PAPER_RHEA_HEALTH_ONLY",
+        "classification": "PAPER_AT_RISK_UNAPPROVED",
+        "blockers": [],
+        "adjustedCollateralE27": "800000000000000000000000000000",
+        "adjustedDebtE27": "1000000000000000000000000000000",
+        "healthFactorBps": "8000",
+        "discountE27": "100000000000000000000000000",
+        "executionEnabled": false,
+        "liquidationEligible": false,
+        "liquidationParityVerified": false,
+        "estimatedProfit": null
+      }
+    ],
+    "executionEnabled": false,
+    "liquidationParityVerified": false,
+    "priceParityVerified": false,
+    "warnings": [
+      "ALL_DATA_SYNTHETIC_NO_ONCHAIN_ACCOUNT"
+    ]
+  },
+  "scenarios": [
+    {
+      "scenarioId": "synthetic-case-1",
+      "accountId": "synthetic.near",
+      "positionId": "isolated-1",
+      "blockHeight": "221350001",
+      "lendingCodeHash": "2222222222222222222222222222222222222222222",
+      "oracleCodeHash": "3333333333333333333333333333333333333333333",
+      "asOfFinalizedHeight": "221350001",
+      "repay": [
+        {
+          "tokenId": "wnear.near",
+          "grossUsdE27": "100000000000000000000000000000",
+          "volatilityBps": 10000
+        }
+      ],
+      "seize": [
+        {
+          "tokenId": "usdc.near",
+          "grossUsdE27": "105000000000000000000000000000",
+          "volatilityBps": 7500
+        }
+      ],
+      "fundingCapacityUsdE27": "110000000000000000000000000000",
+      "costs": {
+        "networkMaxE27": "1000000000000000000000000000",
+        "fundingMaxE27": "1000000000000000000000000000",
+        "slippageMaxE27": "1000000000000000000000000000",
+        "protocolMaxE27": "0",
+        "competitionBufferMaxE27": "1000000000000000000000000000"
+      },
+      "competition": {
+        "kind": "PUBLIC_ACTIVITY_SAMPLE",
+        "blockHeight": "221350001",
+        "sampledTransactions": 0,
+        "exhaustive": false
+      }
+    }
+  ]
+}

@@ -290,3 +290,17 @@ The first complete-index attempt stopped after **5,100 / 72,768** NEAR account i
 ## Stage 15 — Read-only isolated position paper health
 
 `npm run probe:rhea:paper-health` checks discovered isolated positions using exact on-chain share and balance evidence, Stage 13 lending-owned Pyth price quotes and historical Burrow 27-decimal valuation. It outputs `PAPER_AT_RISK_UNAPPROVED`, `PAPER_HEALTHY_UNAPPROVED` or `BLOCKED` — **not** actual NEAR liquidation eligibility. No position is executable and no expected profit is produced. A manual/advisory GitHub Action stores results. The full-market borrower indexing workflow remains separate. See [Stage 15 paper health model](docs/RHEA_STAGE15_PAPER_HEALTH.md).
+
+## Stage 16 — Hypothetical liquidation economics (offline, read-only)
+
+`npm run score:rhea:paper` accepts an explicitly offline Stage 15 health report
+plus operator-supplied **hypothetical** USD-denominated repay/seize legs and
+maximum cost assumptions. It runs conservative 27-decimal historical source
+checks, bounds funding/slippage/gas/competition assumptions and ranks only
+paper-positive scenarios. **No real liquidation eligibility or profit is verified,
+and no transaction construction or signing exists.**
+
+Try the explicitly synthetic example in
+[`examples/stage16-synthetic.json`](examples/stage16-synthetic.json), and read
+[`docs/RHEA_STAGE16_PAPER_OPPORTUNITIES.md`](docs/RHEA_STAGE16_PAPER_OPPORTUNITIES.md).
+Do not treat the fabricated sample as NEAR mainnet account evidence.

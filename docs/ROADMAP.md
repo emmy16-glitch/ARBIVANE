@@ -169,3 +169,17 @@ implemented. See [Stage 14 design](RHEA_STAGE14_FULL_INDEX.md).
 - [ ] Establish liquidator solvency, costs, timing, competition and fund-safety policies before trade execution.
 
 See [Stage 15 notes](RHEA_STAGE15_PAPER_HEALTH.md).
+
+### Stage 16 — Read-only hypothetical liquidation economics (implemented)
+- [x] Combine a Stage 15 paper-health input with carefully scoped hypothetical
+  repayment/seizure USD legs, exact BigInt historical-source discount checks,
+  and after-liquidation health-improvement invariants.
+- [x] Require explicit funding capacity and conservative gas, slippage, protocol,
+  competition and financing cost bounds to calculate an offline paper margin.
+- [x] Reject stale/inconsistent contract and block identities, missing prices,
+  no borrower risk, missing financing evidence and unknown competition signals.
+- [x] Rank only paper-positive synthetic scenarios, with permanent
+  `executionEnabled=false` and `profitabilityVerified=false` flags.
+- [ ] Complete the NEAR mainnet backfill, deployed contract and price parity,
+  executable liquidity and fee quotes, safe custody/limits and MEV analysis.
+See [Stage 16 scope](RHEA_STAGE16_PAPER_OPPORTUNITIES.md).
