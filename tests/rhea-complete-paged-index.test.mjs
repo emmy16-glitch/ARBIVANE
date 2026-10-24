@@ -52,6 +52,10 @@ test('full-run workflow launches on main only and has checkpoint plus aggregate 
  assert.ok(w.includes('RHEA_SCAN_PAGE_SIZE'));
  assert.ok(w.includes('RHEA_CHECKPOINT_EVERY_BATCHES'));
  assert.ok(w.includes('rhea-full-paged-verified-market'));
+ assert.ok(w.includes('node --experimental-strip-types src/rhea/market-shard-snapshot-cli.ts > snapshot.json'));
+ assert.ok(w.includes('node --experimental-strip-types src/rhea/paged-position-index-cli.ts | tee summary-'));
+ assert.ok(!w.includes('npm run probe:rhea:shard-snapshot > snapshot.json'));
+ assert.ok(!w.includes('npm run probe:rhea:paged-position-index | tee summary-'));
  assert.ok(!w.includes('broadcast_tx'));
  assert.ok(!w.includes('EXECUTION_ENABLED: \'true\''));
 });
