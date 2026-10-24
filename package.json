@@ -39,7 +39,8 @@
     "probe:rhea:liquidation-preflight": "node --experimental-strip-types src/rhea/liquidation-preflight-cli.ts",
     "probe:rhea:deployed-wasm": "node --experimental-strip-types src/rhea/deployed-wasm-witness-cli.ts",
     "probe:rhea:liquidation-route": "node --experimental-strip-types src/rhea/liquidation-route-cli.ts",
-    "probe:rhea:liquidation-entry": "node --experimental-strip-types src/rhea/liquidation-entry-cli.ts"
+    "probe:rhea:liquidation-entry": "node --experimental-strip-types src/rhea/liquidation-entry-cli.ts",
+    "probe:rhea:current-health": "node --experimental-strip-types src/rhea/current-borrower-health-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
