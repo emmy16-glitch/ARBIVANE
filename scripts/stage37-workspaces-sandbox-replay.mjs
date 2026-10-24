@@ -7,6 +7,7 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
+import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 const e=process.env;
 let worker;
 async function main(){
@@ -58,7 +59,19 @@ async function main(){
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
  const actor=await root.createSubAccount('arbivane-replay');
- if(!actor||typeof actor.callRaw!=='function')throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
+ if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
+  throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
+ // Observe actual lending positions and NEP-141 balances BEFORE the Sandbox call.
+ // No zero-balance fallback: missing storage/views must block settlement claims.
+ const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
+ const seizeToken=contracts.get(plan.actions[2].Withdraw.token_id);
+ if(!repayToken||!seizeToken)throw Error('SANDBOX_FT_CONTRACT_NOT_IMPORTED');
+ const snapshot=()=>Promise.all([
+  lending.view('get_account_all_positions',{account_id:actor.accountId}),
+  repayToken.view('ft_balance_of',{account_id:actor.accountId}),
+  seizeToken.view('ft_balance_of',{account_id:actor.accountId}),
+ ]);
+ const [actorBefore,repayFtBefore,seizeFtBefore]=await snapshot();
  let raw;
  try{
   raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
@@ -73,8 +86,26 @@ async function main(){
   importedContractCount:contracts.size,allStoredKeysAttested:false,
  });
  await writeFile('stage37-sandbox-execution.json',JSON.stringify(report,null,2)+'\n');
- console.log(JSON.stringify(report,null,2));
- if(report.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF')process.exitCode=2;
+ // Read actual AFTER state even if a callback says "success": detect false
+ // positives, left-over borrow liabilities and zero seized FT inventory.
+ const [borrowerAfter,actorAfter,repayFtAfter,seizeFtAfter]=await Promise.all([
+  lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
+  ...[snapshot()],
+ ]).then(([borrower,row])=>[borrower,...row]);
+ const settlement=attestStage41SandboxSettlement({
+  plan,positionId:proposal.positionId,receipt:report,
+  borrowerBefore:sandboxBorrower,borrowerAfter,
+  actorBefore,actorAfter,
+  actorRepayFtBefore:repayFtBefore,actorRepayFtAfter:repayFtAfter,
+  actorSeizeFtBefore:seizeFtBefore,actorSeizeFtAfter:seizeFtAfter,
+ });
+ await writeFile('stage41-sandbox-balance-settlement.json',JSON.stringify(settlement,null,2)+'\n');
+ console.log(JSON.stringify({...report,settlementStatus:settlement.status,
+  borrowerMutationVerified:settlement.borrowerMutationVerified,
+  assetTransferObserved:settlement.assetTransferObserved,
+  positiveNetProfitVerified:false},null,2));
+ if(report.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
+  settlement.status!=='POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD')process.exitCode=2;
 }
 main().catch(err=>{
  console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
