@@ -44,6 +44,7 @@ test('configured oracle corrected token decimals produce reasonable exact E27 US
  assert.equal(x.status,'REFERENCE_VALUE_RECONCILED_UNAPPROVED');
  assert.equal(x.configuredOraclePriceViewReturned,true);
  assert.equal(x.quotedTokens,2);
+ assert.deepEqual(x.missingQuotedTokenIds,[]);
  assert.equal(x.positions[0].healthFactorBps,'5000');
  assert.equal(x.positions[0].adjustedCollateralE27,(2n*UNIT).toString());
  assert.equal(x.positions[0].adjustedDebtE27,(4n*UNIT).toString());
@@ -66,6 +67,7 @@ test('stale and unavailable configured legacy oracle never silently fallback',as
   const x=await inspectConfiguredOracleDenomination(fixture(change).rpc,OPT);
   assert.equal(x.status,'CONFIGURED_ORACLE_QUOTES_UNAVAILABLE');
   assert.equal(x.quotedTokens,0);
+  assert.deepEqual(x.missingQuotedTokenIds,['usn','wrap.near']);
   assert.equal(x.positions[0].healthFactorBps,null);
   assert.equal(x.mayBroadcast,false);
  }
@@ -74,6 +76,7 @@ test('oracle null quote blocks full position rather than pricing only known toke
  const x=await inspectConfiguredOracleDenomination(fixture({missingPrice:true}).rpc,OPT);
  assert.equal(x.status,'INCOMPLETE_REFERENCE_VALUATION');
  assert.equal(x.positions[0].reason,'MISSING_CONFIGURED_ORACLE_TOKEN_QUOTE');
+ assert.deepEqual(x.missingQuotedTokenIds,['usn']);
 });
 test('deployed contract config drift and cross-block reads fail hard',async()=>{
  await assert.rejects(inspectConfiguredOracleDenomination(fixture({configDrift:true}).rpc,OPT),/CODE_OR_ORACLE_POINTER_DRIFT/);
