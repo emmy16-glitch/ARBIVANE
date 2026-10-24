@@ -1,0 +1,61 @@
+name: Rhea paper health evidence (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      from_index:
+        description: 'Account index for bounded read-only discovery'
+        required: true
+        default: '0'
+      max_accounts:
+        description: 'Accounts to examine (1..1000)'
+        required: true
+        default: '200'
+  pull_request:
+    paths:
+      - 'src/rhea/health-screen*.ts'
+      - 'tests/rhea-health-screen.test.mjs'
+      - '.github/workflows/rhea-paper-health.yml'
+permissions:
+  contents: read
+jobs:
+  paper-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Evidence-only Pyth and position-level risk comparison
+        id: paper
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_HEALTH_FROM_INDEX: ${{ inputs.from_index || '0' }}
+          RHEA_HEALTH_MAX_ACCOUNTS: ${{ inputs.max_accounts || '200' }}
+          RHEA_HEALTH_PAGE_SIZE: '25'
+          RHEA_HEALTH_MAX_FINDINGS: '10'
+          RHEA_HEALTH_MAX_DETAILS: '8'
+          RHEA_HEALTH_MAX_FEEDS: '12'
+          RHEA_HEALTH_DETAIL_BUDGET: '8'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:paper-health | tee rhea-paper-health.json
+      - name: Interpret JSON result, not green advisory wrapper
+        if: always()
+        run: |
+          echo "Stage 15 paper health probe outcome: ${{ steps.paper.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'PAPER_AT_RISK_UNAPPROVED is not liquidation eligibility or contract parity.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Inspect paperAtRisk, blockedPositions, warnings and status in JSON evidence.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No wallet signing, execution or profits are authorized.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-paper-health-evidence
+          path: rhea-paper-health.json
+          if-no-files-found: warn
+          retention-days: 7
