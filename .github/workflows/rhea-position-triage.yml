@@ -1,0 +1,58 @@
+name: Rhea position evidence triage (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      from_index:
+        description: 'Public account index for bounded scan'
+        required: true
+        default: '0'
+      max_accounts:
+        description: 'Maximum accounts to examine (1 to 1000)'
+        required: true
+        default: '200'
+  pull_request:
+    paths:
+      - 'src/rhea/candidate-triage*.ts'
+      - 'tests/rhea-candidate-triage.test.mjs'
+      - '.github/workflows/rhea-position-triage.yml'
+permissions:
+  contents: read
+jobs:
+  advisory-triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Compare discovery and detail at a single finalized block
+        id: triage
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_TRIAGE_FROM_INDEX: ${{ inputs.from_index || '0' }}
+          RHEA_TRIAGE_MAX_ACCOUNTS: ${{ inputs.max_accounts || '200' }}
+          RHEA_TRIAGE_PAGE_SIZE: '25'
+          RHEA_TRIAGE_MAX_FINDINGS: '12'
+          RHEA_TRIAGE_MAX_DETAILS: '8'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:triage | tee rhea-position-triage.json
+      - name: Record advisory result
+        if: always()
+        run: |
+          echo "Position evidence read: ${{ steps.triage.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Inspect the JSON status and reasons. A green advisory job never authorizes liquidations.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'All observations are read-only. No approved oracle quotes, liquidation health parity, wallet or funds.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-position-triage-evidence
+          path: rhea-position-triage.json
+          if-no-files-found: warn
+          retention-days: 7

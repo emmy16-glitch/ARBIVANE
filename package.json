@@ -21,7 +21,8 @@
     "audit:rhea:source": "EXECUTION_ENABLED=false node --experimental-strip-types src/rhea/source-audit-cli.ts",
     "probe:rhea:share-parity": "node --experimental-strip-types src/rhea/deployed-share-parity-cli.ts",
     "probe:rhea:isolated-parity": "node --experimental-strip-types src/rhea/isolated-parity-cli.ts",
-    "probe:rhea:debt-index": "node --experimental-strip-types src/rhea/debt-discovery-cli.ts"
+    "probe:rhea:debt-index": "node --experimental-strip-types src/rhea/debt-discovery-cli.ts",
+    "probe:rhea:triage": "node --experimental-strip-types src/rhea/candidate-triage-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
