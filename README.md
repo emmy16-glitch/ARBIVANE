@@ -2,7 +2,7 @@
 
 **Autonomous Risk-Based Intelligence, Verification And NEAR Execution**
 
-> **Status: Stage 6 read-only lending coverage and derived-price comparison. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
+> **Status: Stage 10 read-only isolated position verification. READ-ONLY / SIMULATION ONLY. No wallet integration, custody contract, liquidation executor, Shade agent deployment, AI inference, or NEAR Intents transfer is live. Nothing here can trade or transfer tokens.**
 
 ARBIVANE is a proposed NEAR-first autonomous DeFi liquidation system. It is designed to observe a market, validate current protocol state, calculate conservative economics, reject unsafe/competitive opportunities, execute only when on-chain authorization is enforceable, reconcile final actual balances, then optionally convert and transfer realized proceeds via NEAR Intents.
 
@@ -220,3 +220,27 @@ not price-source, liquidation, contract-bytecode, borrower-position or
 profitability parity. A read-only GitHub Actions run records its evidence;
 errors are advisory and **do not make CI a financial-approval gate**.
 See [Stage 9 notes](docs/RHEA_STAGE9_DEPLOYED_PARITY.md).
+
+
+## Stage 10 — isolated-position source arithmetic differential
+
+The `npm run probe:rhea:isolated-parity` command compares borrower `positions`
+independently by position identifier, using the modern Rhea Go SDK's
+`get_account_all_positions` view schema as the reference for result fields.
+`get_accounts_paged` shares and `get_account_all_positions` balances must come
+from one finalized block. The expected balance uses the public historic Burrow
+pool `shares_to_amount` integer rounding implementation.
+
+```bash
+export EXECUTION_ENABLED=false
+export NEAR_NETWORK=mainnet
+export NEAR_RPC_URL=https://rpc.mainnet.fastnear.com
+export RHEA_LENDING_CONTRACT=contract.main.burrow.near
+export RHEA_ORACLE_CONTRACT=aggregate-oracle.near
+npm run probe:rhea:isolated-parity
+```
+
+All reports permanently say `liquidationParityVerified=false` and
+`executionEnabled=false`. Matching shares is **not** verification of the deployed
+Wasm, live oracle valuation, liquidation preconditions, or profits.
+Read [Stage 10 evidence](docs/RHEA_STAGE10_ISOLATED_POSITIONS.md) for the outstanding review gates.

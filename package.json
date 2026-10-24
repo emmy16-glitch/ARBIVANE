@@ -19,7 +19,8 @@
     "probe:rhea:coverage": "node --experimental-strip-types src/rhea/coverage-cli.ts",
     "probe:rhea:borrowers": "node --experimental-strip-types src/rhea/borrower-audit-cli.ts",
     "audit:rhea:source": "EXECUTION_ENABLED=false node --experimental-strip-types src/rhea/source-audit-cli.ts",
-    "probe:rhea:share-parity": "node --experimental-strip-types src/rhea/deployed-share-parity-cli.ts"
+    "probe:rhea:share-parity": "node --experimental-strip-types src/rhea/deployed-share-parity-cli.ts",
+    "probe:rhea:isolated-parity": "node --experimental-strip-types src/rhea/isolated-parity-cli.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3"
