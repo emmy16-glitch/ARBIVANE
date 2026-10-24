@@ -141,3 +141,11 @@ Bounded account-index scans with an exact nextOffset, isolated-position debt-sha
 - [x] Publish a strictly advisory read-only CI experiment and regression tests.
 - [ ] Verify deployed share and health calculations, actual asset prices, USN valuation and solvency.
 - [ ] Complete independent execution/custody/financing verification before funds move.
+
+### Stage 13 — Read-only on-chain quote evidence
+- [x] Derive direct Pyth feed IDs solely from lending-owned on-chain metadata.
+- [x] Scope price quotes to positions validated by Stage 12, at one finalized block.
+- [x] Strict freshness, confidence, source/fee coverage and bounded budget checks.
+- [x] Offline regression tests and advisory on-chain CI workflow.
+- [ ] Verify production lending price transformation, derivative ratios and exact
+  deployed liquidation/health parity. This remains a critical **blocking gate**.

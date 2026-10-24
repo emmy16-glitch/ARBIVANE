@@ -1,0 +1,59 @@
+name: Rhea live price evidence (read only)
+on:
+  workflow_dispatch:
+    inputs:
+      from_index:
+        description: 'Public account index to start scanning'
+        required: true
+        default: '0'
+      max_accounts:
+        description: 'Accounts to examine (1 to 1000)'
+        required: true
+        default: '200'
+  pull_request:
+    paths:
+      - 'src/rhea/price-evidence*.ts'
+      - 'tests/rhea-price-evidence.test.mjs'
+      - '.github/workflows/rhea-price-evidence.yml'
+permissions:
+  contents: read
+jobs:
+  advisory-quotes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Public finalized-block price views, no transactions
+        id: quote
+        continue-on-error: true
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EVIDENCE_FROM_INDEX: ${{ inputs.from_index || '0' }}
+          RHEA_EVIDENCE_MAX_ACCOUNTS: ${{ inputs.max_accounts || '200' }}
+          RHEA_EVIDENCE_PAGE_SIZE: '25'
+          RHEA_EVIDENCE_MAX_FINDINGS: '12'
+          RHEA_EVIDENCE_MAX_DETAILS: '8'
+          RHEA_EVIDENCE_MAX_FEEDS: '12'
+        run: |
+          set -o pipefail
+          npm run probe:rhea:price-evidence | tee rhea-price-evidence.json
+      - name: Record honest, non-executable compatibility state
+        if: always()
+        run: |
+          echo "Live oracle quote step outcome: ${{ steps.quote.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Read the JSON report status, blockedPositions and warnings to interpret the live result.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'A green advisory workflow is NOT a proven quote, health factor, liquidation, or profit.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rhea-price-evidence
+          path: rhea-price-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
