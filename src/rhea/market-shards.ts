@@ -16,13 +16,13 @@ export interface ShardAggregate {
 }
 export function mergeDebtShards(parts:unknown[],shards:number):ShardAggregate{
  if(!Array.isArray(parts)||parts.length!==shards||!Number.isSafeInteger(shards)||shards<1||shards>16)throw Error('MISSING_OR_EXCESS_SHARDS');
- const copies=parts as DebtBackfillCheckpoint[];
+ const copies=parts as (DebtBackfillCheckpoint & {sourceView?:string})[];
  const first=copies[0];if(!first||first.version!==1||first.chain!=='NEAR_MAINNET'||first.mode!=='NEAR_RHEA_SAME_BLOCK_BACKFILL'||
   !/^[0-9]+$/.test(first.blockHeight)||!first.lendingCodeHash||!Number.isSafeInteger(first.totalAccounts)||first.totalAccounts<0)throw Error('INVALID_SHARD_REFERENCE');
  const seen=new Set<string>();let scanned=0,invalid=0,debts=0,positions=0,anyPositive=false;
  for(let shard=0;shard<shards;shard++){
   const p=copies[shard],range=shardRange(first.totalAccounts,shard,shards);
-  if(!p||p.mode!==first.mode||p.version!==1||p.chain!==first.chain||p.executionEnabled!==false||p.liquidationParityVerified!==false||
+  if(!p||p.sourceView!=='get_account_all_positions'||p.mode!==first.mode||p.version!==1||p.chain!==first.chain||p.executionEnabled!==false||p.liquidationParityVerified!==false||
    p.lendingContract!==first.lendingContract||p.lendingCodeHash!==first.lendingCodeHash||p.blockHeight!==first.blockHeight||
    p.totalAccounts!==first.totalAccounts||p.startIndex!==range.startIndex||p.targetEndIndex!==range.startIndex+range.maxAccounts||
    p.nextIndex!==p.targetEndIndex||p.scannedAccounts!==range.maxAccounts||p.seenAccountIds?.length!==range.maxAccounts||

@@ -46,7 +46,7 @@ test('shard ranges cover all accounts exactly once including nondivisible totals
 });
 function shard(total,i,count=2){const {startIndex,maxAccounts}=shardRange(total,i,count);
  const ids=Array.from({length:maxAccounts},(_,j)=>`account${startIndex+j}.near`);
- return {version:1,mode:'NEAR_RHEA_SAME_BLOCK_BACKFILL',chain:'NEAR_MAINNET',executionEnabled:false,liquidationParityVerified:false,lendingContract:'contract.main.burrow.near',blockHeight:'101',lendingCodeHash:HASH,codeHashPinProvided:true,totalAccounts:total,startIndex,targetEndIndex:startIndex+maxAccounts,nextIndex:startIndex+maxAccounts,scannedAccounts:maxAccounts,invalidAccounts:0,schemaReasons:{},seenAccountIds:ids,findings:[],completeSnapshot:false,borrowedPoolBalancePositive:true};}
+ return {version:1,mode:'NEAR_RHEA_SAME_BLOCK_BACKFILL',chain:'NEAR_MAINNET',executionEnabled:false,liquidationParityVerified:false,lendingContract:'contract.main.burrow.near',blockHeight:'101',lendingCodeHash:HASH,codeHashPinProvided:true,totalAccounts:total,startIndex,targetEndIndex:startIndex+maxAccounts,nextIndex:startIndex+maxAccounts,scannedAccounts:maxAccounts,invalidAccounts:0,schemaReasons:{},seenAccountIds:ids,findings:[],completeSnapshot:false,borrowedPoolBalancePositive:true,sourceView:'get_account_all_positions'};}
 test('shard merge reports positive pool debt + no located borrower as unverified',()=>{
  const result=mergeDebtShards([shard(10,0),shard(10,1)],2);
  assert.equal(result.status,'BORROWER_DEBT_MISSING_UNVERIFIED');assert.equal(result.scannedAccounts,10);

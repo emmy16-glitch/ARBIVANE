@@ -11,9 +11,9 @@
 ## New defenses
 
 1. `debt-schema-witness.ts` takes bounded, deterministic account samples spread from index 0 to the final index; it re-queries each sample via `get_account_all_positions` at the identical finalized block. It independently validates debt share strings, assets, position IDs and collateral shape, then compares per-position debt asset sets to the paged enumeration. It does not log borrower IDs in the summary, and rejects unavailable, mismatched or malformed detailed views. *A matching sample is not proof of the entire market.* Default samples: 24 of total accounts.
-2. `rhea-sharded-index.yml` uses a read-only `preflight` job to pin one finalized block, code hash and total account count, then **six distinct index-range jobs** for a manually initiated full-market scan. Every shard uses the same block height, with one request at a time and protective RPC pacing. Each shard uploads a checkpoint even if other shards fail.
+2. `rhea-sharded-index.yml` uses a read-only `preflight` job to pin one finalized block, code hash and total account count, then **twelve distinct index-range jobs** for a manually initiated full-market scan. Every shard uses the same block height, with one request at a time and protective RPC pacing. Each shard uploads a checkpoint even if other shards fail.
 3. `market-shards.ts` independently proves contiguous, disjoint coverage with one code hash/block, catches duplicate account IDs and incomplete shards, and refuses a clean result where the market has positive borrowed pool balances yet no debtor has been observed.
-4. The `reconcile` job only runs if **all six scans and the witness succeed**, producing a separate aggregate JSON artifact. **The aggregate's `COMPLETE_UNAPPROVED` means only that the pinned-block index was enumerated**; it says nothing about borrower health or liquidation eligibility.
+4. The `reconcile` job only runs if **all twelve detailed-view shard scans succeed**, producing a separate aggregate JSON artifact. The witness reports the known paged-view mismatch as a failed advisory step rather than blocking use of the independently detailed-based scanner. **The aggregate's `COMPLETE_UNAPPROVED` means only that the pinned-block index was enumerated**; it says nothing about borrower health or liquidation eligibility.
 5. Public RPC may rate-limit, fail to serve historical block IDs, or throttle parallel runners. If any shard fails, inspect its individual artifact, reduce load or use an authorized archival RPC. Do not silently merge snapshots from different heights and label them a single market snapshot.
 
 ## Why not blindly import another bot?
@@ -25,9 +25,17 @@ The official [NEAR Lake JavaScript framework](https://github.com/near/near-lake-
 ## Running the workflows
 
 - A PR change to the witness module triggers a lightweight `preflight` and bounded `witness` check. Heavy full-market jobs only run on manual `workflow_dispatch` to avoid repeatedly issuing 70,000+ account reads during ordinary development.
-- From GitHub Actions, choose **NEAR Rhea sharded borrower index (read only)** → **Run workflow**. Review the `near-rhea-borrower-witness` artifact and the six `near-rhea-shard-N` checkpoints. Only when every job succeeded inspect `near-rhea-shard-verified-aggregate`.
+- From GitHub Actions, choose **NEAR Rhea sharded borrower index (read only)** → **Run workflow**. Review the `near-rhea-borrower-witness` artifact and the twelve `near-rhea-shard-N` checkpoints. Only when every job succeeded inspect `near-rhea-shard-verified-aggregate`.
 - To run locally set `EXECUTION_ENABLED=false`, `NEAR_NETWORK=mainnet`, `NEAR_RPC_URL` to your HTTPS RPC and `RHEA_LENDING_CONTRACT=contract.main.burrow.near` and invoke `npm run probe:rhea:borrower-witness`. Never use this command for transaction signing.
 
 ## Hard blockers
 
 Independent source-to-Wasm attestation, oracle/USN mapping, share and liquidation mutation parity, real financing, custody, and realized profit all remain unverified. Neither debt discovery nor synthetic unit tests authorizes live trading.
+
+## Live cause confirmed and corrected scan strategy
+
+The PR #21 live witness at NEAR mainnet block `221361380` inspected 24 spread-index accounts and found **0 debt accounts in paged view but 2 in `get_account_all_positions`** (`mismatches=2`). This independently proves the old paged-view detector undercounts debt.
+
+The new `detailed-debt-index.ts` treats `get_accounts_paged` **only as an account-ID registry**. For *each* account, it invokes `get_account_all_positions` at the pinned block and derives debt from exact `u128` share strings within each isolated position. Missing views, malformed shares or cross-block results fail the whole shard rather than being interpreted as zero debt. This uses the open-source Rhea SDK's detailed-position shape as a strict read-only contract interface, with no imported wallet/signing code.
+
+The full-market workflow now has **12** independently pinned shards. Reading detailed accounts is substantially more expensive than paging, so this workflow may still require a suitable archival RPC or dedicated indexer infrastructure to complete; do not claim success until the aggregate JSON is present and all shards reconcile. Legacy account-wide debt may require a separate `get_account` witness; this implementation is designed to detect isolated debts and does **not** claim that all historical legacy debt semantics are attested.

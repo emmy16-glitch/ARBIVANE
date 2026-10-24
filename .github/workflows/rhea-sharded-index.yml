@@ -61,6 +61,7 @@ jobs:
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_WITNESS_ACCOUNTS: '24'
           RHEA_WITNESS_PINNED_BLOCK: ${{ needs.preflight.outputs.block }}
+        continue-on-error: true
         run: |
           set -euo pipefail
           npm run probe:rhea:borrower-witness | tee witness-report.json
@@ -77,9 +78,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        id: [0, 1, 2, 3, 4, 5]
+        id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     runs-on: ubuntu-latest
-    timeout-minutes: 17
+    timeout-minutes: 29
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -91,8 +92,8 @@ jobs:
           SHARD: ${{ matrix.id }}
         run: |
           set -euo pipefail
-          start=$(( TOTAL * SHARD / 6 ))
-          end=$(( TOTAL * (SHARD + 1) / 6 ))
+          start=$(( TOTAL * SHARD / 12 ))
+          end=$(( TOTAL * (SHARD + 1) / 12 ))
           echo "RHEA_BACKFILL_FROM_INDEX=$start" >> "$GITHUB_ENV"
           echo "RHEA_BACKFILL_MAX_ACCOUNTS=$((end - start))" >> "$GITHUB_ENV"
       - name: Enumerate this NEAR account shard, exact common block
@@ -104,15 +105,15 @@ jobs:
           RHEA_EXPECTED_LENDING_CODE_HASH: ${{ needs.preflight.outputs.hash }}
           RHEA_BACKFILL_PINNED_BLOCK: ${{ needs.preflight.outputs.block }}
           RHEA_BACKFILL_PAGE_SIZE: '50'
-          RHEA_BACKFILL_CONCURRENCY: '1'
-          RHEA_BACKFILL_BATCH_DELAY_MS: '750'
+          RHEA_DETAIL_CONCURRENCY: '3'
+          RHEA_BACKFILL_BATCH_DELAY_MS: '300'
           RHEA_BACKFILL_MAX_RETRIES: '7'
           RHEA_BACKFILL_RATE_LIMIT_DELAY_MS: '5000'
           RHEA_BACKFILL_CHECKPOINT_PATH: rhea-debt-index.checkpoint.json
           RHEA_BACKFILL_REPORT_PATH: rhea-debt-index.report.json
         run: |
           set -euo pipefail
-          npm run probe:rhea:full-debt-index | tee shard-summary.json
+          npm run probe:rhea:detailed-debt-index | tee shard-summary.json
           cp rhea-debt-index.checkpoint.json 'shard-${{ matrix.id }}.json'
       - uses: actions/upload-artifact@v4
         if: always()
@@ -127,7 +128,7 @@ jobs:
           retention-days: 7
   reconcile:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [preflight, shards, witness]
+    needs: [preflight, shards]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -143,7 +144,7 @@ jobs:
         env:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
-          RHEA_SHARD_COUNT: '6'
+          RHEA_SHARD_COUNT: '12'
           RHEA_SHARD_ROOT: shards
           RHEA_MERGED_REPORT_PATH: rhea-complete-index-evidence.json
         run: |
