@@ -117,8 +117,10 @@ test('Stage107 admits only source-backed beneficiary fee growth bounded by borro
  const base=pool('1780000000000000000','600','450','5').map(([id,v])=>[
   id,{...v,beneficiary_fees:{'treasury.near':'10','rewards.near':'4'}}
  ]);
- const accrued=pool('1780000002000000000','601','454','6').map(([id,v])=>[
-  id,{...v,beneficiary_fees:{'treasury.near':'12','rewards.near':'5'}}
+ const accrued=pool('1780000002000000000','601','454','6').map(([id,v],i)=>[
+  id,{...v,beneficiary_fees:i===0?
+   {'treasury.near':'12','rewards.near':'5'}:
+   {'treasury.near':'10','rewards.near':'4'}}
  ]);
  const proof=stage104AttestTemporalAccrual({
   sourceBorrower:src,sandboxBorrower:dst,sourceAssets:base,sandboxAssets:accrued
@@ -134,8 +136,10 @@ test('Stage107 rejects beneficiary theft, new keys, decreasing balances and grow
  const before=pool('1780000000000000000','600','450','5').map(([id,v])=>[
   id,{...v,beneficiary_fees:{'treasury.near':'10','rewards.near':'4'}}
  ]);
- const after=pool('1780000002000000000','601','451','6').map(([id,v])=>[
-  id,{...v,beneficiary_fees:{'treasury.near':'11','rewards.near':'4'}}
+ const after=pool('1780000002000000000','601','451','6').map(([id,v],i)=>[
+  id,{...v,beneficiary_fees:i===0?
+   {'treasury.near':'11','rewards.near':'4'}:
+   {'treasury.near':'10','rewards.near':'4'}}
  ]);
  const proof=assets=>stage104AttestTemporalAccrual({
   sourceBorrower:src,sandboxBorrower:dst,sourceAssets:before,sandboxAssets:assets
