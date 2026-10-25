@@ -124,6 +124,7 @@ jobs:
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
             stage50-pinned-repay-reserve.json
+            stage51-active-pyth-sandbox-parity.json
           retention-days: 14
           if-no-files-found: warn
   reconcile:
