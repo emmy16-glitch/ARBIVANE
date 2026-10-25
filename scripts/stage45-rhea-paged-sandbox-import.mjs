@@ -7,7 +7,7 @@ import {open,rename,writeFile,unlink} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {createInterface} from 'node:readline';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
-import {coverPinnedContractState} from './stage45-prefix-state.mjs';
+import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 
 const env=process.env,BLOCK=221433162;
@@ -23,6 +23,7 @@ const report={
  expectedLendingCodeHash:CODE_HASH,
  status:'BLOCKED_NOT_YET_RUN',reason:null,
  codeHashVerified:false,prefixPartitionTraversalFinished:false,
+ paginationCursorExhausted:false,completePaginationCoverage:false,
  completePrefixCoverage:false,unresolvedExactBoundaryPrefixCount:null,
  dataRecordsRead:0,dataRecordsPatched:0,sourceBytesObserved:0,
  prefixQueryCount:0,oversizeResponses:0,rateLimitResponses:0,
@@ -68,8 +69,7 @@ async function main(){
   maxQueries:integer('STAGE45_MAX_QUERIES',1536,1,12000),
   maxRecords:integer('STAGE45_MAX_RECORDS',180000,1,5000000),
   maxBytes:integer('STAGE45_MAX_STATE_BYTES',134217728,1024,1073741824),
-  maxDepth:integer('STAGE45_MAX_PREFIX_DEPTH',4,1,8),
-  maxLeafRecords:integer('STAGE45_MAX_LEAF_RECORDS',10000,1,20000),
+  pageSize:integer('STAGE45_PAGE_SIZE',128,1,2048),
  };
  stateRpc=new ArchivalStateRpc({
   endpoint:env.NEAR_RPC_URL,accountId:LENDING,blockHeight:BLOCK,
@@ -79,7 +79,8 @@ async function main(){
  const spool=await open(spoolPath,'w',0o600);
  let coverage;
  try{
-  coverage=await coverPinnedContractState(prefix=>stateRpc.viewState(prefix),opts,
+  coverage=await coverPinnedPagedState(
+   (afterKey,limit)=>stateRpc.viewPage(afterKey,limit),opts,
    async rows=>{
     if(rows.length){
      await spool.writeFile(rows.map(row=>JSON.stringify(row)+'\n').join(''));
@@ -93,9 +94,13 @@ async function main(){
   report.oversizeResponses=stats.oversizeResponses;
   report.rateLimitResponses=stats.rateLimitResponses;
  }
- report.prefixPartitionTraversalFinished=true;
- report.completePrefixCoverage=coverage.completePrefixCoverage;
- report.unresolvedExactBoundaryPrefixCount=coverage.unresolvedExactBoundaryPrefixCount;
+ report.paginationCursorExhausted=coverage.completePaginationCoverage;
+ report.completePaginationCoverage=coverage.completePaginationCoverage;
+ report.completePrefixCoverage=false; // Deprecated prefix-only result is not the active path.
+ report.unresolvedExactBoundaryPrefixCount=0;
+ report.completedPages=coverage.completedPages;
+ report.downsizedPages=coverage.downsizedPages;
+ report.finalPageSize=coverage.finalPageSize;
  report.dataRecordsRead=coverage.records;
  report.sourceBytesObserved=coverage.rawKeyAndValueBytes;
  report.prefixWitnessSha256=coverage.recordStreamSha256;
@@ -146,12 +151,8 @@ async function main(){
   JSON.stringify(config.value);
  if(!report.configMatchesPinnedSource)
   throw Error('STAGE45_IMPORTED_CONFIG_DISAGREES_WITH_PINNED_MAINNET');
- report.status=report.completePrefixCoverage?
-  'SANDBOX_CONFIG_MATCH_WITH_ROOT_STORAGE_RESPONSE':
-  'SANDBOX_CONFIG_MATCH_WITH_SPLIT_PREFIX_GAPS';
+ report.status='SANDBOX_CONFIG_MATCH_WITH_EXHAUSTED_SERVER_CURSOR';
  report.blockers=[
-  ...(!report.completePrefixCoverage?[
-   'OVERSIZED_PREFIX_SPLITTING_CANNOT_RULE_OUT_KEYS_EQUAL_TO_SPLIT_BOUNDARIES']:[]),
   'TRIE_ROOT_PROOF_AND_FULL_STORAGE_KEYSET_NOT_ATTESTED',
   'DEPENDENT_ORACLE_AND_NEP141_FT_STATE_NOT_IMPORTED',
   'NO_VERIFIED_RHEA_LIQUIDATION_RECEIPTS_OR_POST_BALANCE_SETTLEMENT',

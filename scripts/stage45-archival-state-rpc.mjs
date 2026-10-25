@@ -24,11 +24,17 @@ export class ArchivalStateRpc {
   this.#nextAllowed=at+this.#o.paceMs;
   if(at>now)await this.#sleep(at-now);
  }
- async viewState(prefix){
+ async viewState(prefix,afterKey=null,limit=null){
+  if(limit!==null&&(!Number.isSafeInteger(limit)||limit<1||limit>2048))
+   throw Error('STAGE45_INVALID_PAGINATED_PAGE_SIZE');
+  if(afterKey!==null&&(typeof afterKey!=='string'||!/^[A-Za-z0-9+/]*={0,2}$/.test(afterKey)))
+   throw Error('STAGE45_INVALID_PAGINATED_CURSOR');
   this.calls++;
   const request={jsonrpc:'2.0',id:'stage45-pinned-view',method:'query',params:{
    request_type:'view_state',account_id:this.#o.accountId,
    prefix_base64:prefix.toString('base64'),block_id:this.#o.blockHeight,
+   ...(limit===null?{}:{limit}),
+   ...(afterKey===null?{}:{after_key_base64:afterKey}),
   }};
   for(let attempt=0;attempt<=this.#o.maxRetries;attempt++){
    await this.#pace();this.attempts++;
@@ -92,9 +98,15 @@ export class ArchivalStateRpc {
    if(!r||typeof r!=='object'||!Array.isArray(r.values)||
     typeof r.block_height!=='number'||typeof r.block_hash!=='string')
     throw Error('STAGE45_ARCHIVAL_BAD_RPC_RESULT');
-   return {blockHeight:String(r.block_height),blockHash:r.block_hash,values:r.values};
+   if(r.last_key!==undefined&&r.last_key!==null&&typeof r.last_key!=='string')
+    throw Error('STAGE45_BAD_SERVER_PAGINATION_CURSOR');
+   return {blockHeight:String(r.block_height),blockHash:r.block_hash,
+    values:r.values,lastKey:r.last_key??null};
   }
   throw Error('STAGE45_ARCHIVAL_RETRY_EXHAUSTED');
+ }
+ async viewPage(afterKey,limit){
+  return this.viewState(Buffer.alloc(0),afterKey,limit);
  }
  getStats(){return {rpcCalls:this.calls,transportAttempts:this.attempts,
   rateLimitResponses:this.rateLimitResponses,oversizeResponses:this.oversizeResponses};}

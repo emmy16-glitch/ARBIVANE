@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/rhea-stage45-bounded-state-import.yml'
       - 'scripts/stage45-prefix-state.mjs'
+      - 'scripts/stage45-cursor-pages.mjs'
       - 'scripts/stage45-archival-state-rpc.mjs'
       - 'scripts/stage45-rhea-paged-sandbox-import.mjs'
   workflow_dispatch:
@@ -13,10 +14,10 @@ on:
         description: 'Bounded archival view_state query budget (1..12000)'
         required: true
         default: '1536'
-      max_prefix_depth:
-        description: 'Maximum partition depth in bytes (1..8)'
+      page_size:
+        description: 'Maximum entries per archival view_state page (1..2048)'
         required: true
-        default: '4'
+        default: '128'
 permissions:
   contents: read
 concurrency:
@@ -33,7 +34,7 @@ jobs:
           node-version: '22.16.0'
       - name: Install isolated NEAR Workspaces, not production wallet dependencies
         run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
-      - name: Collect archival key-prefix data at ONE historical block and patch local Sandbox
+      - name: Paginate pinned archival Rhea state with native cursor and patch local Sandbox
         env:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
@@ -42,10 +43,9 @@ jobs:
           NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
           NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
           STAGE45_MAX_QUERIES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_prefix_queries || '1536' }}
-          STAGE45_MAX_PREFIX_DEPTH: ${{ github.event_name == 'workflow_dispatch' && inputs.max_prefix_depth || '4' }}
+          STAGE45_PAGE_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.page_size || '128' }}
           STAGE45_MAX_RECORDS: '180000'
           STAGE45_MAX_STATE_BYTES: '134217728'
-          STAGE45_MAX_LEAF_RECORDS: '10000'
           STAGE45_RPC_GAP_MS: '220'
           STAGE45_PATCH_MAX_JSON_BYTES: '32000'
           STAGE45_PATCH_MAX_RECORDS: '50'
@@ -54,7 +54,7 @@ jobs:
           node --experimental-strip-types scripts/stage45-rhea-paged-sandbox-import.mjs > stage45-console.json
           rc=$?
           if test -s stage45-rhea-paged-state-import.json; then
-            jq '{status,reason,codeHashVerified,prefixPartitionTraversalFinished,prefixQueryCount,oversizeResponses,rateLimitResponses,dataRecordsRead,dataRecordsPatched,completePrefixCoverage,unresolvedExactBoundaryPrefixCount,stateAppliedIntoSandbox,configMatchesPinnedSource,fullContractStorageParityVerified,realRheaLiquidationAttempted,positiveNetProfitVerified,blockers}' stage45-rhea-paged-state-import.json >> "$GITHUB_STEP_SUMMARY"
+            jq '{status,reason,codeHashVerified,paginationCursorExhausted,completePaginationCoverage,completedPages,downsizedPages,finalPageSize,prefixQueryCount,oversizeResponses,rateLimitResponses,dataRecordsRead,dataRecordsPatched,completePrefixCoverage,unresolvedExactBoundaryPrefixCount,stateAppliedIntoSandbox,configMatchesPinnedSource,fullContractStorageParityVerified,realRheaLiquidationAttempted,positiveNetProfitVerified,blockers}' stage45-rhea-paged-state-import.json >> "$GITHUB_STEP_SUMMARY"
             jq -e '.mode == "ARBIVANE_STAGE45_PINNED_RHEA_PREFIX_SANDBOX_IMPORT" and
               .chain == "NEAR_SANDBOX" and
               .sourceNetwork == "NEAR_MAINNET_READ_ONLY" and
@@ -70,7 +70,7 @@ jobs:
             echo 'No verified Stage45 import artifact; no Rhea state parity can be claimed.' >> "$GITHUB_STEP_SUMMARY"
             rc=2
           fi
-          echo 'Even a passing config view is NOT cryptographic trie parity, current liquidation eligibility or realized profit.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Exhausting native RPC pages is not cryptographic trie-root parity, liquidation eligibility or realized profit.' >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
       - name: Retain bounded source-coverage, patch and blocker evidence
         if: always()
