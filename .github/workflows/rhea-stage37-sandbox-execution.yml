@@ -6,6 +6,7 @@ on:
       - '.github/workflows/rhea-stage37-sandbox-execution.yml'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
+      - 'scripts/stage50-pinned-ft-reserve.mjs'
       - 'src/rhea/stage37-sandbox-liquidation.ts'
       - 'src/rhea/stage41-sandbox-settlement.ts'
       - 'src/rhea/stage48-finalized-sandbox-witness.ts'
@@ -110,5 +111,6 @@ jobs:
             stage46-sandbox-clone-evidence.json
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
+            stage50-pinned-repay-reserve.json
           if-no-files-found: warn
           retention-days: 14
