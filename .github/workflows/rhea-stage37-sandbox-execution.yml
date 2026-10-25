@@ -7,6 +7,7 @@ on:
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage49-sandbox-borrow-preflight.mjs'
       - 'scripts/stage49-sandbox-wrap-funding.mjs'
+      - 'scripts/stage52-solvent-sandbox-borrow-capacity.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
       - 'scripts/stage50-pinned-ft-reserve.mjs'
       - 'src/rhea/stage37-sandbox-liquidation.ts'
@@ -116,6 +117,7 @@ jobs:
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
+            stage52-actor-borrow-capacity.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
           if-no-files-found: warn
