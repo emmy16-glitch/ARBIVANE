@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {attestStage96PinnedRheaViews,stage96SafeError} from '../scripts/stage96-rhea-view-parity.mjs';
+import {attestStage96PinnedRheaViews,stage96SafeError,stage101SameBorrowerView} from '../scripts/stage96-rhea-view-parity.mjs';
 
 const id='contract.main.burrow.near',borrowerId='borrower.near';
 const source={config:{max_positions:8},borrower:{account_id:borrowerId,positions:[]},assets:[['wrap.near',{config:{can_borrow:true}}]]};
@@ -100,4 +100,41 @@ test('Stage96 integrates before every Pyth, loan or liquidation attempt and uplo
  assert.ok(canary.includes('cloneStage82BorrowerLending({'));
  assert.ok(!canary.includes('callRaw('));
  assert.ok(!canary.includes('broadcast_tx'));
+});
+
+test('Stage101 accepts only reordered genuine borrower map-derived collections',async()=>{
+ const a={account_id:borrowerId,
+  supplied:[{token_id:'wrap.near',balance:'5'},{token_id:'linear-protocol.near',balance:'3'}],
+  positions:{regular:{collateral:[{token_id:'wrap.near',shares:'1'},{token_id:'linear-protocol.near',shares:'2'}],
+   borrowed:[{token_id:'wrap.near',shares:'4'}]}},
+  farms:[{farm_id:'x',rewards:[{reward_token_id:'a',boosted_shares:'1'},{reward_token_id:'z',boosted_shares:'2'}]}],
+  has_non_farmed_assets:false,is_locked:false};
+ const b={is_locked:false,farms:[{rewards:[{boosted_shares:'2',reward_token_id:'z'},{boosted_shares:'1',reward_token_id:'a'}],farm_id:'x'}],
+  positions:{regular:{borrowed:[{shares:'4',token_id:'wrap.near'}],
+   collateral:[{shares:'2',token_id:'linear-protocol.near'},{shares:'1',token_id:'wrap.near'}]}},
+  supplied:[{balance:'3',token_id:'linear-protocol.near'},{balance:'5',token_id:'wrap.near'}],
+  account_id:borrowerId,has_non_farmed_assets:false};
+ assert.equal(stage101SameBorrowerView(a,b),true);
+ const m=make({borrower:b});
+ const w=await attestStage96PinnedRheaViews({lending:m.lending,
+  borrowerAccountId:borrowerId,config:source.config,borrower:a,
+  assets:source.assets,persist:m.persist});
+ assert.equal(w.allSourceViewsVerified,true);
+ assert.equal(w.actualRheaSettlementVerified,false);
+ assert.equal(w.mayBroadcastMainnet,false);
+});
+test('Stage101 still blocks authentic numeric differences with data-free section hints',async()=>{
+ const a={account_id:borrowerId,supplied:[{token_id:'wrap.near',balance:'5'}],
+  positions:{regular:{collateral:[],borrowed:[{token_id:'wrap.near',shares:'4'}]}}};
+ const b={...a,positions:{regular:{collateral:[],borrowed:[{token_id:'wrap.near',shares:'5'}]}}};
+ assert.equal(stage101SameBorrowerView(a,b),false);
+ const m=make({borrower:b});
+ await assert.rejects(attestStage96PinnedRheaViews({
+  lending:m.lending,borrowerAccountId:borrowerId,
+  config:source.config,borrower:a,assets:source.assets,persist:m.persist,
+ }),/STAGE96_BORROWER_VIEW_MISMATCH/);
+ const check=m.written.at(-1).checks.at(-1);
+ assert.deepEqual(check.stage101DifferentSections,['POSITIONS']);
+ assert.equal(m.written.at(-1).allSourceViewsVerified,false);
+ assert.ok(!JSON.stringify(m.written).includes('wrap.near'));
 });

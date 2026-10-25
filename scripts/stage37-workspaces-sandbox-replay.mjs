@@ -15,7 +15,7 @@ import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-cl
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
 import {cloneStage91LinearToken} from './stage91-targeted-linear-token.mjs';
-import {attestStage96PinnedRheaViews} from './stage96-rhea-view-parity.mjs';
+import {attestStage96PinnedRheaViews,stage101SameBorrowerView} from './stage96-rhea-view-parity.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -225,7 +225,7 @@ async function main(){
   lending.view('get_assets_paged',{}),
  ]);
  const pinnedConfigMatches=JSON.stringify(sandboxConfig)===JSON.stringify(config.value);
- const pinnedBorrowerMatches=JSON.stringify(sandboxBorrower)===JSON.stringify(borrower.value);
+ const pinnedBorrowerMatches=stage101SameBorrowerView(borrower.value,sandboxBorrower);
  if(!pinnedConfigMatches||!pinnedBorrowerMatches||
   JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
   throw Error('STAGE96_POST_PROBE_SOURCE_VIEWS_DRIFTED');
