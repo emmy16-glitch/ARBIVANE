@@ -14,7 +14,15 @@ const number=(name:string,def:string):number=>{
  if(env.EXECUTION_ENABLED!=='false'||env.NEAR_NETWORK!=='mainnet'||!env.NEAR_RPC_URL||
  !env.RHEA_STAGE31_VERIFIED_INDEX_PATH)throw Error('STAGE31_READ_ONLY_VERIFIED_INDEX_REQUIRED');
  const raw=JSON.parse(await readFile(env.RHEA_STAGE31_VERIFIED_INDEX_PATH,'utf8')) as CompletePagedIndex;
- const results=await refreshIndexedBorrowerCandidates(new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(env.NEAR_RPC_URL)),raw,{
+ // Stage 32: obtain the finalized lending height once, before parallel borrower reads.
+ // Every account, oracle quote, asset and derivative ratio is then read at that height.
+ const rpc=new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(env.NEAR_RPC_URL));
+ const lending=await rpc.viewAccount(env.RHEA_LENDING_CONTRACT??'');
+ if(!/^[1-9][0-9]{0,15}$/.test(lending.blockHeight)||
+  !Number.isSafeInteger(Number(lending.blockHeight))||
+  lending.codeHash!==env.RHEA_EXPECTED_LENDING_CODE_HASH)
+  throw Error('STAGE32_CURRENT_LENDING_CODE_DRIFT_OR_BLOCK_INVALID');
+ const results=await refreshIndexedBorrowerCandidates(rpc,raw,{
   fromFinding:number('RHEA_STAGE31_FROM_FINDING','0'),
   maxFindings:number('RHEA_STAGE31_MAX_FINDINGS','12'),
   concurrency:number('RHEA_STAGE31_CONCURRENCY','2'),
@@ -23,6 +31,7 @@ const number=(name:string,def:string):number=>{
   expectedLendingCodeHash:env.RHEA_EXPECTED_LENDING_CODE_HASH??'',
   expectedPythOracleCodeHash:env.RHEA_EXPECTED_ORACLE_CODE_HASH??'',
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
+  pinnedBlockHeight:Number(lending.blockHeight),
  });
  const dest=env.RHEA_STAGE31_REPORT_PATH??'rhea-stage31-priced-debt-queue.json';
  await writeFile(dest,JSON.stringify(results,null,2)+'\n',{encoding:'utf8',mode:0o600});
