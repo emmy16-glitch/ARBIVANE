@@ -11,6 +11,7 @@ import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settle
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
+import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-clone-witness.mjs';
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
@@ -23,6 +24,7 @@ const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
 let sandboxFundingAttempted=false;
+let cloneMonitor=null;
 const stage55=createStage55PhaseLedger();
 const stage55Path='stage55-sandbox-phase-evidence.json';
 async function recordStage55(value){
@@ -85,6 +87,8 @@ async function main(){
  // disabled before omitting that unused full-state clone. Preserve Stage71's
  // single-token Repay+Withdraw route and all genuine dependency contracts.
  const ids=selectPinnedActivePythSandboxDependencies(config.value,plan);
+ cloneMonitor=createStage88CloneWitness({contractIds:ids,sourceBlockHeight:block});
+ await cloneMonitor.initialize();
  // Two completely independent archival clones at a time; 450 ms pacing per
  // RPC reader caps aggregate request pressure near previous serial pacing.
  // Keep the exact deterministic pinned dependency list and source code hashes.
@@ -94,7 +98,9 @@ async function main(){
  // independently authenticated. Never mislabel a partial closure as full.
  const oneBorrower=e.STAGE82_SINGLE_BORROWER==='true';
  if(oneBorrower){
-  const targeted=await cloneStage82BorrowerLending({
+  await cloneMonitor.update({contractId:plan.lendingContract,status:'STARTED'});
+  let targeted;
+  try{targeted=await cloneStage82BorrowerLending({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:plan.lendingContract,
    blockHeight:block,expectedCodeHash:plan.sourceCodeHash,
    borrowerAccountId:plan.borrowerAccountId,
@@ -103,12 +109,20 @@ async function main(){
     'https://archival-rpc.mainnet.near.org',
    budgets:{paceMs:450},
   });
+   await cloneMonitor.update({contractId:plan.lendingContract,status:'COMPLETE',
+    evidence:targeted.evidence});
+  }catch(error){
+   await cloneMonitor.update({contractId:plan.lendingContract,status:'BLOCKED',
+    failureCode:stage88FailureCode(error)});
+   throw error;
+  }
   contracts.set(plan.lendingContract,targeted.contract);
   cloneEvidence.push(targeted.evidence);
  }
  const dependencyIds=oneBorrower?ids.filter(id=>id!==plan.lendingContract):ids;
  const clones=await cloneStage76Dependencies({
   ids:dependencyIds,concurrency:2,
+  onStatus:event=>cloneMonitor.update(event),
   clone:(id)=>clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
    fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
@@ -116,11 +130,13 @@ async function main(){
    expectedCodeHash:id===plan.lendingContract?plan.sourceCodeHash:
     id==='aggregate-oracle.near'?plan.sourceOracleHash:null,
    budgets:{paceMs:450},
-   onProgress:entry=>console.error(JSON.stringify({
-    mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry
-   })),
+   onProgress:entry=>{
+    cloneMonitor.progress(entry);
+    console.error(JSON.stringify({mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry}));
+   },
   }),
  });
+ await cloneMonitor.finish();
  for(let i=0;i<dependencyIds.length;i++){
   contracts.set(dependencyIds[i],clones[i].contract);
   cloneEvidence.push(clones[i].evidence);
@@ -310,6 +326,7 @@ async function main(){
   positiveNetProfitVerified:false},null,2));
 }
 main().catch(async err=>{
+ if(cloneMonitor)await cloneMonitor.flush().catch(()=>{});
  const failure=stage55.blocked(err);
  await recordStage55(failure).catch(()=>{});
  // Bounded, machine-readable error taxonomy only; untrusted RPC/SDK
