@@ -8,6 +8,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
+import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 const e=process.env;
 let worker;
@@ -105,23 +106,49 @@ async function main(){
  await writeFile('stage37-sandbox-execution.json',JSON.stringify(report,null,2)+'\n');
  // Read actual AFTER state even if a callback says "success": detect false
  // positives, left-over borrow liabilities and zero seized FT inventory.
- const [borrowerAfter,actorBalancesAfter]=await Promise.all([
-  lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),snapshot(),
- ]);
- const [actorAfter,repayFtAfter,seizeFtAfter]=actorBalancesAfter;
+ const borrowerSnapshot=()=>lending.view('get_account_all_positions',{
+  account_id:plan.borrowerAccountId,
+ });
+ const snapshotAll=async()=>{
+  const [borrower,balances]=await Promise.all([borrowerSnapshot(),snapshot()]);
+  return {borrower,actor:balances[0],repayFt:balances[1],seizeFt:balances[2]};
+ };
+ const immediate=await snapshotAll();
+ let verifiedReport=report,post=immediate;
+ if(report.status!=='SANDBOX_RECEIPT_FAILURE'){
+  if(!worker?.provider||typeof worker.provider.block!=='function'||
+   typeof worker.provider.fastForward!=='function')
+   throw Error('STAGE48_FINALIZED_SANDBOX_PROVIDER_NOT_AVAILABLE');
+  const beforeFinalBlock=await worker.provider.block({finality:'final'});
+  // Stage44's actual NEAR Sandbox proof showed fastForward(8) was not
+  // enough to advance finalized height; Workspaces uses 10,000.
+  await worker.provider.fastForward(10000);
+  const afterFinalBlock=await worker.provider.block({finality:'final'});
+  post=await snapshotAll();
+  verifiedReport=attestStage48FinalizedSandboxReplay({
+   receipt:report,
+   before:{borrower:sandboxBorrower,actor:actorBefore,
+    repayFt:repayFtBefore,seizeFt:seizeFtBefore},
+   immediatelyAfter:immediate,afterFinalBlock:post,
+   finalizedBlockBefore:beforeFinalBlock?.header?.height,
+   finalizedBlockAfter:afterFinalBlock?.header?.height,
+  });
+  await writeFile('stage37-sandbox-execution.json',
+   JSON.stringify(verifiedReport,null,2)+'\n');
+ }
  const settlement=attestStage41SandboxSettlement({
-  plan,positionId:proposal.positionId,receipt:report,
-  borrowerBefore:sandboxBorrower,borrowerAfter,
-  actorBefore,actorAfter,
-  actorRepayFtBefore:repayFtBefore,actorRepayFtAfter:repayFtAfter,
-  actorSeizeFtBefore:seizeFtBefore,actorSeizeFtAfter:seizeFtAfter,
+  plan,positionId:proposal.positionId,receipt:verifiedReport,
+  borrowerBefore:sandboxBorrower,borrowerAfter:post.borrower,
+  actorBefore,actorAfter:post.actor,
+  actorRepayFtBefore:repayFtBefore,actorRepayFtAfter:post.repayFt,
+  actorSeizeFtBefore:seizeFtBefore,actorSeizeFtAfter:post.seizeFt,
  });
  await writeFile('stage41-sandbox-balance-settlement.json',JSON.stringify(settlement,null,2)+'\n');
- console.log(JSON.stringify({...report,settlementStatus:settlement.status,
+ console.log(JSON.stringify({...verifiedReport,settlementStatus:settlement.status,
   borrowerMutationVerified:settlement.borrowerMutationVerified,
   assetTransferObserved:settlement.assetTransferObserved,
   positiveNetProfitVerified:false},null,2));
- if(report.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
+ if(verifiedReport.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
   settlement.status!=='POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD')process.exitCode=2;
 }
 main().catch(err=>{

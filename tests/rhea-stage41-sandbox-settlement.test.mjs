@@ -100,3 +100,21 @@ test('Stage37 runner now captures actual pre/post Sandbox borrower, actor, FT ba
  assert.ok(script.includes('attestStage41SandboxSettlement'));
  assert.ok(!script.includes('broadcast_tx'));assert.ok(!script.includes('send_tx'));
 });
+
+test('Stage41 accepts a later-finalized optimistic callback but never an unconfirmed optimistic receipt',()=>{
+ const report={...receipt(),transactionExecutionStatus:'EXECUTED_OPTIMISTIC',
+  transactionFinal:false,persistedAtLaterFinalizedBlock:true,
+  finalizedBlockBefore:8,finalizedBlockAfter:10008};
+ const confirmed=attestStage41SandboxSettlement({...input(),receipt:report});
+ assert.equal(confirmed.status,'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD');
+ assert.equal(confirmed.positiveNetProfitVerified,false);
+ for(const missing of [
+  {persistedAtLaterFinalizedBlock:false},
+  {finalizedBlockAfter:9},
+  {status:'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE'},
+  {failedReceiptCount:1}
+ ]){
+  const blocked=attestStage41SandboxSettlement({...input(),receipt:{...report,...missing}});
+  assert.equal(blocked.status,'BLOCKED_RECEIPT_OR_CALLBACK');
+ }
+});
