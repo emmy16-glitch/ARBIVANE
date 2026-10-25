@@ -1,4 +1,4 @@
-import {readFile,writeFile,appendFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 import type {SweepCheckpoint} from './full-active-pyth-sweep.ts';
 import type {Stage38Result} from './stage38-live-candidate-pipeline.ts';
@@ -53,7 +53,7 @@ async function run(){
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
   minimumPaperGrossUsdE27:'1000000000000000000000000',
  },undefined,undefined,undefined,async(processed,total)=>{
-  await appendFile('stage43-progress.jsonl',
+  await writeFile('stage43-progress.json',
    JSON.stringify({mode:'STAGE43_RETRY_PROGRESS',processed,total,
     executionEnabled:false,mayBroadcastMainnet:false})+'\n',
    {encoding:'utf8',mode:0o600});
