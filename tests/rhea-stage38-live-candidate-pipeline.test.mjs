@@ -103,3 +103,53 @@ test('cannot silently exclude an oversized risk cohort',async()=>{
  assert.equal(result.refreshed,0);
  assert.equal(result.sandboxPlanReady,false);
 });
+
+test('Stage58 refreshes ALL 80 authentic paper-at-risk borrowers, not just the first twelve',async()=>{
+ const cp=stage32();
+ cp.items=cp.items.map(x=>({...x,classification:'PAPER_AT_RISK_UNAPPROVED'}));
+ cp.paperAtRisk=80;cp.paperHealthy=0;
+ let active=0,highWater=0;
+ const called=[];
+ const result=await qualifyStage38Candidates({},source(),cp,
+  {...options,maxRiskCandidates:80,concurrency:2},async id=>{
+   active++;highWater=Math.max(highWater,active);called.push(id);
+   try{
+    await Promise.resolve();
+    return {...ok(id),status:'NO_SAFE_SOURCE_SCENARIO',referenceRulesPass:false,
+     repay:null,seize:null};
+   }finally{active--;}
+  });
+ assert.equal(result.status,'NO_EXECUTABLE_SOURCE_REFERENCE');
+ assert.equal(result.refreshed,80);
+ assert.equal(result.paperAtRiskFromPreviousScan,80);
+ assert.equal(result.rows.length,80);
+ assert.equal(result.failedFreshReads,0);
+ assert.equal(result.positiveSourcePlans,0);
+ assert.equal(result.sandboxPlanReady,false);
+ assert.equal(result.bestProposal,null);
+ assert.equal(result.noEligibleMainnetTrades,true);
+ assert.equal(result.mayBroadcastMainnet,false);
+ assert.equal(highWater,2);
+ assert.deepEqual(called,cp.items.map(x=>x.borrowerAccountId));
+});
+test('Stage58 still blocks a caller that explicitly asks to discard some of the risk cohort',async()=>{
+ const cp=stage32();
+ cp.items=cp.items.map(x=>({...x,classification:'PAPER_AT_RISK_UNAPPROVED'}));
+ cp.paperAtRisk=80;cp.paperHealthy=0;
+ const result=await qualifyStage38Candidates({},source(),cp,
+  {...options,maxRiskCandidates:79},async()=>{throw Error('MUST_NOT_CALL');});
+ assert.equal(result.status,'BLOCKED_CANDIDATE_LIMIT');
+ assert.equal(result.refreshed,0);
+ assert.equal(result.sandboxPlanReady,false);
+});
+test('Stage58 live CLI chooses full-shard exhaustive risk limit without enabling mainnet',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const cli=await readFile(new URL('../src/rhea/stage38-live-candidate-cli.ts',import.meta.url),'utf8');
+ const wf=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
+ assert.ok(cli.includes('maxRiskCandidates:80,concurrency:2'));
+ assert.ok(wf.includes("'src/rhea/stage38-live-candidate-cli.ts'"));
+ assert.ok(wf.includes("'src/rhea/stage38-live-candidate-pipeline.ts'"));
+ assert.ok(wf.includes('STAGE37_ALLOW_SANDBOX_MUTATION=true'));
+ assert.ok(wf.includes('STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true'));
+ assert.ok(!wf.includes('broadcast_tx'));
+});
