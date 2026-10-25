@@ -1,5 +1,10 @@
 name: Bounded authentic Rhea Sandbox liquidation recovery
 on:
+  # Re-run immediately when source-valid candidate sizing changes on main.
+  push:
+    branches: [main]
+    paths:
+      - 'src/rhea/stage35-atomic-reference-sizing.ts'
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -25,8 +30,8 @@ jobs:
         run: |
           set -euo pipefail
           runs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/rhea-stage63-bounded-recovery.yml/runs?status=completed&per_page=100")
-          attempts=$(jq '[.workflow_runs[] | select(.event == "schedule" or .event == "workflow_dispatch")] | length' <<<"$runs")
-          successes=$(jq '[.workflow_runs[] | select((.event == "schedule" or .event == "workflow_dispatch") and .conclusion == "success")] | length' <<<"$runs")
+          attempts=$(jq '[.workflow_runs[] | select(.event == "schedule" or .event == "workflow_dispatch" or .event == "push")] | length' <<<"$runs")
+          successes=$(jq '[.workflow_runs[] | select((.event == "schedule" or .event == "workflow_dispatch" or .event == "push") and .conclusion == "success")] | length' <<<"$runs")
           [[ "$attempts" =~ ^[0-9]+$ && "$successes" =~ ^[0-9]+$ ]]
           echo "attempt=$attempts" >> "$GITHUB_OUTPUT"
           if (( successes > 0 || attempts >= 18 )); then
