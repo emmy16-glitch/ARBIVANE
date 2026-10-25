@@ -197,7 +197,7 @@ jobs:
         with:
           pattern: stage69-authentic-candidate-*
           path: evidence
-      - name: Verify finalized Rhea callback receipts, debt reduction and seized FT
+      - name: Verify final OR later-finalized persistent Sandbox receipts, borrower deltas and seized FT
         shell: bash
         run: |
           set -euo pipefail
@@ -209,7 +209,7 @@ jobs:
             proposal="$dir/stage38-positive-stage35-evidence.json"
             test -s "$receipt" -a -s "$settlement" -a -s "$proposal" || continue
             if jq -e '.status == "LOCAL_RHEA_BALANCE_AND_CALLBACK_VERIFIED_NOT_PROFIT" and .actualRheaSettlementVerified == true and .localLiquidationCallInvoked == true' "$phase" >/dev/null && \
-               jq -e '.status == "ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF" and .transactionFinal == true and .attemptedTransaction == true and .failedReceiptCount == 0 and .callbackReceiptCount > 0 and .failedCallbackReceiptCount == 0' "$receipt" >/dev/null && \
+               jq -e '.status == "ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF" and .attemptedTransaction == true and .persistedAtLaterFinalizedBlock == true and .failedReceiptCount == 0 and .callbackReceiptCount > 0 and .failedCallbackReceiptCount == 0 and ((.transactionFinal == true and .transactionExecutionStatus == "FINAL") or (.transactionFinal == false and .transactionExecutionStatus == "EXECUTED_OPTIMISTIC" and (.finalizedBlockBefore | type) == "number" and (.finalizedBlockAfter | type) == "number" and .finalizedBlockAfter >= (.finalizedBlockBefore + 2)))' "$receipt" >/dev/null && \
                jq -e '.status == "POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD" and .borrowerMutationVerified == true and .assetTransferObserved == true and .callbackSuccessObserved == true and .borrowerDebtDecreaseInternal != "0" and .borrowerCollateralDecreaseInternal != "0" and .actorSeizeFtIncreaseAtomic != "0"' "$settlement" >/dev/null; then
               verified="$dir"
               break
