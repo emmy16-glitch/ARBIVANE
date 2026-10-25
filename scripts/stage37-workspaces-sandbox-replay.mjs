@@ -265,7 +265,10 @@ async function main(){
  // Reject source/Sandbox quote and derived-token ratio disagreement before
  // funding or attempting any local liquidation transaction.
  await markStage55('SANDBOX_PYTH_PARITY');
- const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block});
+ const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block,
+  fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
+   'https://archival-rpc.mainnet.near.org',
+ });
  await writeFile('stage51-active-pyth-sandbox-parity.json',
   JSON.stringify(pythParity,null,2)+'\n');
  // Public borrowed token and borrower state may require additional Ft account storage.
