@@ -109,3 +109,62 @@ test('Stage82 authentic fastlane invokes same real liquidation and settlement ga
  assert.ok(runner.includes('attestStage48FinalizedSandboxReplay({'));
  assert.ok(runner.includes('mayBroadcastMainnet:false'));
 });
+
+test('Stage83 never silently skips a single oversized record when the alternate archive returns no data',async()=>{
+ const a=scenario(),original=a.args.fetcher;
+ a.args.fetcher=async(url,req)=>{
+  const p=JSON.parse(req.body).params;
+  if(p.prefix_base64===b64([7])){
+   if(url===a.args.endpoint)
+    return new Response('Response too large',{status:413});
+   return new Response(JSON.stringify({result:{
+    block_height:HEIGHT,block_hash:HASH,values:[]
+   }}),{status:200});
+  }
+  return original(url,req);
+ };
+ await assert.rejects(()=>cloneStage82BorrowerLending(a.args),
+  /STAGE83_ALTERNATE_OVERSIZED_RECORD_NOT_RETURNED/);
+ assert.equal(a.imports.length,0);
+ assert.equal(a.patches.length,0);
+});
+
+test('Stage83 resumes normal page size after an independently verified one-entry recovery',async()=>{
+ const a=scenario(),original=a.args.fetcher;
+ const prefix=b64([7]);
+ const first=rows.find(x=>Buffer.from(x.key,'base64')[0]===7);
+ const next=record(join([7,118],u64(1)),borsh(ASSET));
+ const observed=[];
+ a.args.fetcher=async(url,req)=>{
+  const p=JSON.parse(req.body).params;
+  if(p.prefix_base64!==prefix)return original(url,req);
+  observed.push({url,limit:p.limit,cursor:p.after_key_base64??null});
+  if(url===a.args.endpoint&&!p.after_key_base64)
+   return new Response('Response too large',{status:413});
+  if(url!==a.args.endpoint)
+   return new Response(JSON.stringify({result:{
+    block_height:HEIGHT,block_hash:HASH,
+    values:[first],last_key:first.key
+   }}),{status:200});
+  if(p.after_key_base64===first.key)
+   return new Response(JSON.stringify({result:{
+    block_height:HEIGHT,block_hash:HASH,values:[next]
+   }}),{status:200});
+  throw Error('Unexpected archival cursor');
+ };
+ const data=await cloneStage82BorrowerLending(a.args);
+ assert.equal(data.evidence.alternateSingleRecordReads,1);
+ assert.equal(data.evidence.recordsRead,rows.length+1);
+ assert.equal(data.evidence.recordsPatched,rows.length+1);
+ assert.ok(observed.some(x=>x.cursor===first.key&&x.limit===64));
+ assert.equal(data.evidence.mainnetMutated,false);
+});
+
+test('Stage83 parity artifact is valid JSON and never claims market completeness',async()=>{
+ const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ const excerpt=script.slice(script.indexOf("await writeFile('stage82-one-borrower-parity.json'"));
+ assert.ok(excerpt.startsWith("await writeFile('stage82-one-borrower-parity.json'"));
+ assert.ok(excerpt.includes("JSON.stringify(witness,null,2)+'\\n'"));
+ assert.ok(!excerpt.includes("JSON.stringify(witness,null,2)+'\\\\n'"));
+ assert.ok(script.includes('fullMarketImported:false,fullTrieRootParityVerified:false'));
+});

@@ -160,7 +160,7 @@ async function main(){
    mainnetExecutionEnabled:false,localLiquidationVerified:false,
   };
   await writeFile('stage82-one-borrower-parity.json',
-   JSON.stringify(witness,null,2)+'\\n');
+   JSON.stringify(witness,null,2)+'\n');
  }
 
  // The liquidation uses Rhea's active Pyth callback, not priceoracle.near.
