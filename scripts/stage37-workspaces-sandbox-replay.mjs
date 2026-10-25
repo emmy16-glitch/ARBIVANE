@@ -110,7 +110,7 @@ async function main(){
  try{
   sandboxTransactionSubmitted=true;
   raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
-   gas:plan.gasUnits,attachedDeposit:plan.depositYocto,
+   gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
  }catch(error){
   // Never interpret a thrown error as a successful on-chain liquidation.
