@@ -116,3 +116,15 @@ test('Stage51 source-to-Sandbox price parity happens before actor funding and Rh
  assert.match(s,/NEAR_WORKSPACES_NETWORK!=='sandbox'/);
  assert.doesNotMatch(s,/broadcast_tx|signAndSend/);
 });
+
+test('Stage71 same-token source only needs one Pyth quote and no duplicate token accounting',async()=>{
+ const same=plan();
+ same.actions[1].Liquidate.out_assets[0].token_id='usdt.tether-token.near';
+ same.actions[2].Withdraw.token_id='usdt.tether-token.near';
+ const w=await attestStage51PythParity(harness({plan:same}));
+ assert.deepEqual(w.tokensChecked,['usdt.tether-token.near']);
+ assert.equal(w.uniqueFeedsChecked,1);
+ assert.equal(w.derivedPriceRatiosChecked,0);
+ assert.equal(w.pinnedSourceAndSandboxPythViewsMatch,true);
+ assert.equal(w.maySignMainnet,false);
+});
