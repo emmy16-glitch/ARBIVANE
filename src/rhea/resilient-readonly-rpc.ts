@@ -20,7 +20,7 @@ function validate(o:ResilientReadOptions){
   !Number.isSafeInteger(o.maxCachedPinnedViews)||o.maxCachedPinnedViews<0||o.maxCachedPinnedViews>1024)
   throw Error('INVALID_RESILIENT_NEAR_RPC_OPTIONS');
 }
-function retryable(e:unknown):boolean{
+export function isTransientNearRpcError(e:unknown):boolean{
  if(e instanceof NearRpcHttpError)return /^NEAR RPC HTTP (429|5\d\d)$/.test(e.message);
  if(!(e instanceof Error))return false;
  // Never retry malformed JSON, contract errors, stale oracle prices or block drift.
@@ -49,7 +49,7 @@ export class ResilientNearReadOnlyRpc {
     this.#stats.networkAttempts++;
     try{return await fn();}
     catch(e){
-     if(attempt>=this.#options.maxRetries||!retryable(e)){
+     if(attempt>=this.#options.maxRetries||!isTransientNearRpcError(e)){
       this.#stats.failed++;
       throw e;
      }
