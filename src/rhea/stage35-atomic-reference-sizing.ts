@@ -179,9 +179,16 @@ export function sizeStage35SourceLiquidation(
     const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
     // Bound the proposed repayment by actual pinned supply minus outstanding
     // borrow pool balances; actual transferable FT reserve remains unverified.
-    const amount=budget<debtPool.borrowCapacityInternal?
+    const maximumAmount=budget<debtPool.borrowCapacityInternal?
      budget:debtPool.borrowCapacityInternal;
-    if(amount===0n)continue;
+    // The maximum loan share need not fit an independently capped collateral
+    // leg. Review successively smaller REAL source-repay amounts; never infer
+    // source compliance from gross spread or relax any of the four rules.
+    // Bounded geometric search prevents a one-shot maximum from hiding a
+    // smaller viable route and remains conservative (not a completeness proof).
+    for(let amount=maximumAmount,repayStep=0;
+     amount>0n&&repayStep<12;amount/=2n,repayStep++){
+    
     const repaidUsd=asValue(amount,debt);
     if(repaidUsd===0n)continue;
     // The old fixed 75-bps haircut destroyed ALL gross spread when a real
@@ -223,6 +230,7 @@ export function sizeStage35SourceLiquidation(
     if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
      (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
       qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross};
+    }
    }
   }
  }
