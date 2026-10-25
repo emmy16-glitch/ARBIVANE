@@ -78,6 +78,7 @@ export async function sweepIndexedDebtWithActivePyth(
  resume?:SweepCheckpoint,
  onCheckpoint?:(value:SweepCheckpoint,report:SweepReport)=>Promise<void>|void,
  evaluate?:Parameters<typeof refreshIndexedBorrowerCandidates>[3],
+ delay:(ms:number)=>Promise<void>=(ms)=>new Promise(resolve=>setTimeout(resolve,ms)),
 ):Promise<SweepReport>{
  if(!source||source.mode!=='RHEA_COMPLETE_PAGED_INDEX_ATTESTATION'||source.completeSnapshot!==true||
   source.status!=='COMPLETE_DEBT_INDEX_READ_ONLY'||source.zeroSchemaErrors!==true||
@@ -117,10 +118,40 @@ export async function sweepIndexedDebtWithActivePyth(
    batch.currentLiquidationEligibilityProven!==false||batch.transactionReplayPerformed!==false||
    batch.profitVerified!==false)
    throw Error('STAGE32_UNTRUSTED_BATCH_OUTPUT');
-  cp.items.push(...batch.items);cp.nextFinding=batch.nextFinding;
+  // Stage66: a transient RPC/oracle failure must never silently become a
+  // completed risk assessment as the registry cursor advances. Retry at most
+  // four source-identified failures per 20-row batch, on fresh reads. Keep
+  // all persistent failures as BLOCKED, never promote them to healthy.
+  const verifiedItems=[...batch.items];
+  let retries=0;
+  for(let i=0;i<verifiedItems.length&&retries<4;i++){
+   const original=verifiedItems[i]!;
+   if(original.classification!=='BLOCKED_RPC'&&
+    original.classification!=='BLOCKED_INCOMPLETE_QUOTES')continue;
+   retries++;
+   await delay(1500);
+   const retry=await refreshIndexedBorrowerCandidates(rpc,source,{
+    ...o,fromFinding:before+i,maxFindings:1,concurrency:1,
+   },evaluate);
+   const candidate=retry.items[0];
+   if(retry.processed!==1||retry.fromFinding!==before+i||
+    retry.nextFinding!==before+i+1||retry.items.length!==1||
+    retry.sourceCodeHash!==source.lendingCodeHash||
+    !candidate||candidate.borrowerAccountId!==original.borrowerAccountId||
+    candidate.executionEligible!==false||candidate.tradeProfitVerified!==false)
+    throw Error('STAGE66_REJECTED_UNTRUSTED_FRESH_RETRY');
+   verifiedItems[i]=candidate;
+  }
+  const totals={
+   paperAtRisk:verifiedItems.filter(x=>x.classification==='PAPER_AT_RISK_UNAPPROVED').length,
+   paperHealthy:verifiedItems.filter(x=>x.classification==='PAPER_HEALTHY_UNAPPROVED').length,
+   noDebtNow:verifiedItems.filter(x=>x.classification==='NO_DEBT_NOW').length,
+   blocked:verifiedItems.filter(x=>x.classification.startsWith('BLOCKED')).length,
+  };
+  cp.items.push(...verifiedItems);cp.nextFinding=batch.nextFinding;
   cp.processed+=batch.processed;
-  cp.paperAtRisk+=batch.paperAtRisk;cp.paperHealthy+=batch.paperHealthy;
-  cp.noDebtNow+=batch.noDebtNow;cp.blocked+=batch.blocked;
+  cp.paperAtRisk+=totals.paperAtRisk;cp.paperHealthy+=totals.paperHealthy;
+  cp.noDebtNow+=totals.noDebtNow;cp.blocked+=totals.blocked;
   checkSweepCheckpoint(source,o,cp);
   if(onCheckpoint)await onCheckpoint(structuredClone(cp),progress(cp));
  }
