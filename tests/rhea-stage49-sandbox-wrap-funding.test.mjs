@@ -48,9 +48,10 @@ test('Stage49 uses genuine Sandbox wrapper deposit and NEP141 collateral-transfe
   ['storage_deposit','storage_deposit','near_deposit','ft_transfer_call']);
  assert.equal(x.calls[3].args.msg,'"OnlyIncreaseCollateral"');
  assert.equal(x.calls[3].args.amount,NEAR);
- assert.equal(x.calls[3].settings.attachedDeposit,'1');
- assert.equal(x.calls[2].settings.attachedDeposit,NEAR);
+ assert.equal(x.calls[3].settings.attachedDeposit,1n);
+ assert.equal(x.calls[2].settings.attachedDeposit,BigInt(NEAR));
  assert.ok(x.calls.every(y=>y.contract==='wrap.near'||y.contract==='contract.main.burrow.near'));
+ assert.ok(x.calls.every(y=>typeof y.settings.gas==='bigint'&&typeof y.settings.attachedDeposit==='bigint'));
 });
 test('unsupported collateral config rejects without any token or Sandbox tx',async()=>{
  const x=fixture({canCollateral:false});
