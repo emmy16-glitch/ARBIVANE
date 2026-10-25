@@ -9,6 +9,7 @@ on:
       - 'src/rhea/stage37-sandbox-liquidation.ts'
       - 'src/rhea/stage41-sandbox-settlement.ts'
       - 'src/rhea/stage48-finalized-sandbox-witness.ts'
+      - 'scripts/stage49-sandbox-asset-storage-preflight.mjs'
   workflow_dispatch:
     inputs:
       stage35_run_id:
@@ -106,6 +107,7 @@ jobs:
           path: |
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
+            stage49-sandbox-asset-storage-preflight.json
             stage46-sandbox-clone-evidence.json
           if-no-files-found: warn
           retention-days: 14
