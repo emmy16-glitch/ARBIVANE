@@ -14,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       followups_remaining:
-        description: 'Automatic additional 320-finding windows (0..3); stop for any source-positive candidate'
+        description: 'Additional verified 320-finding windows, 0..23 (bounded; local Sandbox only)'
         required: true
-        default: '0'
+        default: '19'
       base_cursor:
         description: 'Historical Stage30 debt index cursor; 4 x 80 nonoverlapping borrower findings'
         required: true
@@ -201,12 +201,12 @@ jobs:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
           STAGE47_EXPECTED_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '1292' }}
-          STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '3' || inputs.followups_remaining }}
+          STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}
         run: |
           set -euo pipefail
           node scripts/stage47-next-market-window-cli.mjs stage42-reconciled-window.json
           jq -e '.mode == "ARBIVANE_STAGE47_VERIFIED_MARKET_CONTINUATION" and .mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .positiveNetProfitVerified == false' stage47-next-window.json
-          jq '{reason,verifiedEndCursor,blockedInitialReads,blockedRiskRefreshes,sourcePlansForSandboxOnly,dispatch,nextCursor,followupsRemaining}' stage47-next-window.json >> "$GITHUB_STEP_SUMMARY"
+          jq '{reason,verifiedEndCursor,remainingHistoricalFindings,fullWindowsRemaining,tailFindingsBeyondFullWindows,blockedInitialReads,blockedRiskRefreshes,sourcePlansForSandboxOnly,continuesAfterSourcePlanEvidence,dispatch,nextCursor,followupsRemaining}' stage47-next-window.json >> "$GITHUB_STEP_SUMMARY"
       - name: Advance only to immediately contiguous verified historical borrower window
         env:
           GH_TOKEN: ${{ github.token }}
@@ -215,7 +215,7 @@ jobs:
           if jq -e '.dispatch == true' stage47-next-window.json >/dev/null; then
             next=$(jq -r '.nextCursor' stage47-next-window.json)
             remaining=$(jq -r '.followupsRemaining' stage47-next-window.json)
-            [[ "$next" =~ ^[0-9]+$ && "$remaining" =~ ^[0-3]$ ]]
+            [[ "$next" =~ ^[0-9]+$ && "$remaining" =~ ^(0|[1-9]|1[0-9]|2[0-3])$ ]]
             gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/rhea-stage42-reconciled-continuation.yml/dispatches" \
               -f ref=main -f "inputs[base_cursor]=$next" -f "inputs[followups_remaining]=$remaining"
             echo "Dispatched next authentic read-only borrower window from finding $next" >> "$GITHUB_STEP_SUMMARY"

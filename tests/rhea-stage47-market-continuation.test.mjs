@@ -37,10 +37,15 @@ test('finite continuation budget stops cleanly and never loops',()=>{
  assert.equal(r.dispatch,false);assert.equal(r.nextCursor,null);
  assert.equal(r.reason,'AUTOMATIC_CONTINUATION_BUDGET_EXHAUSTED');
 });
-test('stops for a source-positive candidate needing local Sandbox review',()=>{
+test('Stage59 continues past source-positive candidates after the separately gated Sandbox evidence',()=>{
  const r=plan(report({sourceReferencePlansForSandboxOnly:1}));
- assert.equal(r.dispatch,false);assert.equal(r.reason,'SOURCE_PLAN_REQUIRES_SANDBOX_REVIEW');
+ assert.equal(r.dispatch,true);
+ assert.equal(r.reason,'CONTINUE_AFTER_SOURCE_PLAN_SANDBOX_EVIDENCE');
+ assert.equal(r.continuesAfterSourcePlanEvidence,true);
+ assert.equal(r.sourcePlansForSandboxOnly,1);
+ assert.equal(r.followupsRemaining,2);
  assert.equal(r.mainnetExecutionEnabled,false);
+ assert.equal(r.maySignMainnet,false);
 });
 test('does not skip end-of-registry partial window',()=>{
  const r=plan(report({baseCursor:7481,endCursor:7801}),{expectedBaseCursor:7481,followupsRemaining:3});
@@ -56,7 +61,7 @@ test('rejects forged, duplicate or incomplete historical windows',()=>{
   {historicalSourceDebtAccounts:1500},{sourceReferencePlansForSandboxOnly:-1}
  ]) assert.throws(()=>plan(report(changes)),/STAGE47_UNTRUSTED/);
  assert.throws(()=>plan(report(),{expectedBaseCursor:972,followupsRemaining:3}),/STAGE47_UNTRUSTED/);
- assert.throws(()=>plan(report(),{expectedBaseCursor:1292,followupsRemaining:4}),/STAGE47_UNTRUSTED/);
+ assert.throws(()=>plan(report(),{expectedBaseCursor:1292,followupsRemaining:24}),/STAGE47_UNTRUSTED/);
 });
 test('workflow has bounded authenticated dispatch, archived proof and no mainnet signer',async()=>{
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
@@ -69,4 +74,58 @@ test('workflow has bounded authenticated dispatch, archived proof and no mainnet
  assert.match(workflow,/STAGE37_ALLOW_SANDBOX_MUTATION=true/);
  assert.match(workflow,/EXECUTION_ENABLED: 'false'/);
  assert.doesNotMatch(workflow,/NEAR_PRIVATE_KEY:/);
+});
+
+test('Stage59 can traverse all full pinned 320-account windows with finite 19-followup budget',()=>{
+ // For 7,801 authentic historical debt findings, 20 full windows beginning
+ // at the existing verified cursor 1292 visit 6,400 distinct accounts.
+ // The final 109 findings are NOT silently called scanned.
+ let cursor=1292,budget=19,dispatches=0,totalVisited=0,last;
+ while(true){
+  const input=report({
+   baseCursor:cursor,endCursor:cursor+320,
+   paperAtRisk:0,paperHealthy:320,noDebtNow:0,blockedInitialReads:0,
+   failedRiskRefreshes:0,sourceReferencePlansForSandboxOnly:0
+  });
+  const r=plan(input,{expectedBaseCursor:cursor,followupsRemaining:budget});
+  totalVisited+=320;last=r;
+  if(!r.dispatch)break;
+  assert.equal(r.nextCursor,cursor+320);
+  assert.equal(r.followupsRemaining,budget-1);
+  cursor=r.nextCursor;budget=r.followupsRemaining;dispatches++;
+  assert.ok(dispatches<=19,'unbounded continuation');
+ }
+ assert.equal(totalVisited,6400);
+ assert.equal(dispatches,19);
+ assert.equal(last.verifiedEndCursor,7692);
+ assert.equal(last.remainingHistoricalFindings,109);
+ assert.equal(last.tailFindingsBeyondFullWindows,109);
+ assert.equal(last.fullWindowsRemaining,0);
+ assert.equal(last.reason,'LESS_THAN_ONE_FULL_WINDOW_REMAINS');
+ assert.equal(last.dispatch,false);
+ assert.equal(last.mayBroadcastMainnet,false);
+});
+test('Stage59 source-positive terminal window cannot skip the last full or remaining partial accounts',()=>{
+ const last=report({
+  baseCursor:7372,endCursor:7692,
+  sourceReferencePlansForSandboxOnly:2,
+  paperAtRisk:2,paperHealthy:318,noDebtNow:0,blockedInitialReads:0
+ });
+ const out=plan(last,{expectedBaseCursor:7372,followupsRemaining:3});
+ assert.equal(out.dispatch,false);
+ assert.equal(out.reason,'LESS_THAN_ONE_FULL_WINDOW_REMAINS');
+ assert.equal(out.continuesAfterSourcePlanEvidence,true);
+ assert.equal(out.remainingHistoricalFindings,109);
+ assert.equal(out.tailFindingsBeyondFullWindows,109);
+ assert.equal(out.mainnetExecutionEnabled,false);
+});
+test('Stage59 GitHub Action uses finite extended budget and restricts dispatch input and signing',async()=>{
+ const w=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
+ assert.ok(w.includes("STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}"));
+ assert.ok(w.includes('tailFindingsBeyondFullWindows'));
+ assert.ok(w.includes('sourcePlansForSandboxOnly'));
+ assert.ok(w.includes('2[0-3]'));
+ assert.ok(w.includes('NEAR_WORKSPACES_NETWORK=sandbox'));
+ assert.ok(!w.includes('broadcast_tx'));
+ assert.ok(!w.includes('NEAR_PRIVATE_KEY:'));
 });
