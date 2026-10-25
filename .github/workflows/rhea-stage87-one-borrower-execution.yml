@@ -1,0 +1,255 @@
+name: Rhea Stage87 focused authentic single-borrower Sandbox execution
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage87-one-borrower-execution.yml'
+      - 'scripts/stage49-sandbox-route-readiness.mjs'
+      - 'scripts/stage51-active-pyth-sandbox-parity.mjs'
+      - 'scripts/stage46-paged-sandbox-clone.mjs'
+      - 'scripts/stage50-pinned-ft-reserve.mjs'
+      - 'scripts/stage45-cursor-pages.mjs'
+      - 'scripts/stage45-archival-state-rpc.mjs'
+      - 'scripts/stage76-bounded-clone-queue.mjs'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage82-targeted-lending-clone.mjs'
+      - 'src/rhea/stage41-sandbox-settlement.ts'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage87-single-borrower
+  # Single source-authenticated borrower is intentionally isolated from
+  # Stage69's queued eight-candidate fanout; never cancel live execution.
+  # Source-pinned archival clones are expensive. Do not discard a live, fully
+  # authenticated execution attempt when a newer merge arrives.
+  # Keep the current run; the pending slot picks the most recent main commit.
+  cancel-in-progress: false
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      count: ${{ steps.pick.outputs.count }}
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - name: Download genuine Stage63 qualification evidence from completed shards
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40187579892'
+          pattern: rhea-stage63-attempt-5-shard-*
+          path: previous
+          github-token: ${{ github.token }}
+      - id: pick
+        name: Admit only source-rechecked positive-gross blocker accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(find previous -type f -name stage38-qualification.json -print0)
+          if (( ${#files[@]} == 0 )); then
+            echo 'Missing authentic Stage63 qualification evidence.' >&2
+            exit 1
+          fi
+          selected=$(jq -s -c '
+            [.[] | select(
+              .mode == "RHEA_STAGE38_LIVE_CANDIDATE_TO_SANDBOX" and
+              .chain == "NEAR_MAINNET" and .sourceDebtAccounts == 7801 and
+              .mainnetExecutionEnabled == false and
+              .maySignMainnet == false and .mayBroadcastMainnet == false
+            ) | .rows[] | select(
+              .status == "NO_CURRENT_SOURCE_SCENARIO" and
+              .sizingStatus == "NO_SAFE_SOURCE_SCENARIO" and
+              (.sizingBlockers | index("SOURCE_VALID_SPREAD_BELOW_MINIMUM_PAPER_GROSS")) and
+              (.historicalFindingIndex | type == "number" and . >= 0 and . < 7801)
+            ) | {start:.historicalFindingIndex,count:1}]
+            | unique_by(.start) | .[:1] | {include:.}
+          ' "${files[@]}")
+          count=$(jq -r '.include | length' <<< "$selected")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "matrix=$selected" >> "$GITHUB_OUTPUT"
+          echo "Stage87 one independently authenticated borrower: $count/1."
+          echo "Selected genuine historical source indexes: $(jq -c '[.include[].start]' <<< "$selected")" >> "$GITHUB_STEP_SUMMARY"
+
+  candidate:
+    needs: select
+    if: needs.select.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 105
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Retrieve immutable 7,801-debt borrower identity registry
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Attest authentic single borrower index and disable public transactions
+        env:
+          START: ${{ matrix.start }}
+        run: |
+          set -euo pipefail
+          jq -e '.mode == "RHEA_COMPLETE_PAGED_INDEX_ATTESTATION" and .completeSnapshot == true and .debtAccounts == 7801 and (.findings | length) == 7801' source/rhea-full-paged-index.json
+          [[ "$START" =~ ^[0-9]+$ ]]
+          (( START >= 0 && START < 7801 ))
+          jq -e --argjson start "$START" '.findings[$start].accountId | strings | length > 0' source/rhea-full-paged-index.json
+          jq -n --argjson start "$START" '{mode:"STAGE69_AUTHENTIC_SOURCE_INDEX",startFinding:$start,count:1,mainnetExecutionEnabled:false}' > stage69-source-index.json
+          echo "RHEA_STAGE32_START_FINDING=$START" >> "$GITHUB_ENV"
+          echo "RHEA_STAGE38_START_FINDING=$START" >> "$GITHUB_ENV"
+      - name: Fresh same-block Pyth borrower classification
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE32_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
+          RHEA_STAGE32_MAX_FINDINGS: '1'
+          RHEA_STAGE32_BATCH_SIZE: '1'
+          RHEA_STAGE32_CONCURRENCY: '1'
+          RHEA_STAGE32_RESUME: 'false'
+          RHEA_RPC_SPACING_MS: '900'
+          RHEA_STAGE32_CHECKPOINT_PATH: stage32-reprice-checkpoint.json
+          RHEA_STAGE32_REPORT_PATH: stage32-reprice-report.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/full-active-pyth-sweep-cli.ts > stage69-sweep-summary.json
+          jq -e '.executionEnabled == false and .processed == 1 and .processed == (.paperAtRisk+.paperHealthy+.noDebtNow+.blocked)' stage69-sweep-summary.json
+      - name: Exact source proof then actual keyless Workspaces Sandbox when qualified
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_WORKSPACES_NETWORK: sandbox
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE38_SOURCE_RUN: '40128285853'
+          RHEA_STAGE38_SOURCE_FILE: source/rhea-full-paged-index.json
+          RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
+          RHEA_STAGE38_MAX_FINDINGS: '1'
+          RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '1'
+          # Optional high-limit archival RPC owner secret; the public archive
+          # is deprecated and only queried if one key exceeds the primary limit.
+          STAGE82_SINGLE_BORROWER: 'true'
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
+          RHEA_RPC_SPACING_MS: '900'
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage38-live-candidate-cli.ts > stage69-qualification-summary.json
+          jq -e '.reviewed == 1 and .refreshed == .paperAtRiskFromPreviousScan and .mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false' stage69-qualification-summary.json
+          jq -c '{startFinding,paperAtRiskFromPreviousScan,positiveSourcePlans,failedFreshReads,sizingBlockerCounts,blockedReasonCounts}' stage69-qualification-summary.json
+          if jq -e '.sandboxPlanReady == true' stage69-qualification-summary.json >/dev/null; then
+            test -s stage38-positive-stage35-evidence.json
+            npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+            sandbox_exit=0
+            if EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true \
+              STAGE37_STAGE35_EVIDENCE_PATH=stage38-positive-stage35-evidence.json \
+              NEAR_RPC_URL=https://archival-rpc.mainnet.fastnear.com \
+              NEAR_CLI_MAINNET_RPC_SERVER_URL=https://archival-rpc.mainnet.fastnear.com \
+              node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage69-sandbox-actual.json; then
+              sandbox_exit=0
+            else
+              sandbox_exit=$?
+            fi
+            EXECUTION_ENABLED=false NEAR_NETWORK=mainnet node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
+              stage69-sandbox-actual.json stage55-sandbox-phase-evidence.json \
+              stage37-sandbox-execution.json stage41-sandbox-balance-settlement.json \
+              > stage69-sandbox-attempt-stdout.json
+            jq -e '.chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .maySignMainnet == false and .mayBroadcastMainnet == false' stage56-sandbox-attempt-evidence.json
+            jq -c '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,actualRheaSettlementVerified}' stage56-sandbox-attempt-evidence.json
+          fi
+      - name: Preserve actual source qualification, execution and callback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage87-authentic-borrower-${{ matrix.start }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            stage69-source-index.json
+            stage32-reprice-checkpoint.json
+            stage32-reprice-report.json
+            stage69-sweep-summary.json
+            stage38-qualification.json
+            stage69-qualification-summary.json
+            stage38-positive-stage35-evidence.json
+            stage69-sandbox-actual.json
+            stage37-sandbox-execution.json
+            stage41-sandbox-balance-settlement.json
+            stage46-sandbox-clone-evidence.json
+            stage82-one-borrower-parity.json
+            stage49-sandbox-route-preflight.json
+            stage49-sandbox-registration.json
+            stage49-sandbox-funding.json
+            stage50-pinned-repay-reserve.json
+            stage51-active-pyth-sandbox-parity.json
+            stage52-actor-borrow-capacity.json
+            stage55-sandbox-phase-evidence.json
+            stage56-sandbox-attempt-evidence.json
+            stage69-sandbox-attempt-stdout.json
+
+  verify:
+    needs: [select,candidate]
+    if: always() && needs.select.outputs.count != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stage87-authentic-borrower-*
+          path: evidence
+      - name: Verify final OR later-finalized persistent Sandbox receipts, borrower deltas and seized FT
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified=''
+          while IFS= read -r phase; do
+            dir=$(dirname "$phase")
+            receipt="$dir/stage37-sandbox-execution.json"
+            settlement="$dir/stage41-sandbox-balance-settlement.json"
+            proposal="$dir/stage38-positive-stage35-evidence.json"
+            test -s "$receipt" -a -s "$settlement" -a -s "$proposal" || continue
+            if jq -e '.status == "LOCAL_RHEA_BALANCE_AND_CALLBACK_VERIFIED_NOT_PROFIT" and .actualRheaSettlementVerified == true and .localLiquidationCallInvoked == true' "$phase" >/dev/null && \
+               jq -e '.status == "ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF" and .attemptedTransaction == true and .persistedAtLaterFinalizedBlock == true and .failedReceiptCount == 0 and .callbackReceiptCount > 0 and .failedCallbackReceiptCount == 0 and ((.transactionFinal == true and .transactionExecutionStatus == "FINAL") or (.transactionFinal == false and .transactionExecutionStatus == "EXECUTED_OPTIMISTIC" and (.finalizedBlockBefore | type) == "number" and (.finalizedBlockAfter | type) == "number" and .finalizedBlockAfter >= (.finalizedBlockBefore + 2)))' "$receipt" >/dev/null && \
+               jq -e '.status == "POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD" and .borrowerMutationVerified == true and .assetTransferObserved == true and .callbackSuccessObserved == true and .borrowerDebtDecreaseInternal != "0" and .borrowerCollateralDecreaseInternal != "0" and .actorSeizeFtIncreaseAtomic != "0"' "$settlement" >/dev/null; then
+              verified="$dir"
+              break
+            fi
+          done < <(find evidence -name stage55-sandbox-phase-evidence.json -print | sort)
+          if [[ -z "$verified" ]]; then
+            echo 'NO_VERIFIED_RHEA_SANDBOX_LIQUIDATION: source-valid paper scenarios and blocked reads are not settlement evidence.' >&2
+            exit 1
+          fi
+          mkdir -p verified
+          cp "$verified"/stage{37-sandbox-execution,41-sandbox-balance-settlement,55-sandbox-phase-evidence}.json verified/
+          cp "$verified"/stage38-positive-stage35-evidence.json verified/
+          jq -n --slurpfile proposal "$verified/stage38-positive-stage35-evidence.json" \
+            --slurpfile receipt "$verified/stage37-sandbox-execution.json" \
+            --slurpfile settlement "$verified/stage41-sandbox-balance-settlement.json" \
+            --arg run "$GITHUB_RUN_ID" \
+            '{mode:"STAGE69_VERIFIED_AUTHENTIC_RHEA_SANDBOX_LIQUIDATION",
+              chain:"NEAR_SANDBOX",mainnetExecutionEnabled:false,sourceRun:"40128285853",
+              executionRun:$run,borrower:$proposal[0].borrowerAccountId,
+              sourceBlock:$proposal[0].blockHeight,transaction:$receipt[0],settlement:$settlement[0]}' > verified/execution-evidence.json
+      - name: Publish successful actual liquidation proof
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage69-verified-rhea-sandbox-liquidation
+          path: verified
+          retention-days: 90
+          if-no-files-found: error
