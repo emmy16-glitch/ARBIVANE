@@ -19,6 +19,29 @@ const stable=(v)=>{
  return s;
 };
 const sha=s=>createHash('sha256').update(s).digest('hex');
+// Stage98: expose only a bounded, non-sensitive failure category. Never persist
+// an SDK error message, panic text, RPC URL, account data or stack trace.
+export function stage98ClassifyViewFailure(error){
+ const name=typeof error?.name==='string'?error.name:'';
+ const message=typeof error?.message==='string'?error.message.slice(0,4096):'';
+ const combined=name+' '+message;
+ if(/access.key|private.key|authorization|bearer|secret|token/i.test(combined))
+  return 'REDACTED_RUNTIME_FAILURE';
+ if(/deserialize|borsh|invalid.enum|unknown.variant|invalid.variant/i.test(combined))
+  return 'STATE_DESERIALIZATION_FAILURE';
+ if(/index.out.of.bounds|index.*bounds/i.test(combined))
+  return 'COLLECTION_INDEX_FAILURE';
+ if(/key.not.found|missing.key|not.found.in.storage/i.test(combined))
+  return 'STORAGE_LOOKUP_FAILURE';
+ if(/gas.exceeded|out.of.gas/i.test(combined))
+  return 'VIEW_GAS_EXHAUSTED';
+ if(/timed?.out|network|connection|socket|503|429/i.test(combined))
+  return 'VIEW_TRANSPORT_FAILURE';
+ if(/wasm|unreachable|trap|panic/i.test(combined))
+  return 'WASM_EXECUTION_FAILURE';
+ return 'UNCLASSIFIED_LOCAL_VIEW_FAILURE';
+}
+
 export async function attestStage96PinnedRheaViews({
  lending,borrowerAccountId,config,borrower,assets,
  persist=async witness=>writeFile('stage96-rhea-view-parity.json',
@@ -55,9 +78,11 @@ export async function attestStage96PinnedRheaViews({
   }
   let observed;
   try{observed=await lending.view(method,args(borrowerAccountId));}
-  catch{
+  catch(error){
    witness.failedView=id;witness.failureCode='STAGE96_'+id+'_VIEW_CALL_FAILED';
-   witness.checks.push({view:id,status:'SANDBOX_VIEW_FAILED',expectedSha256:sha(target)});
+   witness.checks.push({view:id,status:'SANDBOX_VIEW_FAILED',
+    stage98FailureClass:stage98ClassifyViewFailure(error),
+    expectedSha256:sha(target)});
    witness.status='BLOCKED_SANDBOX_VIEW_EXCEPTION';await store();
    throw Error(witness.failureCode);
   }
