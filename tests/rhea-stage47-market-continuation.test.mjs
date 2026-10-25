@@ -121,7 +121,7 @@ test('Stage59 source-positive terminal window cannot skip the last full or remai
 });
 test('Stage59 GitHub Action uses finite extended budget and restricts dispatch input and signing',async()=>{
  const w=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
- assert.ok(w.includes("STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}"));
+ assert.ok(w.includes('STAGE47_FOLLOWUPS_REMAINING: ${{ inputs.followups_remaining }}'));
  assert.ok(w.includes('tailFindingsBeyondFullWindows'));
  assert.ok(w.includes('sourcePlansForSandboxOnly'));
  assert.ok(w.includes('2[0-3]'));
@@ -130,14 +130,15 @@ test('Stage59 GitHub Action uses finite extended budget and restricts dispatch i
  assert.ok(!w.includes('NEAR_PRIVATE_KEY:'));
 });
 
-test('Stage62 keeps all verified Stage47 workflow dispatches queued rather than replacing pending windows',async()=>{
+test('Stage63 prevents code pushes from launching duplicate fixed-cursor scans',async()=>{
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
  const block=workflow.match(/^concurrency:\n((?: {2}[^\n]*\n|  #.*\n)*)/m)?.[1]??'';
  assert.match(block,/^  group: arbivane-stage42-\$\{\{ github\.ref \}\}$/m);
- assert.match(block,/^  queue: max$/m);
  assert.match(block,/^  cancel-in-progress: false$/m);
  assert.ok(!block.includes('cancel-in-progress: true'));
- assert.ok(workflow.includes("STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}"));
+ assert.doesNotMatch(workflow,/^  push:$/m);
+ assert.ok(!block.includes('queue:'));
+ assert.ok(workflow.includes('STAGE47_FOLLOWUPS_REMAINING: ${{ inputs.followups_remaining }}'));
  assert.ok(workflow.includes('stage47-next-window.json'));
  assert.ok(workflow.includes('boundedRecoveryAttempts,recoveredRateLimitedFindings'));
  assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
