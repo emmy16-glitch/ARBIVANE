@@ -90,6 +90,7 @@ async function main(){
  const clones=await cloneStage76Dependencies({ids,concurrency:2,
   clone:(id)=>clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
+   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL?.trim()||null,
    expectedCodeHash:id===plan.lendingContract?plan.sourceCodeHash:
     id==='aggregate-oracle.near'?plan.sourceOracleHash:null,
    budgets:{paceMs:450},
