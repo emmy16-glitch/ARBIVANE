@@ -109,7 +109,8 @@ test('default on-chain price needs neither feed lookup nor derived extra_call',a
 });
 test('Stage51 source-to-Sandbox price parity happens before actor funding and Rhea action',async()=>{
  const s=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
- assert.match(s,/attestStage51PythParity\(\{rpc,contracts,plan,blockHeight:block\}\)/);
+ assert.match(s,/attestStage51PythParity\(\{/);
+ assert.ok(s.includes('fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL'));
  assert.match(s,/stage51-active-pyth-sandbox-parity\.json/);
  assert.ok(s.indexOf('const pythParity=await')<s.indexOf("root.createSubAccount('arbivane-replay'"));
  assert.ok(s.indexOf('const pythParity=await')<s.indexOf('sandboxTransactionSubmitted=true'));
@@ -129,4 +130,54 @@ test('Stage71 same-token source only needs one Pyth quote and no duplicate token
  assert.equal(w.derivedPriceRatiosChecked,0);
  assert.equal(w.pinnedSourceAndSandboxPythViewsMatch,true);
  assert.equal(w.maySignMainnet,false);
+});
+
+test('Stage108 retries only transient pinned Pyth source views through an independent archival provider',async()=>{
+ const primary=harness({source:(id,method,args,original)=>{
+  if(id===oracle&&method==='get_price_no_older_than'){
+   const error=new Error('NEAR RPC HTTP 429');
+   error.name='NearRpcHttpError';
+   return Promise.reject(error);
+  }
+  return original(id,method,args);
+ }});
+ const baseline=harness();
+ let fallbackCalls=0;
+ const alt={view:async(...args)=>{
+  fallbackCalls++;
+  return baseline.rpc.view(...args);
+ }};
+ // Use the real classified SDK error type; arbitrary errors never trigger
+ // provider switching or a forged successful Oracle quote.
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ primary.rpc.view=async(id,method,args,block)=>{
+  if(id===oracle&&method==='get_price_no_older_than')
+   throw new NearRpcHttpError(429,'0');
+  return baseline.rpc.view(id,method,args,block);
+ };
+ const proof=await attestStage51PythParity({...primary,fallbackRpc:alt});
+ assert.equal(proof.pinnedSourceAndSandboxPythViewsMatch,true);
+ assert.equal(proof.realRheaLiquidationVerified,false);
+ assert.equal(proof.mayBroadcastMainnet,false);
+ assert.ok(fallbackCalls>=1);
+});
+test('Stage108 never retries a contract error or accepts fallback block drift',async()=>{
+ const base=harness(),bad=harness();
+ let fallbackCalls=0;
+ bad.rpc.view=async()=>{throw Error('contract panicked at source');};
+ const alternative={view:async(...args)=>{fallbackCalls++;return base.rpc.view(...args);}};
+ await assert.rejects(attestStage51PythParity({...bad,fallbackRpc:alternative}),
+  /STAGE51_SOURCE_VIEW_UNAVAILABLE/);
+ assert.equal(fallbackCalls,0);
+ const transient=harness();
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ transient.rpc.view=async(id,method,args,block)=>{
+  if(id===oracle&&method==='get_price_no_older_than')
+   throw new NearRpcHttpError(503,'0');
+  return base.rpc.view(id,method,args,block);
+ };
+ const drifted={view:async(...args)=>({...await base.rpc.view(...args),
+  blockHeight:String(blockHeight+1)})};
+ await assert.rejects(attestStage51PythParity({...transient,fallbackRpc:drifted}),
+  /STAGE51_SOURCE_BLOCK_DRIFT/);
 });
