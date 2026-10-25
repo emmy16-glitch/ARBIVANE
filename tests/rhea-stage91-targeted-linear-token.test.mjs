@@ -198,3 +198,57 @@ test('Stage101 never routes deterministic contract errors through a fallback pro
  assert.equal(fallbackCalls,0);
  assert.equal(x.imports.length,0);
 });
+
+
+test('Stage105 retries the exact pinned LiNEAR Wasm import on independent archival RPC and restores process configuration',async()=>{
+ const x=scenario(),original=x.args.root.importContract;
+ const initial=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ const urls=[];
+ x.args.root.importContract=async opts=>{
+  urls.push(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL);
+  assert.deepEqual(opts,{mainnetContract:'linear-protocol.near',
+   blockId:H,withData:false});
+  if(urls.length===1)throw Error('private provider error with token=HIDDEN');
+  return original(opts);
+ };
+ try{
+  const out=await cloneStage91LinearToken(x.args);
+  assert.equal(out.evidence.wasmImportFallbackUsed,true);
+  assert.equal(out.evidence.wasmImportAttempts,2);
+  assert.deepEqual(urls,[initial||x.args.endpoint,
+   'https://archival-rpc.mainnet.near.org']);
+  assert.equal(out.evidence.originalDeployedWasmVerified,true);
+  assert.equal(out.evidence.mainnetMutated,false);
+  assert.equal(out.evidence.realLiquidationVerified,false);
+  assert.equal(x.imports.length,1);
+ }finally{
+  assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,initial);
+ }
+});
+test('Stage105 fails closed when both archival Wasm import sources fail and never supplies invented code',async()=>{
+ const x=scenario(),initial=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let attempts=0;
+ x.args.root.importContract=async()=>{attempts++;throw Error('private upstream response');};
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE105_PINNED_LINEAR_WASM_IMPORT_PROVIDERS_EXHAUSTED/);
+ assert.equal(attempts,2);
+ assert.equal(x.patches.length,0);
+ assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,initial);
+});
+test('Stage105 code hash mismatch after successful fallback still blocks before any local state patch',async()=>{
+ const x=scenario(),initial=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let attempts=0;
+ x.args.root.importContract=async()=>{
+  attempts++;
+  if(attempts===1)throw Error('upstream unavailable');
+  return {accountId:'linear-protocol.near',
+   patchStateRecords:async()=>{throw Error('must not patch');},
+   view:async()=>null,
+   accountView:async()=>({code_hash:'E'.repeat(43)})};
+ };
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE91_LOCAL_DEPLOYED_LINEAR_CODE_MISMATCH/);
+ assert.equal(attempts,2);
+ assert.equal(x.patches.length,0);
+ assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,initial);
+});
