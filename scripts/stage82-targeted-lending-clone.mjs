@@ -168,6 +168,11 @@ export async function cloneStage82BorrowerLending({
  await scan(Buffer.from([5]));
  await scan(Buffer.from([6]));
  await exact(Buffer.from([8]));
+ // The deployed Rhea borrower view calculates supply APR using the
+ // source margin debt discount. This is a separate LazyOption stored under
+ // StorageKey::MarginConfig (Borsh enum tag 12), not Config (tag 8).
+ // Never replace missing historical configuration with synthetic defaults.
+ await exact(Buffer.from([12]));
  const contract=await root.importContract({
   mainnetContract:contractId,blockId:blockHeight,withData:false});
  if(typeof contract?.patchStateRecords!=='function'||

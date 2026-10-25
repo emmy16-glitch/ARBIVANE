@@ -23,6 +23,7 @@ const rows=[
  record(join([5,105],borsh('farm-near')),u64(1)),
  record(join([6,102],borsh('farm-near')),u64(1)),
  record([8],[10,20,30]),
+ record([12],[44,55,66]), // authentic StorageKey::MarginConfig LazyOption
 ];
 function scenario({missing=null,invalidIndex=false,drift=false}={}){
  const calls=[],patches=[],imports=[];
@@ -79,6 +80,17 @@ test('Stage82 blocks source key deletion, invalid index and cross-block drift be
   assert.equal(a.patches.length,0);
   assert.equal(a.imports.length,0);
  }
+});
+test('Stage100 imports source-authenticated margin config and fails closed when absent',async()=>{
+ const ok=scenario(),result=await cloneStage82BorrowerLending(ok.args);
+ const marginKey=b64([12]);
+ assert.equal(result.evidence.recordsPatched,rows.length);
+ assert.equal(ok.patches.find(v=>v.Data.data_key===marginKey)?.Data.value,b64([44,55,66]));
+ const missing=scenario({missing:Buffer.from([12])});
+ await assert.rejects(()=>cloneStage82BorrowerLending(missing.args),
+  /STAGE82_REQUIRED_SOURCE_KEY_MISSING/);
+ assert.equal(missing.imports.length,0);
+ assert.equal(missing.patches.length,0);
 });
 test('Stage82 rejects forged account, duplicated assets, bad code hash and missing source',async()=>{
  for(const patch of [
