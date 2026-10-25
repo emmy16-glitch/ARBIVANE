@@ -110,6 +110,58 @@ function stage101BorrowerDifferenceSections(source,sandbox){
   .map(key=>key.toUpperCase());
 }
 
+// Stage103: compare source-pinned and local market assets after BOTH views.
+// Timestamp-driven interest may change balances without changing pool shares.
+// This is diagnostic only: no clock drift permits skipping strict view parity.
+export function stage103MarketAssetDifferenceClasses(source,sandbox){
+ const issues=new Set(),LIMIT=512;
+ if(!Array.isArray(source)||!Array.isArray(sandbox)||
+  source.length>LIMIT||sandbox.length>LIMIT){
+  return ['MARKET_COLLECTION_SHAPE_OR_BUDGET'];
+ }
+ const market=new Map();
+ for(const [side,items] of [['source',source],['sandbox',sandbox]]){
+  const byId=new Map();
+  for(const item of items){
+   if(!Array.isArray(item)||item.length!==2||
+    typeof item[0]!=='string'||!ID.test(item[0])||
+    !item[1]||typeof item[1]!=='object'||Array.isArray(item[1])||
+    byId.has(item[0]))
+    return ['MARKET_COLLECTION_SHAPE_OR_BUDGET'];
+   byId.set(item[0],item[1]);
+  }
+  market.set(side,byId);
+ }
+ const left=market.get('source'),right=market.get('sandbox');
+ if(left.size!==right.size||[...left.keys()].some(id=>!right.has(id)))
+  return ['MARKET_ASSET_MEMBERSHIP_DIFFERENT'];
+ for(const [tokenId,a] of left){
+  const b=right.get(tokenId);
+  if(a?.last_update_timestamp!==b?.last_update_timestamp)
+   issues.add('MARKET_ACCRUAL_TIMESTAMP_DIFFERENT');
+  for(const pool of ['supplied','borrowed']){
+   if(a?.[pool]?.shares!==b?.[pool]?.shares)
+    issues.add('MARKET_POOL_SHARES_DIFFERENT');
+   if(a?.[pool]?.balance!==b?.[pool]?.balance)
+    issues.add('MARKET_POOL_BALANCES_DIFFERENT');
+  }
+  if(a?.reserved!==b?.reserved)issues.add('MARKET_RESERVED_DIFFERENT');
+  if(stable(stage101CanonicalBorrower(a?.config))!==
+   stable(stage101CanonicalBorrower(b?.config)))
+   issues.add('MARKET_CONFIG_DIFFERENT');
+  const remainder=v=>{
+   const out={...v};
+   for(const key of ['supplied','borrowed','reserved','last_update_timestamp','config'])
+    delete out[key];
+   return out;
+  };
+  if(stable(stage101CanonicalBorrower(remainder(a)))!==
+   stable(stage101CanonicalBorrower(remainder(b))))
+   issues.add('MARKET_OTHER_FIELDS_DIFFERENT');
+ }
+ return [...issues].sort();
+}
+
 // Stage98: expose only a bounded, non-sensitive failure category. Never persist
 // an SDK error message, panic text, RPC URL, account data or stack trace.
 export function stage98ClassifyViewFailure(error){
@@ -157,6 +209,7 @@ export async function attestStage96PinnedRheaViews({
   catch{throw Error('STAGE96_PARITY_EVIDENCE_PERSISTENCE_FAILED');}
  };
  await store();
+ let firstMismatch=null;
  for(let i=0;i<VIEWS.length;i++){
   const {id,method,args}=VIEWS[i];
   let target;
@@ -197,13 +250,26 @@ export async function attestStage96PinnedRheaViews({
    check.stage101DifferentSections=stage101BorrowerDifferenceSections(expected[i],observed);
   if(id==='BORROWER'&&!match)
    check.stage102AssetDifferenceClasses=stage102BorrowerAssetDifferenceClasses(expected[i],observed);
+  if(id==='ASSETS'&&!match)
+   check.stage103MarketDifferenceClasses=stage103MarketAssetDifferenceClasses(expected[i],observed);
   witness.checks.push(check);
   if(!match){
-   witness.failedView=id;witness.failureCode='STAGE96_'+id+'_VIEW_MISMATCH';
+   const code='STAGE96_'+id+'_VIEW_MISMATCH';
+   firstMismatch??={id,code};
+   witness.failedView=firstMismatch.id;
+   witness.failureCode=firstMismatch.code;
    witness.status='BLOCKED_PINNED_PARITY_MISMATCH';await store();
-   throw Error(witness.failureCode);
+   // Stage103: if borrower differs, collect ONE additional read-only market
+   // view before blocking. Config failure remains an immediate hard stop.
+   if(id!=='BORROWER')throw Error(firstMismatch.code);
+   continue;
   }
   await store();
+ }
+ if(firstMismatch){
+  witness.failedView=firstMismatch.id;witness.failureCode=firstMismatch.code;
+  witness.status='BLOCKED_PINNED_PARITY_MISMATCH';await store();
+  throw Error(firstMismatch.code);
  }
  witness.status='ALL_REQUIRED_PINNED_VIEWS_MATCH_NOT_LIQUIDATION';
  witness.allSourceViewsVerified=true;
