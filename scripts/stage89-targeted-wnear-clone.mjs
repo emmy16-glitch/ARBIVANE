@@ -98,8 +98,7 @@ export async function cloneStage89WrappedNear({
  // per-account storage usage; none are rewritten to seed Sandbox holdings.
  const state=await exact(Buffer.from('STATE'),true);
  if(state.length!==29||!state.subarray(0,5).equals(Buffer.from([1,0,0,0,97]))||
-  state.readBigUInt64LE(21)===0n||
-  state.subarray(5,21).readBigUInt64LE(0)===undefined)
+  state.readBigUInt64LE(21)===0n)
   throw Error('STAGE89_DEPLOYED_WNEAR_STATE_LAYOUT_NOT_ATTESTED');
  const totalSupply=BigInt('0x'+Buffer.from(state.subarray(5,21)).reverse().toString('hex'));
  if(totalSupply.toString()!==supply.value)
