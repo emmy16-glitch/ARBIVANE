@@ -184,29 +184,45 @@ export function sizeStage35SourceLiquidation(
     if(amount===0n)continue;
     const repaidUsd=asValue(amount,debt);
     if(repaidUsd===0n)continue;
-    // 0.75% below theoretical maximum discounted collateral, before share
-    // rounding. Always checked by source's full 4-rule inequality afterward.
-    const target=(repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount))*9925n/MAX_BPS;
-    let seizedQty=maxInternalAmount(collateral,target);
-    if(seizedQty===0n)continue;
-    for(let attempts=0;attempts<14&&seizedQty>0n;attempts++){
-     const seizedUsd=asValue(seizedQty,collateral);
-     const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
-     const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
-     if(repayAdjusted>=d||seizeAdjusted>=c||repaidUsd===0n){seizedQty/=2n;continue;}
-     const newC=c-seizeAdjusted,newD=d-repayAdjusted;
-     const source=sourceCheckLiquidationRules({
-      beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
-      repaidE27:repaidUsd,seizedE27:seizedUsd});
-     const gross=seizedUsd-repaidUsd;
-     if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
-      (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
-       qtyIn:amount,qtyOut:seizedQty,repaidUsd,seizedUsd,newC,newD,discount,gross};
-     // Lower collateral seizure can improve source health even if the
-     // theoretical maximum failed, without increasing expected gross spread.
-     if(source.validBySourceRules)break;
-     seizedQty/=2n;
+    // The old fixed 75-bps haircut destroyed ALL gross spread when a real
+    // borrower was only slightly undercollateralized (source discount <75bps).
+    // Instead search the exact maximum source-valid seizure at integer
+    // lending units; never relax the original four liquidation rules.
+    const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
+    if(repayAdjusted>=d)continue;
+    const newD=d-repayAdjusted;
+    const theoreticalUsd=repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount);
+    let low=0n,high=maxInternalAmount(collateral,theoreticalUsd);
+    // At fixed repayment, the discounted-collateral bound and strictly
+    // improving borrower health impose monotonic UPPER seizure bounds.
+    // FINAL_POSITION_NOT_AT_RISK is a LOWER bound, checked only at the end.
+    // No sampling/halving may skip a narrow valid profitable interval.
+    while(low<high){
+     const mid=(low+high+1n)/2n;
+     const midUsd=asValue(mid,collateral);
+     const midAdjusted=sourceMulRatio(midUsd,collateral.vol);
+     if(midAdjusted>=c){high=mid-1n;continue;}
+     const midRules=sourceCheckLiquidationRules({
+      beforeCollateralE27:c,beforeDebtE27:d,
+      afterCollateralE27:c-midAdjusted,afterDebtE27:newD,
+      repaidE27:repaidUsd,seizedE27:midUsd});
+     if(midRules.reasons.includes('DISCOUNTED_COLLATERAL_EXCEEDS_REPAYMENT')||
+      midRules.reasons.includes('BORROWER_HEALTH_NOT_IMPROVED')){
+      high=mid-1n;
+     }else low=mid;
     }
+    if(low===0n)continue;
+    const seizedUsd=asValue(low,collateral);
+    const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
+    if(seizeAdjusted>=c)continue;
+    const newC=c-seizeAdjusted;
+    const source=sourceCheckLiquidationRules({
+     beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
+     repaidE27:repaidUsd,seizedE27:seizedUsd});
+    const gross=seizedUsd-repaidUsd;
+    if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
+     (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
+      qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross};
    }
   }
  }
