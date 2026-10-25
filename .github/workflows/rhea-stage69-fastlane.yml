@@ -13,7 +13,9 @@ permissions:
   actions: read
 concurrency:
   group: arbivane-stage69-fastlane
-  cancel-in-progress: false
+  # Supersede obsolete execution code on main pushes while keeping manually
+  # dispatched investigations serial and preserving all uploaded evidence.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   select:
