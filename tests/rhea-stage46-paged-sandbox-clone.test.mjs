@@ -239,3 +239,28 @@ test('Stage78 rejects insecure, credential-bearing and same-as-primary alternati
   assert.equal(x.imports.length,0);
  }
 });
+
+
+test('Stage80 rejects same-origin disguises, private IPs and unsafe archive redirects before imports',async()=>{
+ const primary='https://archival-rpc.mainnet.fastnear.com';
+ const {validateStage80ArchivalFallback}=await import('../scripts/stage46-paged-sandbox-clone.mjs');
+ for(const fallbackEndpoint of [
+  primary+'/',primary+'/?apiKey=different',
+  'http://archive.example/rpc','https://127.0.0.1/rpc',
+  'https://169.254.169.254/latest','https://10.1.1.4/rpc',
+  'https://192.168.1.4/rpc','https://[::1]/rpc',
+  'https://archive.local/rpc','https://archive.internal/rpc',
+  'https://localhost/rpc','https://reader:password@archive.example/rpc',
+  'https://archive.example:8443/rpc','https://archive.example/rpc#fragment',
+ ]){
+  const x=scenario({fallbackEndpoint});
+  assert.throws(()=>validateStage80ArchivalFallback(primary,fallbackEndpoint),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  assert.equal(x.imports.length,0);
+ }
+ assert.equal(validateStage80ArchivalFallback(primary,
+  'https://independent-archive.example/rpc?key=PRIVATE'),
+  'https://independent-archive.example/rpc?key=PRIVATE');
+});
