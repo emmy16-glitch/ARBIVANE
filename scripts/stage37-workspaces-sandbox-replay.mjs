@@ -16,6 +16,7 @@ import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs'
 import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
 import {cloneStage91LinearToken} from './stage91-targeted-linear-token.mjs';
 import {attestStage96PinnedRheaViews,stage101SameBorrowerView} from './stage96-rhea-view-parity.mjs';
+import {stage104AttestTemporalAccrual} from './stage104-temporal-accrual-parity.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -213,9 +214,10 @@ async function main(){
  const lending=contracts.get(plan.lendingContract);
  // Isolated, durable view-by-view diagnosis after authentic clone completion.
  // Never mark a clone or matching view as a successful liquidation.
- await attestStage96PinnedRheaViews({
+ const parityWitness=await attestStage96PinnedRheaViews({
   lending,borrowerAccountId:plan.borrowerAccountId,
   config:config.value,borrower:borrower.value,assets:assets.value,
+  allowSandboxTemporalAccrual:true,
  });
  // Source-vs-Sandbox comparisons are separately persisted above and
  // fail closed on the specific config, borrower or asset read.
@@ -226,8 +228,20 @@ async function main(){
  ]);
  const pinnedConfigMatches=JSON.stringify(sandboxConfig)===JSON.stringify(config.value);
  const pinnedBorrowerMatches=stage101SameBorrowerView(borrower.value,sandboxBorrower);
- if(!pinnedConfigMatches||!pinnedBorrowerMatches||
-  JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
+ const pinnedAssetsMatch=JSON.stringify(sandboxAssets)===JSON.stringify(assets.value);
+ // Source-backed partial state may accrue interest using the newer local
+ // block timestamp. Never claim exact historical view parity in that case.
+ // Revalidate the restricted temporal proof AFTER the probe against fresh
+ // local views, rather than reusing its prior observation.
+ const temporalProof=parityWitness.temporalAccrualVerified===true?
+  stage104AttestTemporalAccrual({
+   sourceBorrower:borrower.value,sandboxBorrower,
+   sourceAssets:assets.value,sandboxAssets,
+  }):null;
+ const exactParity=pinnedConfigMatches&&pinnedBorrowerMatches&&pinnedAssetsMatch;
+ if(!exactParity&&(!pinnedConfigMatches||
+  parityWitness.temporalAccrualVerified!==true||
+  temporalProof?.verified!==true))
   throw Error('STAGE96_POST_PROBE_SOURCE_VIEWS_DRIFTED');
  // Partial closure cannot be advertised as a full cloned market. The
  // original independent source-view gate above remains mandatory BEFORE
@@ -236,8 +250,10 @@ async function main(){
   const witness={
    mode:'STAGE82_SOURCE_PINNED_BORROWER_VIEW_WITNESS',
    contractId:plan.lendingContract,borrowerAccountId:plan.borrowerAccountId,
-   pinnedConfigMatches,pinnedBorrowerMatches,
-   pinnedAssetsMatch:JSON.stringify(sandboxAssets)===JSON.stringify(assets.value),
+   pinnedConfigMatches,pinnedBorrowerMatches,pinnedAssetsMatch,
+   exactHistoricalViewParity:exactParity,
+   temporalAccrualVerified:temporalProof?.verified===true,
+   temporalProofClassification:temporalProof?.class??null,
    fullMarketImported:false,fullTrieRootParityVerified:false,
    mainnetExecutionEnabled:false,localLiquidationVerified:false,
   };
