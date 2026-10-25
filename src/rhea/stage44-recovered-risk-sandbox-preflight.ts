@@ -88,7 +88,7 @@ export function selectStage44RecoveredRisk(
   seen.add(obs.findingIndex);
   if(obs.status==='STILL_BLOCKED'){
    blocked++;
-   if(obs.freshBlockHeight!==null||obs.healthBps!==null)
+   if((obs.freshBlockHeight!==null&&obs.freshBlockHeight!==prior.currentPricingBlockHeight)||obs.healthBps!==null)
     fail('BLOCKED_OBSERVATION_CLAIMS_CURRENT_HEALTH');
   }else{
    if(obs.freshBlockHeight!==prior.currentPricingBlockHeight)
