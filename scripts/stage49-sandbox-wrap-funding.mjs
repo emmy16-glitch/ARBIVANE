@@ -11,6 +11,38 @@ const DEPOSIT=NEAR; // one disposable Sandbox NEAR, not user's real money
 const STORAGE=NEAR/10n; // bounded 0.1 Sandbox NEAR per storage registration
 const MAX_GAS=100000000000000n;
 const ID=/^[a-z0-9._-]{2,64}$/;
+const UINT=/^(0|[1-9][0-9]{0,38})$/;
+const U128=(1n<<128n)-1n;
+function ft(v,label){
+ if(typeof v!=='string'||!UINT.test(v)||BigInt(v)>U128)
+  throw Error('STAGE52_'+label+'_INVALID_TOKEN_BALANCE');
+ return BigInt(v);
+}
+/** Check collateral token identity and both nonzero balance and share units.
+ * Total unrelated collateral cannot substitute for a wrapped-NEAR receipt. */
+function wrappedCollateralPosition(account){
+ const positions=account?.positions;
+ if(!positions||typeof positions!=='object'||Array.isArray(positions))
+  throw Error('STAGE52_INVALID_LENDING_COLLATERAL_POSITIONS');
+ let balance=0n,shares=0n;
+ for(const position of Object.values(positions)){
+  if(!position||typeof position!=='object'||!Array.isArray(position.collateral))
+   throw Error('STAGE52_INVALID_LENDING_COLLATERAL_POSITION');
+  const seen=new Set();
+  for(const leg of position.collateral){
+   if(!leg||typeof leg!=='object'||!ID.test(leg.token_id)||seen.has(leg.token_id))
+    throw Error('STAGE52_INVALID_OR_DUPLICATE_COLLATERAL_LEG');
+   seen.add(leg.token_id);
+   if(leg.token_id==='wrap.near'){
+    balance+=ft(leg.balance,'COLLATERAL');
+    shares+=ft(leg.shares,'COLLATERAL_SHARES');
+   }
+  }
+ }
+ if(balance>U128||shares>U128||(balance===0n)!==(shares===0n))
+  throw Error('STAGE52_INVALID_WRAPPED_COLLATERAL_SHARES');
+ return {balance,shares};
+}
 function success(result,label){
  const v=result?.result??result;
  if(!v||!['FINAL','EXECUTED_OPTIMISTIC'].includes(v.final_execution_status)||
@@ -67,16 +99,29 @@ export async function seedSandboxLiquidatorWithWrappedNear({
  const before=await lending.view('get_account_all_positions',{account_id:actor.accountId});
  if(actorCollateralInternal(before)!==0n)
   throw Error('STAGE49_REFUSE_PREEXISTING_ACTOR_COLLATERAL');
+ const beforeWrappedPosition=wrappedCollateralPosition(before);
+ if(beforeWrappedPosition.balance!==0n||beforeWrappedPosition.shares!==0n)
+  throw Error('STAGE52_PREEXISTING_WRAPPED_NEAR_COLLATERAL');
  await registerIfNeeded(actor,lending,'LENDING');
  await registerIfNeeded(actor,wrapped,'WNEAR');
+ const [actorFtBefore,vaultFtBefore]=await Promise.all([
+  wrapped.view('ft_balance_of',{account_id:actor.accountId}),
+  wrapped.view('ft_balance_of',{account_id:lending.accountId}),
+ ]);
+ if(ft(actorFtBefore,'ACTOR_PRE_WRAP')!==0n)
+  throw Error('STAGE52_DISPOSABLE_ACTOR_WNEAR_BALANCE_NOT_EMPTY');
+ const vaultBaseline=ft(vaultFtBefore,'VAULT_PRE_TRANSFER');
  const rawWrap=await actor.callRaw(wrapped,'near_deposit',{},{
   gas:MAX_GAS,attachedDeposit:DEPOSIT
  });
  success(rawWrap,'WNEAR_WRAP');
- const ftBalance=await wrapped.view('ft_balance_of',{account_id:actor.accountId});
- if(typeof ftBalance!=='string'||!/^(0|[1-9][0-9]{0,38})$/.test(ftBalance)||
-  BigInt(ftBalance)<DEPOSIT)
-  throw Error('STAGE49_WNEAR_NATIVE_DEPOSIT_NOT_CREDITED');
+ const [ftBalance,vaultAfterWrap]=await Promise.all([
+  wrapped.view('ft_balance_of',{account_id:actor.accountId}),
+  wrapped.view('ft_balance_of',{account_id:lending.accountId}),
+ ]);
+ if(ft(ftBalance,'ACTOR_AFTER_WRAP')!==DEPOSIT||
+  ft(vaultAfterWrap,'VAULT_AFTER_WRAP')!==vaultBaseline)
+  throw Error('STAGE52_WRAPPED_NATIVE_DEPOSIT_OR_VAULT_BALANCE_MISMATCH');
  const rawCollateral=await actor.callRaw(wrapped,'ft_transfer_call',{
   receiver_id:lending.accountId,amount:DEPOSIT.toString(),
   msg:'"OnlyIncreaseCollateral"',
@@ -84,12 +129,17 @@ export async function seedSandboxLiquidatorWithWrappedNear({
  success(rawCollateral,'WNEAR_COLLATERAL_TRANSFER');
  const after=await lending.view('get_account_all_positions',{account_id:actor.accountId});
  const balance=actorCollateralInternal(after);
- if(balance<=0n)
-  throw Error('STAGE49_WNEAR_COLLATERAL_NOT_RECORDED_IN_ACTOR_POSITION');
- const remaining=await wrapped.view('ft_balance_of',{account_id:actor.accountId});
- if(typeof remaining!=='string'||!/^(0|[1-9][0-9]{0,38})$/.test(remaining)||
-  BigInt(remaining)>=BigInt(ftBalance))
-  throw Error('STAGE49_WNEAR_COLLATERAL_TOKEN_TRANSFER_UNVERIFIED');
+ const credited=wrappedCollateralPosition(after);
+ if(balance<=0n||credited.balance<=beforeWrappedPosition.balance||
+  credited.shares<=beforeWrappedPosition.shares)
+  throw Error('STAGE52_SPECIFIC_WRAPPED_COLLATERAL_NOT_CREDITED');
+ const [remaining,vaultAfterTransfer]=await Promise.all([
+  wrapped.view('ft_balance_of',{account_id:actor.accountId}),
+  wrapped.view('ft_balance_of',{account_id:lending.accountId}),
+ ]);
+ if(ft(remaining,'ACTOR_AFTER_TRANSFER')!==0n||
+  ft(vaultAfterTransfer,'VAULT_AFTER_TRANSFER')!==vaultBaseline+DEPOSIT)
+  throw Error('STAGE52_EXACT_WRAPPED_TRANSFER_OR_VAULT_DELTA_UNVERIFIED');
  return {
   mode:'ARBIVANE_STAGE49_FUNDED_LOCAL_LIQUIDATOR',
   chain:'NEAR_SANDBOX',
@@ -97,6 +147,11 @@ export async function seedSandboxLiquidatorWithWrappedNear({
   actorAccountId:actor.accountId,collateralTokenId:'wrap.near',
   wrappedNativeSandboxYocto:DEPOSIT.toString(),
   observedActorCollateralReferenceInternal:balance.toString(),
+  observedWrappedNearCollateralInternal:credited.balance.toString(),
+  observedWrappedNearCollateralShares:credited.shares.toString(),
+  observedLendingVaultWrappedFtBeforeAtomic:vaultBaseline.toString(),
+  observedLendingVaultWrappedFtAfterAtomic:(vaultBaseline+DEPOSIT).toString(),
+  exactSandboxFtVaultTransferVerified:true,
   realMainnetExecuted:false,mainnetFundingVerified:false,
   lendingBorrowHealthVerified:false,mainnetExecutionEnabled:false,
   maySignMainnet:false,mayBroadcastMainnet:false,
