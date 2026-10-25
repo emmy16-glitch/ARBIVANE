@@ -193,3 +193,43 @@ test('Stage64 cannot manufacture a profitable source-valid scenario where liquid
  assert.equal(result.seize,null);
  assert.equal(result.maySign,false);
 });
+
+test('Stage65 rescues a source-valid small repayment when max repayment would cure borrower health',()=>{
+ const candidate=report();
+ candidate.positions[0].legs=[
+  source('borrowed','usd-debt.near','10000000000',10000),
+  source('collateral','collateral.near','12487500000',8000),
+ ];
+ candidate.positions[0].adjustedCollateralE27=String(9990n*E27);
+ candidate.positions[0].adjustedDebtE27=String(10000n*E27);
+ candidate.positions[0].healthFactorBps='9990';
+ const pools=assets();
+ pools[0][1].supplied.balance='20000000000';
+ pools[0][1].borrowed.balance='10000000000';
+ pools[1][1].supplied.balance='20000000000';
+ const result=sizeStage35SourceLiquidation(candidate,pools,options);
+ assert.equal(result.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(result.referenceRulesPass,true);
+ assert.ok(BigInt(result.repay.referenceUsdE27)<100n*E27,
+  'max capped repayment heals borrower; only a smaller valid repayment qualifies');
+ assert.ok(BigInt(result.paperGrossUsdE27)>=BigInt(options.minimumPaperGrossUsdE27));
+ assert.ok(BigInt(result.referenceAfterHealthBps)>=9990n);
+ assert.ok(BigInt(result.referenceAfterHealthBps)<10000n);
+ assert.equal(result.maySign,false);
+ assert.equal(result.mayBroadcast,false);
+ assert.equal(result.sandboxStateReplaySucceeded,false);
+});
+test('Stage65 returns concrete denial reason without fabricating a liquidation',()=>{
+ const stopped=assets();
+ stopped[0][1].config.can_borrow=false;
+ const blocked=sizeStage35SourceLiquidation(report(),stopped,options);
+ assert.equal(blocked.status,'NO_SAFE_SOURCE_SCENARIO');
+ assert.ok(blocked.blockers.includes('NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR'));
+ assert.equal(blocked.repay,null);
+ const empty=assets();
+ empty[0][1].supplied.balance=empty[0][1].borrowed.balance;
+ const noReserve=sizeStage35SourceLiquidation(report(),empty,options);
+ assert.ok(noReserve.blockers.includes('NO_SOURCE_POOL_BORROW_HEADROOM'));
+ assert.equal(noReserve.executionEnabled,false);
+ assert.equal(noReserve.mayBroadcast,false);
+});
