@@ -49,7 +49,8 @@ export function stage101SameBorrowerView(source,sandbox){
 function stage101BorrowerDifferenceSections(source,sandbox){
  const keys=['account_id','supplied','positions','farms',
   'has_non_farmed_assets','booster_staking','booster_stakings','is_locked'];
- return keys.filter(key=>!stage101SameBorrowerView(source?.[key],sandbox?.[key]))
+ return keys.filter(key=>JSON.stringify(stage101CanonicalBorrower(source?.[key]))!==
+  JSON.stringify(stage101CanonicalBorrower(sandbox?.[key])))
   .map(key=>key.toUpperCase());
 }
 
