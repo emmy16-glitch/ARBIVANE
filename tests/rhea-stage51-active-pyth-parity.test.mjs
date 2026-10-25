@@ -121,6 +121,8 @@ test('Stage71 same-token source only needs one Pyth quote and no duplicate token
  const same=plan();
  same.actions[1].Liquidate.out_assets[0].token_id='usdt.tether-token.near';
  same.actions[2].Withdraw.token_id='usdt.tether-token.near';
+ same.actions[2].Withdraw.amount='11';
+ same.actions.splice(2,0,{Repay:{token_id:'usdt.tether-token.near',amount:'100'}});
  const w=await attestStage51PythParity(harness({plan:same}));
  assert.deepEqual(w.tokensChecked,['usdt.tether-token.near']);
  assert.equal(w.uniqueFeedsChecked,1);

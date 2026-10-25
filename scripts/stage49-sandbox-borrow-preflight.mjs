@@ -42,15 +42,24 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   plan.chain!=='NEAR_SANDBOX'||plan.executionEnabled!==false||
   plan.mayBroadcastMainnet!==false||plan.maySignMainnet!==false||
   plan.method!=='execute_with_pyth'||!Array.isArray(plan.actions)||
-  plan.actions.length!==3||!ID.test(actorAccountId)||
+  ![3,4].includes(plan.actions.length)||!ID.test(actorAccountId)||
   actorAccountId===plan.borrowerAccountId||
   !Array.isArray(assets)||assets.length<1||assets.length>256)
   throw Error('STAGE49_UNTRUSTED_SANDBOX_PROPOSAL');
  const token=plan.actions[0]?.Borrow?.token_id,rawQty=plan.actions[0]?.Borrow?.amount;
  const liquidation=plan.actions[1]?.Liquidate;
+ const withdraw=plan.actions.at(-1)?.Withdraw;
+ const same=liquidation?.out_assets?.[0]?.token_id===token;
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
+  liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
   liquidation.in_assets[0]?.amount!==rawQty||
+  !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
+  (same?(plan.actions.length!==4||
+   plan.actions[2]?.Repay?.token_id!==token||
+   plan.actions[2].Repay.amount!==rawQty||
+   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==BigInt(withdraw.amount??'0')):
+   plan.actions.length!==3)||
   liquidation.account_id!==plan.borrowerAccountId)
   throw Error('STAGE49_PLAN_REPAY_ROUTE_MISMATCH');
  const qty=amount(rawQty,'BORROW_AMOUNT');

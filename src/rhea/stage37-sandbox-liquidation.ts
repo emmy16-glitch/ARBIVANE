@@ -16,6 +16,12 @@ export interface SandboxReplayPlan {
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
   {Withdraw:{token_id:string;amount:string}}
+ ] | [
+  {Borrow:{token_id:string;amount:string}},
+  {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount:string}>;
+   out_assets:Array<{token_id:string;amount:string}>}},
+  {Repay:{token_id:string;amount:string}},
+  {Withdraw:{token_id:string;amount:string}}
  ];
  depositYocto:'0';gasUnits:'300000000000000';
  sourceCodeHash:string;sourceOracleHash:string;
@@ -46,16 +52,26 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
  BigInt(e.referenceInitialHealthBps)>=10000n)
   throw Error('STAGE37_REQUIRES_VALID_NONEXECUTABLE_STAGE35_REFERENCE_PROPOSAL');
  const repay=amount(e.repay.amountLendingInternalAtomic),seize=amount(e.seize.amountLendingInternalAtomic);
+ const sameToken=e.repay.tokenId===e.seize.tokenId;
+ // An authentic same-token route can settle the temporary Sandbox borrow
+ // INSIDE the same Rhea execute_with_pyth call, then withdraw only the
+ // remaining collateral. This is not a flash loan or mainnet authorisation.
+ if(sameToken&&BigInt(seize)<=BigInt(repay))
+  throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
+ const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
+ const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
+  in_assets:[{token_id:e.repay.tokenId,amount:repay}],
+  out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
+ const actions:SandboxReplayPlan['actions']=sameToken?[
+  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
+  {Withdraw:{token_id:e.seize.tokenId,amount:(BigInt(seize)-BigInt(repay)).toString()}}
+ ]:[
+  borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
+ ];
  return {mode:'ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN',chain:'NEAR_SANDBOX',
   mainnetSourceBlockHeight:e.blockHeight,borrowerAccountId:e.borrowerAccountId,
   lendingContract:'contract.main.burrow.near',method:'execute_with_pyth',
-  actions:[
-   {Borrow:{token_id:e.repay.tokenId,amount:repay}},
-   {Liquidate:{account_id:e.borrowerAccountId,
-    in_assets:[{token_id:e.repay.tokenId,amount:repay}],
-    out_assets:[{token_id:e.seize.tokenId,amount:seize}]}},
-   {Withdraw:{token_id:e.seize.tokenId,amount:seize}},
-  ],
+  actions,
   depositYocto:'0',gasUnits:'300000000000000',
   sourceCodeHash:e.lendingCodeHash,sourceOracleHash:e.pythOracleCodeHash,
   sourceMathOnly:true,realContractReplayVerified:false,fullImportedStateVerified:false,

@@ -93,7 +93,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  if(!plan||plan.mode!=='ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN'||
   plan.chain!=='NEAR_SANDBOX'||plan.method!=='execute_with_pyth'||
   !ID.test(e.positionId)||!TOKEN.test(plan.borrowerAccountId)||
-  !Array.isArray(plan.actions)||plan.actions.length!==3||
+  !Array.isArray(plan.actions)||![3,4].includes(plan.actions.length)||
   plan.executionEnabled!==false||plan.maySignMainnet!==false||
   plan.mayBroadcastMainnet!==false||plan.sourceMathOnly!==true||
   !receipt||receipt.mode!=='ARBIVANE_STAGE37_SANDBOX_RESULT'||
@@ -101,15 +101,33 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   receipt.realProfitVerified!==false||receipt.mayBroadcastMainnet!==false)
   throw Error('STAGE41_REJECTED_UNTRUSTED_SANDBOX_REPORT');
  const repay=plan.actions[0]?.Borrow?.token_id;
- const seize=plan.actions[2]?.Withdraw?.token_id;
+ const seize=plan.actions.length===4?
+  plan.actions[3].Withdraw.token_id:plan.actions[2].Withdraw.token_id;
+ const withdrawAmount=plan.actions.length===4?
+  plan.actions[3].Withdraw.amount:plan.actions[2].Withdraw.amount;
+ const selfRepay=plan.actions.length===4?plan.actions[2].Repay:undefined;
+ const same=repay===seize;
  if(typeof repay!=='string'||typeof seize!=='string'||!TOKEN.test(repay)||
   !TOKEN.test(seize)||
+  (same?plan.actions.length!==4:plan.actions.length!==3)||
   plan.actions[1]?.Liquidate?.account_id!==plan.borrowerAccountId||
   plan.actions[1]?.Liquidate?.in_assets?.length!==1||
   plan.actions[1]?.Liquidate?.out_assets?.length!==1||
   plan.actions[1].Liquidate.in_assets[0]?.token_id!==repay||
   plan.actions[1].Liquidate.out_assets[0]?.token_id!==seize)
   throw Error('STAGE41_INVALID_LIQUIDATION_TOKEN_ROUTE');
+ // Same-token Sandbox liquidation must repay the temporary borrow before
+ // withdrawing surplus. Successful callbacks alone cannot authorize profit.
+ const borrowed=uint(plan.actions[0].Borrow.amount,'SELF_BORROW');
+ const liquidationRepay=uint(plan.actions[1].Liquidate.in_assets[0].amount,'LIQUIDATION_REPAY');
+ const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
+ const withdrawn=uint(withdrawAmount,'WITHDRAW');
+ if(borrowed===0n||liquidationRepay!==borrowed||
+  (same?(!selfRepay||selfRepay.token_id!==repay||
+    uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
+    liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
+    withdrawn!==liquidationSeize))
+  throw Error('STAGE41_INVALID_ATOMIC_ROUTE_AMOUNTS');
  const preDebt=amountIn(scoped(e.borrowerBefore,e.positionId,'borrowed'),repay);
  const postDebt=amountIn(scoped(e.borrowerAfter,e.positionId,'borrowed'),repay);
  const preCollateral=amountIn(scoped(e.borrowerBefore,e.positionId,'collateral'),seize);
@@ -119,9 +137,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const ftRepayAfter=uint(e.actorRepayFtAfter,'FT_REPAY_AFTER');
  const ftSeizeBefore=uint(e.actorSeizeFtBefore,'FT_SEIZE_BEFORE');
  const ftSeizeAfter=uint(e.actorSeizeFtAfter,'FT_SEIZE_AFTER');
- // For a shared NEP-141 contract the repay and seized-asset observations
- // refer to the SAME account/FT balance. An invented second balance can
- // never be used to create a fictitious local liquidation success.
+ // Both snapshots refer to the SAME shared NEP-141 balance.
  if(repay===seize&&(ftRepayBefore!==ftSeizeBefore||ftRepayAfter!==ftSeizeAfter))
   throw Error('STAGE41_SAME_TOKEN_MUST_HAVE_IDENTICAL_FT_BALANCE_EVIDENCE');
  const debtDecreased=preDebt>postDebt;
