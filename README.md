@@ -27,13 +27,17 @@ The first implementation intentionally stops **before money moves**. The publicl
 
 ## Run locally
 
-Requires Node.js **22.16+** (and TypeScript `tsc` available for the typecheck command). No wallet keys and no `npm install` are required for the unit tests or demo.
+Requires Node.js **22.16+**. Install the locked development dependency set before
+running the complete check; no wallet keys are required.
 
 ```bash
-npm test
+npm ci --ignore-scripts --no-audit --no-fund
+npm run check
 npm run demo
-npm run typecheck
 ```
+
+`npm test` and `npm run demo` use Node.js directly, but `npm run typecheck`
+requires the locked local TypeScript compiler installed by `npm ci`.
 
 For **read-only** Rhea RPC exploration, verify the current lending/oracle deployments independently first, then set:
 
