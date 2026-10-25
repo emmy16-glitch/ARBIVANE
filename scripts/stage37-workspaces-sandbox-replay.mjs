@@ -12,7 +12,7 @@ import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
-import {attestStage51PythParity} from './stage51-active-pyth-sandbox-parity.mjs';
+import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
@@ -79,8 +79,10 @@ async function main(){
  await markStage55('SANDBOX_STATE_CLONE');
  const contracts=new Map();
  const cloneEvidence=[];
- const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
-  'wrap.near',plan.actions[0].Borrow.token_id,plan.actions.at(-1).Withdraw.token_id]);
+ // Complete, pinned Rhea source config must prove the legacy price oracle
+ // disabled before omitting that unused full-state clone. Preserve Stage71's
+ // single-token Repay+Withdraw route and all genuine dependency contracts.
+ const ids=selectPinnedActivePythSandboxDependencies(config.value,plan);
  for(const id of ids){
   const {contract,evidence}=await clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
@@ -95,7 +97,8 @@ async function main(){
   throw Error('STAGE46_CROSS_CONTRACT_SOURCE_BLOCK_HASH_MISMATCH');
  await writeFile('stage46-sandbox-clone-evidence.json',JSON.stringify({
   mode:'STAGE46_PINNED_SANDBOX_DEPENDENCY_CLONES',chain:'NEAR_SANDBOX',
-  contracts:cloneEvidence,completeTrieRootParityVerified:false,
+  contracts:cloneEvidence,pinnedActivePythOnlyConfigVerified:true,
+  disabledLegacyPriceOracleExcluded:true,completeTrieRootParityVerified:false,
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
