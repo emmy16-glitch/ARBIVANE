@@ -123,18 +123,15 @@ profit or permission to sign transactions.
 
 See [Stage 32 evidence and limitations](docs/RHEA_STAGE32_COHERENT_BLOCK_QUEUE.md).
 
-## Stage 44 — execute a real transaction in local NEAR Sandbox
+## Stage 44 — size recovered paper-risk debt and inspect Sandbox-only eligibility
 
-The [Stage 44 executable Sandbox workflow](.github/workflows/rhea-stage44-executable-sandbox.yml)
-starts an isolated NEAR Workspaces chain, deploys a hash-verified upstream
-test contract, executes a state-changing `set_status` transaction, and attests
-final receipts plus actual pre/post storage values. A separate diagnostic tries
-to import pinned historical Rhea lending state with data and records precise
-blockers when that is not possible.
+Stage44 consumes **authentic Stage43 recovered paper-risk observations** and
+refreshes current active Pyth, borrower state and Stage35 source-reference
+repay/seize calculations. Only a strictly valid source-positive result can
+reach the existing isolated NEAR Sandbox replay. No mainnet signer, transfer,
+verified economic profit or spending authorization is introduced.
 
-This is **not a Rhea liquidation**, real mainnet execution, or profit; the
-existing Rhea liquidation runner still requires an authentic, validated
-positive source-sizing candidate. Read [Stage 44 boundaries](docs/RHEA_STAGE44_EXECUTABLE_SANDBOX.md).
+See [Stage44 limits and workflow](docs/RHEA_STAGE44_RECOVERED_RISK_SANDBOX_PREFLIGHT.md).
 
 ## Not financial advice / not production-ready
 
