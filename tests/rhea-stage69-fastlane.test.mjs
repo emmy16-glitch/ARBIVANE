@@ -16,6 +16,8 @@ test('Stage69 must independently process only authentic Stage63 tiny source-gros
  assert.ok(text.includes('max-parallel: 2'));
  assert.ok(text.includes('group: arbivane-stage69-fastlane'));
  assert.ok(!text.includes('group: arbivane-stage63-authentic-recovery'));
+ assert.ok(text.includes("src/rhea/stage35-atomic-reference-sizing.ts"));
+ assert.ok(text.includes("src/rhea/stage37-sandbox-liquidation.ts"));
 });
 
 test('Stage69 independently reattests each borrower against the immutable genuine registry before fresh risk',()=>{
