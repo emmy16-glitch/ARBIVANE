@@ -96,7 +96,7 @@ jobs:
           path: |
             stage43-summary.json
             stage43-retry-report.json
-            stage43-progress.jsonl
+            stage43-progress.json
             stage43-positive-stage35-evidence.json
             stage43-sandbox-actual.json
             stage37-sandbox-execution.json
