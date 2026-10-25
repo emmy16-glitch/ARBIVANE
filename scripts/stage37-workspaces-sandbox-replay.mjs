@@ -13,12 +13,16 @@ import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity} from './stage51-active-pyth-sandbox-parity.mjs';
+import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
+import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
+let sandboxFundingAttempted=false;
 async function main(){
  if(e.NEAR_WORKSPACES_NETWORK!=='sandbox'||e.EXECUTION_ENABLED!=='false'||
   e.STAGE37_ALLOW_SANDBOX_MUTATION!=='true'||
+  e.STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING!=='true'||
   !e.STAGE37_STAGE35_EVIDENCE_PATH||!e.NEAR_RPC_URL||
   e.NEAR_PRIVATE_KEY||e.NEAR_ACCOUNT_ID||e.MAINNET_PRIVATE_KEY)
   throw Error('LOCAL_SANDBOX_ONLY_EXPLICIT_REPLAY_GATE_REQUIRED');
@@ -63,7 +67,7 @@ async function main(){
  const contracts=new Map();
  const cloneEvidence=[];
  const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
-  plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
+  'wrap.near',plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
  for(const id of ids){
   const {contract,evidence}=await clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
@@ -124,6 +128,31 @@ async function main(){
  });
  if(localVault!==repayReserve.tokenVaultFtAtomic)
   throw Error('STAGE50_CLONED_FT_VAULT_MISMATCH');
+ // Stage52: fund ONLY the disposable Sandbox account with one locally wrapped
+ // NEAR via the cloned native wrapper + actual ft_transfer_call to cloned Rhea.
+ // This comes AFTER Stage51's pinned Pyth parity and reserve checks, and
+ // BEFORE any Rhea Borrow -> Liquidate -> Withdraw attempt.
+ sandboxFundingAttempted=true;
+ const collateralFunding=await seedSandboxLiquidatorWithWrappedNear({
+  actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
+ });
+ const actorPositionsForFunding=await lending.view('get_account_all_positions',{
+  account_id:actor.accountId,
+ });
+ const borrowCapacity=inspectStage49SandboxBorrow({
+  plan,assets:sandboxAssets,actorAccountId:actor.accountId,
+  actorPositions:actorPositionsForFunding,
+ });
+ await writeFile('stage52-sandbox-collateral-funding.json',JSON.stringify({
+  mode:'ARBIVANE_STAGE52_VERIFIED_LOCAL_COLLATERAL_FUNDING',
+  chain:'NEAR_SANDBOX',sourceBlockHeight:plan.mainnetSourceBlockHeight,
+  collateralFunding,borrowCapacity,
+  pinnedSourceRepayVaultVerified:true,pinnedPythParityVerified:true,
+  mainnetExecutionEnabled:false,maySignMainnet:false,
+  mayBroadcastMainnet:false,positiveNetProfitVerified:false,
+ },null,2)+'\n');
+ if(!borrowCapacity.sandboxAttemptAllowed)
+  throw Error('STAGE52_'+borrowCapacity.status);
  const snapshot=()=>Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   repayToken.view('ft_balance_of',{account_id:actor.accountId}),
@@ -195,6 +224,7 @@ async function main(){
 main().catch(err=>{
  console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
   status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:sandboxTransactionSubmitted,
+  sandboxFundingAttempted,
   reason:err instanceof Error?err.message:'UNKNOWN',
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
