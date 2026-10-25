@@ -50,9 +50,15 @@ export function inspectStage50RepayReserve({
  const extra=whole(config.extra_decimals,'INVALID_EXTRA_DECIMALS',0,36);
  const ftMeta=record(repayFtMetadata,'INVALID_FT_METADATA');
  const decimals=whole(ftMeta.decimals,'INVALID_FT_DECIMALS',0,36);
- // The lending source's 24-decimal normalization cannot be assumed when
- // metadata/config do not match; do not invent token conversion in that case.
- if(decimals+extra!==24)throw Error('STAGE50_UNVERIFIED_FT_INTERNAL_PRECISION');
+ // The public Burrow/Rhea lending source converts raw NEP-141 units via
+ // exactly 10**config.extra_decimals (ft_on_transfer and internal_ft_transfer).
+ // It does NOT require metadata.decimals + extra_decimals == 24. Requiring 24
+ // incorrectly blocks valid assets, including ones internally scaled to 18.
+ // The independently pinned metadata proves token precision, while Rhea
+ // config controls conversion. Deployed WASM parity is still checked later
+ // through identical source-state Sandbox import and actual FT balance deltas.
+ if(decimals+extra>72)
+  throw Error('STAGE50_UNSUPPORTED_TOTAL_TOKEN_PRECISION');
  const balance=amount(repayFtBalance,'INVALID_REPAY_FT_VAULT_BALANCE');
  const supplied=amount(record(pool.supplied,'MISSING_SUPPLIED_POOL').balance,'INVALID_SUPPLIED_POOL');
  const borrowed=amount(record(pool.borrowed,'MISSING_BORROWED_POOL').balance,'INVALID_BORROWED_POOL');
@@ -61,6 +67,10 @@ export function inspectStage50RepayReserve({
  const scale=10n**BigInt(extra);
  const requiredFt=(requiredInternal+scale-1n)/scale;
  const reserveInternal=balance*scale;
+ // The deployed pool stores u128 balances, never promote an overflowing FT
+ // reserve conversion to a viable Sandbox financing claim.
+ if(reserveInternal>U128)
+  throw Error('STAGE50_TOKEN_VAULT_INTERNAL_SCALE_OVERFLOWS_U128');
  if(availableInternal<requiredInternal)
   throw Error('STAGE50_REPAY_EXCEEDS_PINNED_POOL_CAPACITY');
  if(balance<requiredFt)
@@ -76,6 +86,9 @@ export function inspectStage50RepayReserve({
   requiredFtAtomicRoundedUp:requiredFt.toString(),
   indicativeFtReserveInternal:reserveInternal.toString(),
   tokenDecimals:decimals,extraDecimals:extra,
+  internalPrecisionDecimals:decimals+extra,
+  rawFtToLendingInternalScale:scale.toString(),
+  sourceConversionFormula:'raw_nep141_balance_times_10_pow_extra_decimals',
   status:'PINNED_SOURCE_POOL_AND_TOKEN_VAULT_CAPACITY_OBSERVED',
   exactTokenConversionVerifiedAgainstDeployedWasm:false,
   actorCollateralAndFundingVerified:false,
