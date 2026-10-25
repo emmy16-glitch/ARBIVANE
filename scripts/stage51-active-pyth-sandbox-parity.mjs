@@ -23,6 +23,29 @@ async function local(contract,method,args){
  try{return await contract.view(method,args);}
  catch{throw Error('STAGE51_SANDBOX_VIEW_UNAVAILABLE');}
 }
+/** Stage72: trim the expensive complete state import only when the pinned
+ * Rhea source config proves legacy pricing is disabled and Pyth is active.
+ * Always clone lender, actual oracle, WNEAR funding and both route FTs.
+ */
+export function selectPinnedActivePythSandboxDependencies(config,plan){
+ const c=obj(config,'INVALID_PINNED_LENDING_CONFIG');
+ if(c.enable_pyth_oracle!==true||c.enable_price_oracle!==false||
+  c.pyth_oracle_account_id!=='aggregate-oracle.near')
+  throw Error('STAGE72_PINNED_ACTIVE_PYTH_ONLY_REQUIRED');
+ if(!plan||plan.mode!=='ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN'||
+  plan.chain!=='NEAR_SANDBOX'||plan.lendingContract!=='contract.main.burrow.near'||
+  plan.method!=='execute_with_pyth'||plan.executionEnabled!==false||
+  plan.maySignMainnet!==false||plan.mayBroadcastMainnet!==false)
+  throw Error('STAGE72_UNTRUSTED_SANDBOX_PLAN');
+ const repay=plan.actions?.[0]?.Borrow?.token_id;
+ const seize=plan.actions?.at(-1)?.Withdraw?.token_id;
+ if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||
+  !ID.test(seize)||repay==='priceoracle.near'||seize==='priceoracle.near')
+  throw Error('STAGE72_INVALID_ACTIVE_PYTH_ASSET_ROUTE');
+ return [...new Set([plan.lendingContract,'aggregate-oracle.near',
+  'wrap.near',repay,seize])];
+}
+
 export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
  const lender=plan?.lendingContract;
  if(!rpc||typeof rpc.view!=='function'||!contracts||
