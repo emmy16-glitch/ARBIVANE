@@ -123,6 +123,19 @@ profit or permission to sign transactions.
 
 See [Stage 32 evidence and limitations](docs/RHEA_STAGE32_COHERENT_BLOCK_QUEUE.md).
 
+## Stage 44 — execute a real transaction in local NEAR Sandbox
+
+The [Stage 44 executable Sandbox workflow](.github/workflows/rhea-stage44-executable-sandbox.yml)
+starts an isolated NEAR Workspaces chain, deploys a hash-verified upstream
+test contract, executes a state-changing `set_status` transaction, and attests
+final receipts plus actual pre/post storage values. A separate diagnostic tries
+to import pinned historical Rhea lending state with data and records precise
+blockers when that is not possible.
+
+This is **not a Rhea liquidation**, real mainnet execution, or profit; the
+existing Rhea liquidation runner still requires an authentic, validated
+positive source-sizing candidate. Read [Stage 44 boundaries](docs/RHEA_STAGE44_EXECUTABLE_SANDBOX.md).
+
 ## Not financial advice / not production-ready
 
 Tests use fabricated positions (including Rhea's own published numerical example) and mocked-RPC responses. A passing unit test does not prove current Rhea liquidation math, true execution profitability, compliance with hackathon rules, deployed contract security, or that an external transfer can succeed. Do not fund, connect secrets, or deploy an autonomous executor based on this stage.
