@@ -186,6 +186,10 @@ test('Stage77 resumes normal large pages after recovering just one oversized sto
    return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
   if(url==='https://archival-rpc.mainnet.near.org'&&cursor!==b64('a'))
    throw Error('ONLY_ONE_PINNED_KEY_CAN_BE_RECOVERED');
+  // This provider cannot return the big full page; it can only return the
+  // exact single original record after primary adaptive downsizing.
+  if(url==='https://archival-rpc.mainnet.near.org'&&params.limit>1)
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
   const key=cursor===null?'a':cursor===b64('a')?'b':'c';
   const result={block_height:221433162,block_hash:blockHash,
    ...(key==='c'?{}:{last_key:b64(key)}),
