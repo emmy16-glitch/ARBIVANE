@@ -13,6 +13,7 @@ import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
 import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-clone-witness.mjs';
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
+import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -118,8 +119,33 @@ async function main(){
   }
   contracts.set(plan.lendingContract,targeted.contract);
   cloneEvidence.push(targeted.evidence);
+  if(ids.includes('wrap.near')){
+   await cloneMonitor.update({contractId:'wrap.near',status:'STARTED'});
+   let wrapped;
+   try{
+    wrapped=await cloneStage89WrappedNear({
+     root,rpc,endpoint:e.NEAR_RPC_URL,blockHeight:block,
+     lendingAccountId:plan.lendingContract,
+     borrowerAccountId:plan.borrowerAccountId,
+     fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
+      'https://archival-rpc.mainnet.near.org',
+     paceMs:450,
+    });
+    await cloneMonitor.update({contractId:'wrap.near',status:'COMPLETE',
+     evidence:wrapped.evidence});
+   }catch(error){
+    await cloneMonitor.update({contractId:'wrap.near',status:'BLOCKED',
+     failureCode:stage88FailureCode(error)});
+    throw error;
+   }
+   contracts.set('wrap.near',wrapped.contract);
+   cloneEvidence.push(wrapped.evidence);
+   await writeFile('stage89-wnear-parity.json',
+    JSON.stringify(wrapped.evidence,null,2)+'\n');
+  }
  }
- const dependencyIds=oneBorrower?ids.filter(id=>id!==plan.lendingContract):ids;
+ const dependencyIds=oneBorrower?
+  ids.filter(id=>id!==plan.lendingContract&&id!=='wrap.near'):ids;
  const clones=await cloneStage76Dependencies({
   ids:dependencyIds,concurrency:2,
   onStatus:event=>cloneMonitor.update(event),
@@ -149,7 +175,8 @@ async function main(){
   mode:'STAGE46_PINNED_SANDBOX_DEPENDENCY_CLONES',chain:'NEAR_SANDBOX',
   contracts:cloneEvidence,pinnedActivePythOnlyConfigVerified:true,
   disabledLegacyPriceOracleExcluded:true,completeTrieRootParityVerified:false,
-  partialOneBorrowerState:oneBorrower,fullMarketImported:!oneBorrower,
+  partialOneBorrowerState:oneBorrower,partialWnearState:oneBorrower,
+  fullMarketImported:!oneBorrower,
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);

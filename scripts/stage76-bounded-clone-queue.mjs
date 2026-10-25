@@ -4,7 +4,7 @@
  */
 const ID=/^[a-z0-9._-]{2,64}$/;
 export async function cloneStage76Dependencies({ids,clone,concurrency=2,onStatus=async()=>{}}){
- if(!Array.isArray(ids)||ids.length<2||ids.length>6||
+ if(!Array.isArray(ids)||ids.length<1||ids.length>6||
   new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!ID.test(id))||
   typeof clone!=='function'||typeof onStatus!=='function'||
   !Number.isSafeInteger(concurrency)||
