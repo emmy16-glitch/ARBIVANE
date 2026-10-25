@@ -50,8 +50,13 @@ export async function clonePinnedContractWithState({
   pageSize:budgets.pageSize??128,
   maxPatchBytes:budgets.maxPatchBytes??48000,
   maxPatchRecords:budgets.maxPatchRecords??128,
+  // Workspaces patchStateRecords supports larger singleton Data records than
+  // Arbivane's 48 KB *batch* target. Bound these separately, never split data.
+  maxSinglePatchBytes:budgets.maxSinglePatchBytes??2097152,
  };
- if(!bounded(o.maxPatchBytes,1024,64000)||!bounded(o.maxPatchRecords,1,250))
+ if(!bounded(o.maxPatchBytes,1024,64000)||
+  !bounded(o.maxPatchRecords,1,250)||
+  !bounded(o.maxSinglePatchBytes,o.maxPatchBytes,2097152))
   throw Error('STAGE46_INVALID_SANDBOX_PATCH_BUDGET');
  const remote=await rpc.viewAccount(contractId,blockHeight);
  if(remote.blockHeight!==String(blockHeight)||!HASH.test(remote.codeHash)||
@@ -83,6 +88,7 @@ export async function clonePinnedContractWithState({
  },fetcher);
  let alternateSingleEntryReads=0,alternateFailures=0;
  let patched=0,patchWrites=0,batch=[],batchBytes=0;
+ let largeSingleRecordPatchCalls=0,largestPatchRecordBytes=0;
  async function flush(){
   if(!batch.length)return;
   await clone.patchStateRecords({records:batch});
@@ -100,6 +106,8 @@ export async function clonePinnedContractWithState({
     // Do NOT skip, truncate or synthesize the source storage record.
     try{
      const page=await fallbackArchival.viewPage(cursor,1);
+     if(!Array.isArray(page?.values)||page.values.length!==1)
+      throw Error('STAGE84_ALTERNATE_MISSING_OVERSIZED_RECORD');
      alternateSingleEntryReads++;
      return {...page,recoveredOversizedEntry:true};
     }catch{
@@ -114,7 +122,18 @@ export async function clonePinnedContractWithState({
    for(const row of rows){
     const entry={Data:{account_id:contractId,data_key:row.key,value:row.value}};
     const bytes=Buffer.byteLength(JSON.stringify(entry));
-    if(bytes>o.maxPatchBytes)throw Error('STAGE46_INDIVIDUAL_STORAGE_KEY_EXCEEDS_PATCH_LIMIT');
+    if(bytes>o.maxSinglePatchBytes)
+     throw Error('STAGE46_INDIVIDUAL_STORAGE_KEY_EXCEEDS_PATCH_LIMIT');
+    largestPatchRecordBytes=Math.max(largestPatchRecordBytes,bytes);
+    if(bytes>o.maxPatchBytes){
+     // One intact, original storage record per Sandbox call. The regular
+     // 48 KB multi-record bound does not apply to an atomic large record.
+     await flush();
+     await clone.patchStateRecords({records:[entry]});
+     patched++;patchWrites++;largeSingleRecordPatchCalls++;
+     onProgress({contractId,patched,patchWrites,complete:false});
+     continue;
+    }
     if(batch.length>=o.maxPatchRecords||batchBytes+bytes>o.maxPatchBytes)
      await flush();
     batch.push(entry);batchBytes+=bytes;
@@ -135,6 +154,7 @@ export async function clonePinnedContractWithState({
    sourceBlockHash:coverage.blockHash,
    providerPaginationExhausted:true,recordsRead:coverage.records,
    recordsPatched:patched,patchWriteCalls:patchWrites,
+   largeSingleRecordPatchCalls,largestPatchRecordBytes,
    sourcePageCount:coverage.completedPages,
    sourceRpcAttempts:archive.getStats().transportAttempts,
    alternateSingleEntryReads,alternateFailures,
