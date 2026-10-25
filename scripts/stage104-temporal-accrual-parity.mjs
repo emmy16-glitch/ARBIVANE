@@ -32,7 +32,7 @@ const monotone=(before,after)=>validNumber(before)&&validNumber(after)&&BigInt(a
 // or even untrusted JSON field names. Hash only bounded names of fields that
 // must remain exact and visibly differ. This is evidence, NOT a bypass.
 const STAGE106_ACCRUAL_FIELDS=new Set([
- 'supplied','borrowed','reserved','last_update_timestamp'
+ 'supplied','borrowed','reserved','last_update_timestamp','beneficiary_fees'
 ]);
 function stage106SafeFieldDiff(a,b){
  const shape=v=>v===undefined?'ABSENT':v===null?'NULL':
@@ -50,6 +50,28 @@ function stage106SafeFieldDiff(a,b){
   if(differing.length===16)break;
  }
  return differing.sort((x,y)=>x.fieldNameSha256.localeCompare(y.fieldNameSha256));
+}
+// Stage107: beneficiary_fees are interest-linked on Rhea assets. Admit only
+// authentic, bounded and monotone fee accrual for identical beneficiary IDs.
+// An unrecognized field, fee reversal, new beneficiary, or excess accrual
+// remains a hard block before any Sandbox funding/liquidation.
+function stage107VerifiedBeneficiaryFees(before,after,borrowedBefore,borrowedAfter){
+ if(before===undefined&&after===undefined)return true;
+ const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+ if(!plain(before)||!plain(after)||
+  !monotone(borrowedBefore,borrowedAfter))return false;
+ const names=Object.keys(before),other=Object.keys(after);
+ if(names.length>128||names.length!==other.length||
+  names.some(k=>!Object.hasOwn(after,k)||!/^[a-z0-9._-]{2,64}$/.test(k)))
+  return false;
+ let accrued=0n;
+ for(const id of names){
+  const old=before[id],now=after[id];
+  if(!monotone(old,now))return false;
+  accrued+=BigInt(now)-BigInt(old);
+ }
+ // Beneficiary-fee growth cannot exceed the gross lending interest accrued.
+ return accrued<=BigInt(borrowedAfter)-BigInt(borrowedBefore);
 }
 function marketCheck(source,observed,diagnostic){
  if(!Array.isArray(source)||!Array.isArray(observed)||
@@ -70,7 +92,7 @@ function marketCheck(source,observed,diagnostic){
   const a=row[1],b=indexed.get(row[0]);
   // Any unrecognized top-level field must still match EXACTLY.
   const fixed=o=>Object.fromEntries(Object.entries(o).filter(([k])=>
-   !['supplied','borrowed','reserved','last_update_timestamp'].includes(k)));
+   !['supplied','borrowed','reserved','last_update_timestamp','beneficiary_fees'].includes(k)));
   if(stable(canon(fixed(a)))!==stable(canon(fixed(b)))){
    diagnostic.stage106FieldDiffFingerprints=stage106SafeFieldDiff(a,b);
    return 'MARKET_NON_ACCRUAL_STATE_DRIFT';
@@ -88,6 +110,10 @@ function marketCheck(source,observed,diagnostic){
   }
   if(!monotone(a.reserved,b.reserved))
    return 'MARKET_RESERVED_DRIFT';
+  if(!stage107VerifiedBeneficiaryFees(
+    a.beneficiary_fees,b.beneficiary_fees,
+    a.borrowed.balance,b.borrowed.balance))
+   return 'MARKET_BENEFICIARY_FEE_ACCOUNTING_DRIFT';
   if(!validNumber(a.last_update_timestamp)||!validNumber(b.last_update_timestamp))
    return 'MARKET_INVALID_ACCRUAL_CLOCK';
   const older=BigInt(a.last_update_timestamp),newer=BigInt(b.last_update_timestamp);
