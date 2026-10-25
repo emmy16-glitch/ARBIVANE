@@ -56,7 +56,7 @@ test('rejects forged, duplicate or incomplete historical windows',()=>{
   {historicalSourceDebtAccounts:1500},{sourceReferencePlansForSandboxOnly:-1}
  ]) assert.throws(()=>plan(report(changes)),/STAGE47_UNTRUSTED/);
  assert.throws(()=>plan(report(),{expectedBaseCursor:972,followupsRemaining:3}),/STAGE47_UNTRUSTED/);
- assert.throws(()=>plan(report(),{expectedBaseCursor:1292,followupsRemaining:4}),/STAGE47_UNTRUSTED/);
+ assert.throws(()=>plan(report(),{expectedBaseCursor:1292,followupsRemaining:25}),/STAGE47_UNTRUSTED/);
 });
 test('workflow has bounded authenticated dispatch, archived proof and no mainnet signer',async()=>{
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
@@ -69,4 +69,45 @@ test('workflow has bounded authenticated dispatch, archived proof and no mainnet
  assert.match(workflow,/STAGE37_ALLOW_SANDBOX_MUTATION=true/);
  assert.match(workflow,/EXECUTION_ENABLED: 'false'/);
  assert.doesNotMatch(workflow,/NEAR_PRIVATE_KEY:/);
+});
+
+test('Stage59 allows 20 authenticated continuation steps, then stops at the historical source bound',()=>{
+ let base=1292,remaining=20,count=0;
+ while(true){
+  const row=report({baseCursor:base,endCursor:base+320});
+  const next=plan(row,{expectedBaseCursor:base,followupsRemaining:remaining});
+  count++;
+  assert.equal(next.positiveNetProfitVerified,false);
+  assert.equal(next.mainnetExecutionEnabled,false);
+  assert.equal(next.maySignMainnet,false);
+  assert.equal(next.mayBroadcastMainnet,false);
+  if(!next.dispatch){
+   assert.equal(next.reason,'LESS_THAN_ONE_FULL_WINDOW_REMAINS');
+   assert.equal(next.verifiedEndCursor,7692);
+   assert.equal(next.nextCursor,null);
+   break;
+  }
+  assert.equal(next.nextCursor,base+320);
+  assert.equal(next.followupsRemaining,remaining-1);
+  base=next.nextCursor;remaining=next.followupsRemaining;
+  assert.ok(count<25);
+ }
+ assert.equal(count,20);
+ assert.equal(7801-base-320,109);
+});
+test('Stage59 cannot loop after finite budget exhaustion or bypass a source-positive borrower',()=>{
+ assert.equal(plan(report(),{expectedBaseCursor:1292,followupsRemaining:24}).followupsRemaining,23);
+ assert.equal(plan(report(),{expectedBaseCursor:1292,followupsRemaining:0}).dispatch,false);
+ assert.equal(plan(report({sourceReferencePlansForSandboxOnly:1}),{
+  expectedBaseCursor:1292,followupsRemaining:24
+ }).reason,'SOURCE_PLAN_REQUIRES_SANDBOX_REVIEW');
+});
+test('Stage59 workflow preserves finite 20-window auto budget, encoded dispatch budget validation and real-only execution',async()=>{
+ const yaml=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
+ assert.match(yaml,/STAGE47_FOLLOWUPS_REMAINING:.*'20'/);
+ assert.match(yaml,/1\[0-9\]\|2\[0-4\]/);
+ assert.match(yaml,/\bmax-parallel: 2\b/);
+ assert.match(yaml,/stage56-sandbox-attempt-cli.mjs/);
+ assert.match(yaml,/EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox/);
+ assert.doesNotMatch(yaml,/NEAR_PRIVATE_KEY:/);
 });
