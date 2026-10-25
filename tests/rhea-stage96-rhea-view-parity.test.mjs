@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {attestStage96PinnedRheaViews,stage96SafeError,stage101SameBorrowerView,stage102BorrowerAssetDifferenceClasses} from '../scripts/stage96-rhea-view-parity.mjs';
+import {attestStage96PinnedRheaViews,stage96SafeError,stage101SameBorrowerView,stage102BorrowerAssetDifferenceClasses,stage103MarketAssetDifferenceClasses} from '../scripts/stage96-rhea-view-parity.mjs';
 
 const id='contract.main.burrow.near',borrowerId='borrower.near';
 const source={config:{max_positions:8},borrower:{account_id:borrowerId,positions:[]},assets:[['wrap.near',{config:{can_borrow:true}}]]};
@@ -54,7 +54,7 @@ for(const [view,code,method] of [
   assert.equal(final.actualRheaSettlementVerified,false);
   assert.equal(final.allSourceViewsVerified,false);
   assert.ok(!JSON.stringify(m.written).includes('hostile account info'));
-  assert.equal(m.calls.at(-1),method);
+  assert.equal(m.calls.at(-1),view==='borrower'?'get_assets_paged':method);
  });
  test('Stage96 records '+view+' SDK/RPC exception without revealing raw exception content',async()=>{
   const m=make({[view]:new Error('credential=https://example.test/private?token=SECRET')});
@@ -133,7 +133,7 @@ test('Stage101 still blocks authentic numeric differences with data-free section
   lending:m.lending,borrowerAccountId:borrowerId,
   config:source.config,borrower:a,assets:source.assets,persist:m.persist,
  }),/STAGE96_BORROWER_VIEW_MISMATCH/);
- const check=m.written.at(-1).checks.at(-1);
+ const check=m.written.at(-1).checks.find(c=>c.view==='BORROWER');
  assert.deepEqual(check.stage101DifferentSections,['POSITIONS']);
  assert.equal(m.written.at(-1).allSourceViewsVerified,false);
  assert.ok(!JSON.stringify(m.written).includes('wrap.near'));
@@ -154,7 +154,7 @@ test('Stage102 distinguishes changed shares from timestamp-dependent balance and
   borrower:base,assets:source.assets,persist:m.persist
  }),/STAGE96_BORROWER_VIEW_MISMATCH/);
  const witness=m.written.at(-1),serialized=JSON.stringify(witness);
- assert.deepEqual(witness.checks.at(-1).stage102AssetDifferenceClasses,classes);
+ assert.deepEqual(witness.checks.find(c=>c.view==='BORROWER').stage102AssetDifferenceClasses,classes);
  assert.equal(witness.allSourceViewsVerified,false);
  assert.equal(witness.liquidationAttempted,false);
  assert.equal(serialized.includes('wrap.near'),false);
@@ -172,4 +172,52 @@ test('Stage102 never treats a share mismatch or different asset identity as harm
  modified.supplied[0].token_id='linear-protocol.near';
  assert.deepEqual(stage102BorrowerAssetDifferenceClasses(original,modified),
   ['ASSET_MEMBERSHIP_DIFFERENT']);
+});
+
+
+test('Stage103 compares authentic market pool shares and time-derived balances without leaking records',async()=>{
+ const base={account_id:borrowerId,supplied:[
+  {token_id:'wrap.near',shares:'100',balance:'101',apr:'0.01'}],positions:{}};
+ const accrued={...base,supplied:[
+  {token_id:'wrap.near',shares:'100',balance:'102',apr:'0.02'}]};
+ const marketBefore=[['wrap.near',{supplied:{shares:'800',balance:'801'},
+  borrowed:{shares:'400',balance:'450'},reserved:'5',
+  last_update_timestamp:'1000000',config:{can_borrow:true}}]];
+ const marketAfter=[['wrap.near',{supplied:{shares:'800',balance:'802'},
+  borrowed:{shares:'400',balance:'451'},reserved:'6',
+  last_update_timestamp:'2000000',config:{can_borrow:true}}]];
+ assert.deepEqual(stage103MarketAssetDifferenceClasses(marketBefore,marketAfter),[
+  'MARKET_ACCRUAL_TIMESTAMP_DIFFERENT','MARKET_POOL_BALANCES_DIFFERENT',
+  'MARKET_RESERVED_DIFFERENT']);
+ const m=make({borrower:accrued,assets:marketAfter});
+ await assert.rejects(attestStage96PinnedRheaViews({
+  lending:m.lending,borrowerAccountId:borrowerId,
+  config:source.config,borrower:base,assets:marketBefore,persist:m.persist,
+ }),/STAGE96_BORROWER_VIEW_MISMATCH/);
+ const witness=m.written.at(-1);
+ assert.deepEqual(m.calls,['get_config','get_account_all_positions','get_assets_paged']);
+ assert.equal(witness.failedView,'BORROWER');
+ assert.equal(witness.status,'BLOCKED_PINNED_PARITY_MISMATCH');
+ assert.deepEqual(witness.checks.find(c=>c.view==='ASSETS').stage103MarketDifferenceClasses,
+  ['MARKET_ACCRUAL_TIMESTAMP_DIFFERENT','MARKET_POOL_BALANCES_DIFFERENT',
+   'MARKET_RESERVED_DIFFERENT']);
+ assert.equal(witness.allSourceViewsVerified,false);
+ assert.equal(witness.liquidationAttempted,false);
+ assert.equal(witness.mayBroadcastMainnet,false);
+ const serialized=JSON.stringify(m.written);
+ assert.equal(serialized.includes('wrap.near'),false);
+ assert.equal(serialized.includes('2000000'),false);
+ assert.equal(serialized.includes('802'),false);
+});
+test('Stage103 never attributes real share, config or identity changes solely to accrual',()=>{
+ const before=[['wrap.near',{supplied:{shares:'4',balance:'5'},
+  borrowed:{shares:'2',balance:'3'},last_update_timestamp:'1',config:{can_borrow:true}}]];
+ const after=[['wrap.near',{supplied:{shares:'8',balance:'5'},
+  borrowed:{shares:'2',balance:'3'},last_update_timestamp:'1',config:{can_borrow:false}}]];
+ assert.deepEqual(stage103MarketAssetDifferenceClasses(before,after),
+  ['MARKET_CONFIG_DIFFERENT','MARKET_POOL_SHARES_DIFFERENT']);
+ assert.deepEqual(stage103MarketAssetDifferenceClasses(before,[['linear-protocol.near',after[0][1]]]),
+  ['MARKET_ASSET_MEMBERSHIP_DIFFERENT']);
+ assert.deepEqual(stage103MarketAssetDifferenceClasses(before,[before[0],before[0]]),
+  ['MARKET_COLLECTION_SHAPE_OR_BUDGET']);
 });
