@@ -8,6 +8,7 @@ on:
       - 'scripts/stage45-cursor-pages.mjs'
       - 'scripts/stage45-archival-state-rpc.mjs'
       - 'scripts/stage45-rhea-paged-sandbox-import.mjs'
+      - 'scripts/stage85-bounded-sandbox-patches.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
   workflow_dispatch:
     inputs:
@@ -52,12 +53,13 @@ jobs:
           STAGE45_RPC_GAP_MS: '220'
           STAGE45_PATCH_MAX_JSON_BYTES: '32000'
           STAGE45_PATCH_MAX_RECORDS: '50'
+          STAGE45_PATCH_MAX_SINGLE_JSON_BYTES: '2097152'
         run: |
           set -uo pipefail
           node --experimental-strip-types scripts/stage45-rhea-paged-sandbox-import.mjs > stage45-console.json
           rc=$?
           if test -s stage45-rhea-paged-state-import.json; then
-            jq '{status,reason,codeHashVerified,paginationCursorExhausted,completePaginationCoverage,completedPages,downsizedPages,finalPageSize,prefixQueryCount,oversizeResponses,rateLimitResponses,alternateSingleEntryReads,alternateFailures,alternateRpcAttempts,dataRecordsRead,dataRecordsPatched,completePrefixCoverage,unresolvedExactBoundaryPrefixCount,stateAppliedIntoSandbox,configMatchesPinnedSource,fullContractStorageParityVerified,realRheaLiquidationAttempted,positiveNetProfitVerified,blockers}' stage45-rhea-paged-state-import.json >> "$GITHUB_STEP_SUMMARY"
+            jq '{status,reason,codeHashVerified,paginationCursorExhausted,completePaginationCoverage,completedPages,downsizedPages,finalPageSize,prefixQueryCount,oversizeResponses,rateLimitResponses,alternateSingleEntryReads,alternateFailures,alternateRpcAttempts,dataRecordsRead,dataRecordsPatched,patchWriteCalls,largeSingleRecordPatchCalls,largestPatchRecordBytes,completePrefixCoverage,unresolvedExactBoundaryPrefixCount,stateAppliedIntoSandbox,configMatchesPinnedSource,fullContractStorageParityVerified,realRheaLiquidationAttempted,positiveNetProfitVerified,blockers}' stage45-rhea-paged-state-import.json >> "$GITHUB_STEP_SUMMARY"
             jq -e '.mode == "ARBIVANE_STAGE45_PINNED_RHEA_PREFIX_SANDBOX_IMPORT" and
               .chain == "NEAR_SANDBOX" and
               .sourceNetwork == "NEAR_MAINNET_READ_ONLY" and
