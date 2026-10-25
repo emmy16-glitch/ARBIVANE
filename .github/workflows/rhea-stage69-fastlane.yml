@@ -140,6 +140,9 @@ jobs:
           RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
           RHEA_STAGE38_MAX_FINDINGS: '1'
           RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '1'
+          # Optional high-limit archival RPC for a genuinely oversized raw key.
+          # This provider is read-only. Missing secret uses the one-key fallback.
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL }}
           RHEA_RPC_SPACING_MS: '900'
         run: |
           set -euo pipefail
