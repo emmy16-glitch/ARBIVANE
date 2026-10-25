@@ -18,7 +18,7 @@ const n=(key:string,def:string)=>{
  const prior=JSON.parse(await readFile(e.RHEA_STAGE38_STAGE32_REPORT_FILE,'utf8')) as SweepCheckpoint;
  const results=await qualifyStage38Candidates(new PacedNearReadOnlyRpc(new NearReadOnlyRpc(e.NEAR_RPC_URL),Number(e.RHEA_RPC_SPACING_MS??'700')),source,prior,{
   startFinding:n('RHEA_STAGE38_START_FINDING','332'),maxFindings:n('RHEA_STAGE38_MAX_FINDINGS','80'),
-  maxRiskCandidates:12,concurrency:2,
+  maxRiskCandidates:80,concurrency:2,
   lendingContract:e.RHEA_LENDING_CONTRACT??'',pythOracle:e.RHEA_ORACLE_CONTRACT??'',
   expectedLendingCodeHash:e.RHEA_EXPECTED_LENDING_CODE_HASH??'',
   expectedPythOracleCodeHash:e.RHEA_EXPECTED_ORACLE_CODE_HASH??'',
