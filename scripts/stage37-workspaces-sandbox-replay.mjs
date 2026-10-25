@@ -15,6 +15,7 @@ import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
+import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -141,15 +142,25 @@ async function main(){
   plan,assets:sandboxAssets,actorAccountId:actor.accountId,
   actorPositions:actorPositionsForFunding,
  });
+ // Source-pinned, active-Pyth price accounting of the REAL actor collateral:
+ // merely "positive" WNEAR is not enough to support the intermediate Borrow.
+ const boundedCapacity=await attestStage52BorrowCollateralCapacity({
+  rpc,contracts,plan,proposal,actorPositions:actorPositionsForFunding,
+  pinnedAssets:assets.value,blockHeight:block,
+ });
+ await writeFile('stage52-actor-borrow-capacity.json',
+  JSON.stringify(boundedCapacity,null,2)+'\n');
  await writeFile('stage49-sandbox-funding.json',JSON.stringify({
   mode:'ARBIVANE_STAGE49E_VERIFIED_LOCAL_FINANCING',
-  chain:'NEAR_SANDBOX',collateralFunding,borrowCapacity,
+  chain:'NEAR_SANDBOX',collateralFunding,borrowCapacity,boundedCapacity,
   pinnedSourceRepayVaultVerified:true,activePythParityVerified:true,
   maySignMainnet:false,mayBroadcastMainnet:false,
   positiveNetProfitVerified:false,
  },null,2)+'\n');
  if(!borrowCapacity.sandboxAttemptAllowed)
   throw Error('STAGE49_'+borrowCapacity.status);
+ if(!boundedCapacity.actorCoveredByConservativeReference)
+  throw Error('STAGE52_ACTOR_REFERENCE_COLLATERAL_INSUFFICIENT');
  const snapshot=()=>Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   repayToken.view('ft_balance_of',{account_id:actor.accountId}),
