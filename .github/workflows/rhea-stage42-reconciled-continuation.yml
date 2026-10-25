@@ -8,6 +8,7 @@ on:
       - 'scripts/stage47-next-market-window-cli.mjs'
       - 'scripts/stage56-sandbox-attempt-evidence.mjs'
       - 'scripts/stage56-sandbox-attempt-cli.mjs'
+      - 'src/rhea/stage35-atomic-reference-sizing.ts'
   workflow_dispatch:
     inputs:
       followups_remaining:

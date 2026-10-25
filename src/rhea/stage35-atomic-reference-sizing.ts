@@ -44,18 +44,36 @@ interface Leg {
  token:string;amount:bigint;mult:bigint;decimals:number;extra:number;
  priceUsd:bigint;adjusted:bigint;vol:bigint;role:'borrowed'|'collateral';
 }
-function ratios(assets:unknown):Map<string,bigint>{
- if(!Array.isArray(assets)||assets.length===0)throw Error('INVALID_PINNED_ASSETS');
- const m=new Map<string,bigint>();
+interface ActionablePool {
+ volatility:bigint;canBorrow:boolean;canWithdraw:boolean;borrowCapacityInternal:bigint;
+}
+/** Same pinned asset rows used in Stage49/50: never propose a route the
+ * deployed lender itself marks Borrow/Withdraw disabled. The pool headroom
+ * is only an accounting ceiling; the actual FT vault is checked separately.
+ */
+function actionablePools(assets:unknown):Map<string,ActionablePool>{
+ if(!Array.isArray(assets)||assets.length===0||assets.length>256)
+  throw Error('INVALID_PINNED_ASSETS');
+ const m=new Map<string,ActionablePool>();
  for(const row of assets){
-  if(!Array.isArray(row)||row.length!==2||typeof row[0]!=='string'||!ID.test(row[0])||m.has(row[0]))
-   throw Error('INVALID_ASSET_ROW');
-  const cfg=obj(obj(row[1]).config);
+  if(!Array.isArray(row)||row.length!==2||typeof row[0]!=='string'||
+   !ID.test(row[0])||m.has(row[0]))throw Error('INVALID_ASSET_ROW');
+  const raw=obj(row[1]),cfg=obj(raw.config);
   const v=cfg.volatility_ratio;
   if((typeof v!=='string'&&typeof v!=='number')||!/^[1-9][0-9]{0,4}$/.test(String(v)))
    throw Error('INVALID_ASSET_VOLATILITY');
-  const n=BigInt(v);if(n>MAX_BPS)throw Error('INVALID_ASSET_VOLATILITY');
-  m.set(row[0],n);
+  const volatility=BigInt(v);
+  if(volatility>MAX_BPS)throw Error('INVALID_ASSET_VOLATILITY');
+  for(const k of ['can_borrow','can_withdraw'] as const)
+   if(cfg[k]!==undefined&&typeof cfg[k]!=='boolean')
+    throw Error('INVALID_ASSET_PERMISSION');
+  const supplied=usd(obj(raw.supplied).balance,'SUPPLIED_POOL_BALANCE');
+  const borrowed=usd(obj(raw.borrowed).balance,'BORROWED_POOL_BALANCE');
+  // Source-pinned headroom is deliberately only indicative; Stage50 requires
+  // independently observed on-chain NEP-141 lending-vault inventory.
+  m.set(row[0],{volatility,
+   canBorrow:cfg.can_borrow===true,canWithdraw:cfg.can_withdraw===true,
+   borrowCapacityInternal:supplied>borrowed?supplied-borrowed:0n});
  }
  return m;
 }
@@ -64,13 +82,13 @@ function boundedNumber(x:unknown,name:string,max=36):number{
   throw Error('INVALID_'+name);
  return x;
 }
-function positionLegs(p:ExecutionPythValuationReport['positions'][number],vol:Map<string,bigint>):Leg[]{
+function positionLegs(p:ExecutionPythValuationReport['positions'][number],vol:Map<string,ActionablePool>):Leg[]{
  const seen=new Set<string>();
  return p.legs.map(x=>{
   if(!ID.test(x.tokenId)||!['borrowed','collateral'].includes(x.role)||seen.has(x.role+':'+x.tokenId))
    throw Error('INVALID_LENDING_ASSET_LEG');
   seen.add(x.role+':'+x.tokenId);
-  const ratio=vol.get(x.tokenId);
+  const ratio=vol.get(x.tokenId)?.volatility;
   if(ratio===undefined)throw Error('MISSING_LENDING_VOLATILITY');
   const amount=usd(x.balanceInternalAtomic,'INTERNAL_BALANCE');
   const shares=usd(x.shares,'SHARES');
@@ -130,7 +148,7 @@ export function sizeStage35SourceLiquidation(
  !Number.isSafeInteger(options.maxRepayBps)||options.maxRepayBps<5||options.maxRepayBps>200)
   throw Error('UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE');
  const minGross=usd(options.minimumPaperGrossUsdE27,'MINIMUM_PAPER_GROSS');
- const vol=ratios(assets);
+ const vol=actionablePools(assets);
  let best:{p:typeof evidence.positions[number];repay:Leg;seize:Leg;
   qtyIn:bigint;qtyOut:bigint;repaidUsd:bigint;seizedUsd:bigint;
   newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
@@ -153,7 +171,16 @@ export function sizeStage35SourceLiquidation(
    for(const collateral of legs.filter(x=>x.role==='collateral')){
     considered++;
     if(considered>256)throw Error('EXCESSIVE_LIQUIDATION_PAIRS');
-    const amount=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
+    // A high paper spread is worthless if Rhea has disabled Borrow or
+    // Withdraw for either asset. Do not discard other valid pairs because
+    // the highest reference-profit pair would fail the deployed preflight.
+    const debtPool=vol.get(debt.token),collateralPool=vol.get(collateral.token);
+    if(!debtPool?.canBorrow||!collateralPool?.canWithdraw)continue;
+    const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
+    // Bound the proposed repayment by actual pinned supply minus outstanding
+    // borrow pool balances; actual transferable FT reserve remains unverified.
+    const amount=budget<debtPool.borrowCapacityInternal?
+     budget:debtPool.borrowCapacityInternal;
     if(amount===0n)continue;
     const repaidUsd=asValue(amount,debt);
     if(repaidUsd===0n)continue;
@@ -204,6 +231,7 @@ export function sizeStage35SourceLiquidation(
  executionEnabled:false,maySign:false,mayBroadcast:false,
  blockers:['PREVIEW_LENDING_INTERNAL_UNITS_NOT_WALLET_NE_P141_ATOMIC_AMOUNTS',
   'DEPLOYED_EXECUTE_WITH_PYTH_LIQUIDATE_RULES_AND_LOAN_FUNDING_NOT_ATTESTED',
+  'PINNED_BORROW_WITHDRAW_PERMISSIONS_AND_POOL_HEADROOM_SCREENED_NOT_FT_RESERVE_PROOF',
   'REQUIRES_IDENTICAL_STATE_SANDBOX_LIQUIDATION_AND_BALANCE_REPLAY',
   'NO_EXECUTABLE_SWAP_QUOTES_NETWORK_GAS_OR_REALIZED_NET_PROFIT',
   'MAINNET_SIGNER_OWNER_APPROVAL_AND_EXPOSURE_LIMITS_NOT_PROVIDED']};
