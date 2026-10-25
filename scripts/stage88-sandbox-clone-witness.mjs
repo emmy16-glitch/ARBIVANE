@@ -31,6 +31,7 @@ export function createStage88CloneWitness({
   completeSourcePagination:false,
  }]));
  let writeFault=null,queued=Promise.resolve();
+ const lastCheckpoint=new Map(contractIds.map(id=>[id,0]));
  let finished=false;
  const snapshot=()=>({
   mode:'ARBIVANE_STAGE88_DEPENDENCY_CLONE_WITNESS',
@@ -84,9 +85,9 @@ export function createStage88CloneWitness({
   const row=rows.get(contractId);
   if(!row||row.status!=='IN_PROGRESS'||!number(patched)||!number(patchWrites)||
    patched<row.recordsPatched||patchWrites<row.patchWriteCalls)return;
-  const report=(patched-row.recordsPatched)>=500;
+  const report=(patched-lastCheckpoint.get(contractId))>=500;
   row.recordsPatched=patched;row.patchWriteCalls=patchWrites;
-  if(report)void enqueue();
+  if(report){lastCheckpoint.set(contractId,patched);void enqueue();}
  };
  const finish=async()=>{
   if([...rows.values()].some(x=>x.status!=='COMPLETE'))
