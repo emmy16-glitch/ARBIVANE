@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {reconcileStage42Window} from '../src/rhea/stage42-window-reconciliation.ts';
+import {qualifyStage61RecoveredRisk} from '../src/rhea/stage61-recovered-risk-to-sandbox.ts';
 import {collectStage43BlockedTargets,retryStage43BlockedObservations}
  from '../src/rhea/stage43-blocked-observation-retry.ts';
 
@@ -151,13 +152,92 @@ test('Stage43 validates bounded cursor, block, hash and request budget before ne
    opts(override),async()=>{throw Error('NETWORK_SHOULD_NOT_BE_USED');}),/STAGE43_/);
  }
 });
-test('Stage43 workflow cannot sign mainnet or run sandbox execution',async()=>{
+test('Stage61 Stage43 workflow can execute isolated Sandbox only after source-positive recovered risk',async()=>{
  const {readFile}=await import('node:fs/promises');
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage43-blocked-retry.yml',import.meta.url),'utf8');
  assert.ok(workflow.includes('rhea-stage42-reconciled-window'));
  assert.ok(workflow.includes('rhea-stage42-opportunity-shard-'));
  assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
  assert.ok(workflow.includes('stage43-blocked-observation-retry-cli.ts'));
- assert.ok(!workflow.includes('near-workspaces'));
+ assert.ok(workflow.includes('near-workspaces@5.0.0'));
+ assert.ok(workflow.includes('stage61-recovered-risk-cli.ts'));
+ assert.ok(workflow.includes('stage61-positive-stage35-evidence.json'));
+ assert.ok(workflow.includes('STAGE37_ALLOW_SANDBOX_MUTATION=true'));
+ assert.ok(workflow.includes('stage56-sandbox-attempt-cli.mjs'));
+ assert.ok(!workflow.includes('NEAR_PRIVATE_KEY:'));
  assert.ok(!workflow.includes('broadcast_tx'));
+});
+
+const stage61Opts={...opts(),startFinding:BASE,maxFindings:80,maxRiskCandidates:12,
+ concurrency:1,minimumPaperGrossUsdE27:'1000000000000000000000000'};
+function sized(id,positive=false){
+ return {mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',
+  chain:'NEAR_MAINNET',borrowerAccountId:id,blockHeight:String(HEIGHT+2),
+  status:positive?'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE':'NO_SAFE_SOURCE_SCENARIO',
+  referenceRulesPass:positive,positionId:positive?'REGULAR':null,
+  lendingCodeHash:H,pythOracleCodeHash:O,referenceInitialHealthBps:'9300',
+  referenceInitialDiscountE27:'40000000000000000000000000',
+  repay:positive?{tokenId:'wrap.near',amountLendingInternalAtomic:'1230000000000000000',
+   referenceUsdE27:'2000000000000000000000000000',
+   shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false}:null,
+  seize:positive?{tokenId:'usdc.near',amountLendingInternalAtomic:'2200000000000000000',
+   referenceUsdE27:'2500000000000000000000000000',
+   shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false}:null,
+  paperGrossUsdE27:positive?'500000000000000000000000000':null,
+  contractRouteParityVerified:false,rawTokenDenominationsVerified:false,
+  sandboxStateReplaySucceeded:false,gasAndSwapNetProfitVerified:false,
+  walletCapitalVerified:false,mainnetWalletApproved:false,
+  executionEnabled:false,maySign:false,mayBroadcast:false};
+}
+test('Stage61 fresh-sizes only authentic Stage43 recovered paper-risk and preserves conditional Sandbox gate',async()=>{
+ const {s,xs,saved}=input();
+ const report=await retryStage43BlockedObservations({},s,xs,saved,BASE,
+  opts({maxTargets:2}),async id=>priced(id,'PAPER_AT_RISK_UNAPPROVED'));
+ const called=[];
+ const result=await qualifyStage61RecoveredRisk({},s,xs,saved,report,stage61Opts,
+  async id=>{called.push(id);return sized(id,id==='borrower975.near');},async()=>{});
+ assert.deepEqual(called,['borrower975.near','borrower979.near']);
+ assert.equal(result.recoveredPaperRisk,2);
+ assert.equal(result.positiveSourcePlans,1);
+ assert.equal(result.sandboxPlanReady,true);
+ assert.equal(result.bestProposal.borrowerAccountId,'borrower975.near');
+ assert.equal(result.mainnetExecutionEnabled,false);
+ assert.equal(result.mayBroadcastMainnet,false);
+ assert.equal(result.realProfitVerified,false);
+});
+test('Stage61 never sizes healthy recovered borrowers and never invents profits',async()=>{
+ const {s,xs,saved}=input();
+ const report=await retryStage43BlockedObservations({},s,xs,saved,BASE,
+  opts({maxTargets:2}),async id=>priced(id,'PAPER_HEALTHY_UNAPPROVED'));
+ const result=await qualifyStage61RecoveredRisk({},s,xs,saved,report,stage61Opts,
+  async()=>{throw Error('NETWORK_FORBIDDEN');});
+ assert.equal(result.recoveredPaperRisk,0);
+ assert.equal(result.attemptedFresh,0);
+ assert.equal(result.sandboxPlanReady,false);
+ assert.equal(result.bestProposal,null);
+});
+test('Stage61 rejects modified Stage43 output and forged source borrower before fresh RPC',async()=>{
+ const {s,xs,saved}=input();
+ const report=await retryStage43BlockedObservations({},s,xs,saved,BASE,
+  opts({maxTargets:2}),async id=>priced(id,'PAPER_AT_RISK_UNAPPROVED'));
+ for(const change of [
+  r=>r.observations[0].borrowerAccountId='imposter.near',
+  r=>r.paperAtRiskNeedsSizing=1,
+  r=>r.mayBroadcastMainnet=true,
+  r=>r.observations[0].freshBlockHeight=String(HEIGHT+1),
+ ]){
+  const forged=structuredClone(report);change(forged);
+  await assert.rejects(()=>qualifyStage61RecoveredRisk({},s,xs,saved,forged,stage61Opts,
+   async()=>{throw Error('NETWORK_FORBIDDEN');}),/STAGE61_/);
+ }
+});
+test('Stage61 stays fail-closed on source sizing errors and never accepts untrusted positive result',async()=>{
+ const {s,xs,saved}=input();
+ const report=await retryStage43BlockedObservations({},s,xs,saved,BASE,
+  opts({maxTargets:2}),async id=>priced(id,'PAPER_AT_RISK_UNAPPROVED'));
+ const result=await qualifyStage61RecoveredRisk({},s,xs,saved,report,stage61Opts,
+  async id=>({...sized(id,true),mainnetWalletApproved:true}),async()=>{});
+ assert.equal(result.positiveSourcePlans,0);
+ assert.equal(result.blockedFresh,2);
+ assert.equal(result.sandboxPlanReady,false);
 });
