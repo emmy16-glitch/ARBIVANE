@@ -90,6 +90,7 @@ jobs:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
           RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
@@ -110,6 +111,7 @@ jobs:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
           RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa

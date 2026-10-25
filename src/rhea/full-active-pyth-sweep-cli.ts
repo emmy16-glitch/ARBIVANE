@@ -2,6 +2,7 @@ import {readFile,writeFile,rename} from 'node:fs/promises';
 import {NearReadOnlyRpc} from './rpc.ts';
 import {PacedNearReadOnlyRpc} from './paced-readonly-rpc.ts';
 import {ResilientNearReadOnlyRpc} from './resilient-readonly-rpc.ts';
+import {FailoverNearReadOnlyRpc} from './failover-readonly-rpc.ts';
 import {sweepIndexedDebtWithActivePyth,type SweepCheckpoint} from './full-active-pyth-sweep.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 const proc=(globalThis as typeof globalThis&{process:{env:Record<string,string|undefined>;exitCode:number}}).process;
@@ -24,7 +25,9 @@ async function atomicFile(path:string,data:unknown){
  const reportPath=env.RHEA_STAGE32_REPORT_PATH??'stage32-reprice-report.json';
  const resume=env.RHEA_STAGE32_RESUME==='true'?
   JSON.parse(await readFile(checkpointPath,'utf8')) as SweepCheckpoint:undefined;
- const output=await sweepIndexedDebtWithActivePyth(new ResilientNearReadOnlyRpc(new PacedNearReadOnlyRpc(new NearReadOnlyRpc(env.NEAR_RPC_URL),Number(env.RHEA_RPC_SPACING_MS??'700'))),source,{
+ const endpoints=[env.NEAR_RPC_URL,env.NEAR_RPC_FALLBACK_URL].filter((x):x is string=>Boolean(x));
+ const transport=new FailoverNearReadOnlyRpc(endpoints.map(url=>new NearReadOnlyRpc(url)));
+ const output=await sweepIndexedDebtWithActivePyth(new ResilientNearReadOnlyRpc(new PacedNearReadOnlyRpc(transport,Number(env.RHEA_RPC_SPACING_MS??'700'))),source,{
   startFinding:num('RHEA_STAGE32_START_FINDING','0'),
   maxFindings:num('RHEA_STAGE32_MAX_FINDINGS','80'),
   batchSize:num('RHEA_STAGE32_BATCH_SIZE','20'),
