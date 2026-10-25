@@ -7,6 +7,7 @@ on:
       - '.github/workflows/rhea-stage96-rhea-canary.yml'
       - 'scripts/stage96-rhea-source-canary.mjs'
       - 'scripts/stage96-rhea-view-parity.mjs'
+      - 'scripts/stage82-targeted-lending-clone.mjs'
 permissions:
   contents: read
   actions: read

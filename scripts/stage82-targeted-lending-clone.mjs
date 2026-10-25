@@ -142,7 +142,25 @@ export async function cloneStage82BorrowerLending({
  const storedKey=await exact(raw([0,107],u64(index)));
  if(!storedKey.equals(accountKey))
   throw Error('STAGE82_BORROWER_VECTOR_KEY_MISMATCH');
- await exact(raw([0,118],u64(index)));
+ const versionedAccount=await exact(raw([0,118],u64(index)));
+ // Upstream Burrow VAccount::V0/V1 stores supplied assets and farms in
+ // borrower-specific legacy UnorderedMaps. Their data is indexed under
+ // Borsh(StorageKey::AccountAssets/Farms {account_id}), not inside 0v.
+ // Copy EVERY original entry in both namespaces with checked pagination.
+ // VAccount::Current stores inline maps; scanning the two prefixes is still
+ // read-only and safe, and avoids assuming orphan storage is a live balance.
+ if(versionedAccount.length===0||versionedAccount[0]>2)
+  throw Error('STAGE97_UNKNOWN_VERSIONED_BORROWER_ACCOUNT_LAYOUT');
+ const accountStoragePrefixes=[
+  raw([1],accountKey), // StorageKey::AccountAssets {account_id}
+  raw([2],accountKey), // StorageKey::AccountFarms {account_id}
+ ];
+ const nestedFamilyCounts=[];
+ for(const prefix of accountStoragePrefixes){
+  const before=stored.size;
+  await scan(prefix);
+  nestedFamilyCounts.push(stored.size-before);
+ }
  await exact(assetKey(3,borrowerAccountId));
  // Shared asset index, per-market pool records and affected farm metadata.
  await scan(Buffer.from([7]));
@@ -195,7 +213,10 @@ export async function cloneStage82BorrowerLending({
   mode:'STAGE82_PINNED_ONE_BORROWER_MARKET_CLOSURE',
   contractId,borrowerAccountId,blockHeight:String(blockHeight),
   sourceCodeHash:expectedCodeHash,sourceBlockHash:pinnedHash,
-  borrowerIndex:index.toString(),sourceQueryCount:queries,
+  borrowerIndex:index.toString(),borrowerAccountVersion:versionedAccount[0],
+  borrowerSuppliedNestedRecords:nestedFamilyCounts[0],
+  borrowerFarmNestedRecords:nestedFamilyCounts[1],
+  borrowerNestedPrefixesScanned:true,sourceQueryCount:queries,
   sourceBytes:bytes,recordsRead:stored.size,recordsPatched:patched,
   patchWriteCalls:patchWrites,alternateSingleRecordReads:alternateReads,
   largeSingleRecordPatchCalls,largestPatchRecordBytes,
