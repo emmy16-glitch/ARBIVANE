@@ -44,7 +44,7 @@ export async function clonePinnedContractWithState({
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
  validateStage80IndependentArchive(endpoint,fallbackEndpoint);
  const o={
-  maxQueries:budgets.maxQueries??1536,
+  maxQueries:budgets.maxQueries??6144,
   maxRecords:budgets.maxRecords??180000,
   maxBytes:budgets.maxBytes??134217728,
   pageSize:budgets.pageSize??128,
@@ -87,6 +87,10 @@ export async function clonePinnedContractWithState({
   accountId:contractId,blockHeight,paceMs:4000,timeoutMs:18000,maxRetries:0,
  },fetcher);
  let alternateSingleEntryReads=0,alternateFailures=0;
+ let alternateHighLimitPages=0,alternateHighLimitFailures=0;
+ // Probe the high-limit archive at most once per source cursor. Do not
+ // multiply paid fallback calls during primary binary-search downsizing.
+ let highLimitCursor=Symbol('not-yet-queried');
  let patched=0,patchWrites=0,batch=[],batchBytes=0;
  let largeSingleRecordPatchCalls=0,largestPatchRecordBytes=0;
  async function flush(){
@@ -100,7 +104,26 @@ export async function clonePinnedContractWithState({
   async(cursor,limit)=>{
    try{return await archive.viewPage(cursor,limit);}
    catch(error){
-    if(!(error instanceof StateResponseTooLarge)||limit!==1)throw error;
+    if(!(error instanceof StateResponseTooLarge))throw error;
+    // One bounded attempt to retrieve the SAME pinned page from a provider
+    // with larger allowed responses can avoid up to seven primary 413s.
+    // If it cannot, keep native adaptive downsizing and no skipped keys.
+    if(limit>1){
+     if(highLimitCursor!==cursor){
+      highLimitCursor=cursor;
+      try{
+       const bigger=await fallbackArchival.viewPage(cursor,limit);
+       if(!Array.isArray(bigger?.values)||bigger.values.length<1||
+        bigger.values.length>limit)
+        throw Error('STAGE86_INVALID_HIGH_LIMIT_BACKUP_PAGE');
+       alternateHighLimitPages++;
+       return bigger;
+      }catch{
+       alternateHighLimitFailures++;
+      }
+     }
+     throw error;
+    }
     // Primary has exhausted adaptive paging down to one full raw record.
     // A distinct, known archival node can sometimes serve a larger record.
     // Do NOT skip, truncate or synthesize the source storage record.
@@ -158,6 +181,8 @@ export async function clonePinnedContractWithState({
    sourcePageCount:coverage.completedPages,
    sourceRpcAttempts:archive.getStats().transportAttempts,
    alternateSingleEntryReads,alternateFailures,
+   alternateHighLimitPages,alternateHighLimitFailures,
+   maxSourceQueries:o.maxQueries,
    alternateRpcAttempts:fallbackArchival.getStats().transportAttempts,
    sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,

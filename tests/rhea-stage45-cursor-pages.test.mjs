@@ -106,17 +106,22 @@ test('Stage78 rejects a forged two-record provider recovery, never bypassing sou
   recoveredOversizedEntry:true
  }),opts,()=>{}),/STAGE77_INVALID_SINGLE_ENTRY_RECOVERY/);
 });
-test('Stage78 standalone reader only uses a second public archival endpoint at limit 1',async()=>{
+test('Stage86 standalone reader supports bounded high-page fallback and exact one-entry recovery',async()=>{
  const script=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
  assert.ok(script.includes("https://archival-rpc.mainnet.near.org"));
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
  assert.ok(workflow.includes("NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com"));
  assert.ok(script.includes('error instanceof StateResponseTooLarge'));
- assert.ok(script.includes('limit!==1'));
+ assert.ok(script.includes('if(limit>1)'));
+ assert.ok(script.includes('highLimitCursor!==afterKey'));
+ assert.ok(script.includes('report.alternateHighLimitPages++'));
+ assert.ok(script.includes("maxQueries:integer('STAGE45_MAX_QUERIES',6144"));
  assert.ok(script.includes('page.values.length!==1'));
  assert.ok(script.includes('recoveredOversizedEntry:true'));
  assert.ok(script.includes('STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY'));
  assert.ok(script.includes('sourcePage,opts'));
  assert.ok(script.includes('report.alternateSingleEntryReads++'));
+ assert.ok(workflow.includes("default: '6144'"));
+ assert.ok(workflow.includes("inputs.max_prefix_queries || '6144'"));
  assert.ok(!script.includes('broadcast_tx'));
 });
