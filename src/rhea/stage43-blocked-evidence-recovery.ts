@@ -66,6 +66,29 @@ export function selectStage43BlockedTargets(
  const recomputed=reconcileStage42Window(source,shards,baseCursor);
  // A copied, edited, unrelated or incomplete aggregate is not valid input.
  if(canonical(recomputed)!==canonical(attestation))fail('STAGE42_AGGREGATE_DRIFT');
+ // Reject unexpected fields that the Stage42 counter-only reconciliation
+ // does not interpret. In particular, no artifact may smuggle a new
+ // signer/profit/authorization flag into an individual borrower observation.
+ const allowedPriceItem=new Set([
+  'borrowerAccountId','sourcePositionIds','classification',
+  'freshBlockHeight','freshHealthBps','paperAtRiskPositions',
+  'paperHealthyPositions','reason','executionEligible','tradeProfitVerified',
+ ]);
+ const allowedRiskRow=new Set([
+  'borrowerAccountId','historicalFindingIndex','status',
+  'observationBlockHeight','reasonCode','referenceInitialHealthBps',
+  'paperGrossUsdE27','executionEligible','netProfitVerified',
+ ]);
+ for(const shard of shards){
+  for(const item of shard.checkpoint.items)
+   if(Object.keys(item).some(k=>!allowedPriceItem.has(k)))
+    fail('UNEXPECTED_PRICE_OBSERVATION_FIELD');
+  for(const item of shard.qualification.rows)
+   if(Object.keys(item).some(k=>!allowedRiskRow.has(k)))
+    fail('UNEXPECTED_RISK_QUALIFICATION_FIELD');
+  if(shard.qualification.bestProposal)
+   buildStage37SandboxPlan(shard.qualification.bestProposal);
+ }
  const targets:Stage43Target[]=[];
  for(let shard=0;shard<4;shard++){
   const row=shards.find(s=>s.shard===shard)!;
