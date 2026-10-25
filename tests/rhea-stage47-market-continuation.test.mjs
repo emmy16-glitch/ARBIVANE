@@ -129,3 +129,18 @@ test('Stage59 GitHub Action uses finite extended budget and restricts dispatch i
  assert.ok(!w.includes('broadcast_tx'));
  assert.ok(!w.includes('NEAR_PRIVATE_KEY:'));
 });
+
+test('Stage62 keeps all verified Stage47 workflow dispatches queued rather than replacing pending windows',async()=>{
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
+ const block=workflow.match(/^concurrency:\n((?: {2}[^\n]*\n|  #.*\n)*)/m)?.[1]??'';
+ assert.match(block,/^  group: arbivane-stage42-\$\{\{ github\.ref \}\}$/m);
+ assert.match(block,/^  queue: max$/m);
+ assert.match(block,/^  cancel-in-progress: false$/m);
+ assert.ok(!block.includes('cancel-in-progress: true'));
+ assert.ok(workflow.includes("STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}"));
+ assert.ok(workflow.includes('stage47-next-window.json'));
+ assert.ok(workflow.includes('boundedRecoveryAttempts,recoveredRateLimitedFindings'));
+ assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
+ assert.ok(!workflow.includes('NEAR_PRIVATE_KEY:'));
+ assert.ok(!workflow.includes('broadcast_tx'));
+});
