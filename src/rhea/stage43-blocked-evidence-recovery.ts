@@ -1,4 +1,3 @@
-import {isDeepStrictEqual} from 'node:util';
 import type {NearReadOnlyRpc} from './rpc.ts';
 import {NearRpcHttpError} from './rpc.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
@@ -51,6 +50,13 @@ export interface Stage43Report {
 const exact=(n:unknown,a:number,b:number):n is number=>
  typeof n==='number'&&Number.isSafeInteger(n)&&n>=a&&n<=b;
 const fail=(s:string):never=>{throw Error('STAGE43_'+s);};
+/** Compare untrusted JSON objects irrespective of property ordering. */
+function canonical(value:unknown):string{
+ if(value===null||typeof value!=='object')return JSON.stringify(value);
+ if(Array.isArray(value))return '['+value.map(canonical).join(',')+']';
+ const record=value as Record<string,unknown>;
+ return '{'+Object.keys(record).sort().map(k=>JSON.stringify(k)+':'+canonical(record[k])).join(',')+'}';
+}
 
 export function selectStage43BlockedTargets(
  source:CompletePagedIndex,shards:Stage42Shard[],
@@ -59,7 +65,7 @@ export function selectStage43BlockedTargets(
  if(!exact(maxTargets,1,320))fail('BAD_TARGET_BUDGET');
  const recomputed=reconcileStage42Window(source,shards,baseCursor);
  // A copied, edited, unrelated or incomplete aggregate is not valid input.
- if(!isDeepStrictEqual(recomputed,attestation))fail('STAGE42_AGGREGATE_DRIFT');
+ if(canonical(recomputed)!==canonical(attestation))fail('STAGE42_AGGREGATE_DRIFT');
  const targets:Stage43Target[]=[];
  for(let shard=0;shard<4;shard++){
   const row=shards.find(s=>s.shard===shard)!;
@@ -122,9 +128,9 @@ function checkFreshPrice(e:ExecutionPythValuationReport,target:Stage43Target,
   if(debt<=0n||BigInt(p.healthFactorBps!)!==collateral*10000n/debt)
    fail('PRICE_HEALTH_DRIFT');
   const borrowed=p.legs.filter(x=>x.role==='borrowed').map(x=>x.tokenId);
-  if(borrowed.length!==old.debtAssetIds.length||
+  if(borrowed.length!==old!.debtAssetIds.length||
    new Set(borrowed).size!==borrowed.length||
-   borrowed.some(x=>!old.debtAssetIds.includes(x)))
+   borrowed.some(x=>!old!.debtAssetIds.includes(x)))
    fail('DEBT_ASSET_CHANGED');
   if(p.status!==(collateral<debt?'PAPER_AT_RISK_UNAPPROVED':'PAPER_HEALTHY_UNAPPROVED'))
    fail('PRICE_RISK_STATUS_DRIFT');
