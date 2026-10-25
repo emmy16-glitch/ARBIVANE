@@ -67,7 +67,13 @@ export async function cloneStage82BorrowerLending({
   try{result=await source.viewState(prefix,afterKey,limit);}
   catch(e){
    if(!(e instanceof StateResponseTooLarge)||limit!==1)throw e;
-   result=await secondary.viewState(prefix,afterKey,1);alternateReads++;
+   result=await secondary.viewState(prefix,afterKey,1);
+   // A provider that cannot return the oversized record is NOT a completed
+   // page. A zero-row success must never silently skip a source key.
+   if(!Array.isArray(result?.values)||result.values.length!==1)
+    throw Error('STAGE83_ALTERNATE_OVERSIZED_RECORD_NOT_RETURNED');
+   result={...result,recoveredOversizedEntry:true};
+   alternateReads++;
   }
   if(result.blockHeight!==String(blockHeight)||!HASH.test(result.blockHash)||
    (pinnedHash!==null&&pinnedHash!==result.blockHash)||
@@ -102,6 +108,12 @@ export async function cloneStage82BorrowerLending({
     if(!(e instanceof StateResponseTooLarge))throw e;
     if(size===1)throw Error('STAGE82_SINGLE_SOURCE_STORAGE_TOO_LARGE');
     size=Math.max(1,Math.floor(size/2));continue;
+   }
+   if(result.recoveredOversizedEntry===true){
+    if(size!==1||result.values.length!==1)
+     throw Error('STAGE83_INVALID_ONE_ENTRY_ARCHIVE_RECOVERY');
+    // Recover one large record, not the entire remainder at limit=1.
+    size=64;
    }
    for(const item of result.values){
     const row=remember(item,prefix);
