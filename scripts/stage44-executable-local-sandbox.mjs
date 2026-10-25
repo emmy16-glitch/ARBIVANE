@@ -45,7 +45,9 @@ async function main(){
  // advance the *local* Sandbox chain, then read persistent contract state again
  // at a later finalized block. This never sends anything to mainnet.
  const finalizedBefore=await worker.provider.block({finality:'final'});
- await worker.provider.fastForward(8);
+ // NEAR Workspaces' own Sandbox fast-forward test uses 10,000 blocks
+ // to advance the observed finalized height; eight blocks did not.
+ await worker.provider.fastForward(10000);
  const finalizedAfter=await worker.provider.block({finality:'final'});
  const afterFastForward=await contract.view('get_status',{account_id:actor.accountId});
  const beforeHeight=finalizedBefore?.header?.height;
