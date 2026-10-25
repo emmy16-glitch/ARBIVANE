@@ -4,15 +4,21 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rhea-stage42-reconciled-continuation.yml'
+      - 'scripts/stage47-next-market-window.mjs'
+      - 'scripts/stage47-next-market-window-cli.mjs'
   workflow_dispatch:
     inputs:
+      followups_remaining:
+        description: 'Automatic additional 320-finding windows (0..3); stop for any source-positive candidate'
+        required: true
+        default: '0'
       base_cursor:
         description: 'Historical Stage30 debt index cursor; 4 x 80 nonoverlapping borrower findings'
         required: true
-        default: '972'
+        default: '1292'
 permissions:
   contents: read
-  actions: read
+  actions: write
 concurrency:
   group: arbivane-stage42-${{ github.ref }}
   cancel-in-progress: false
@@ -39,7 +45,7 @@ jobs:
           path: source
       - name: Validate cursor and disjoint shard boundaries
         env:
-          BASE: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
+          BASE: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '1292' }}
           SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
@@ -114,6 +120,7 @@ jobs:
             stage42-sandbox-actual.json
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
+            stage46-sandbox-clone-evidence.json
           retention-days: 14
           if-no-files-found: warn
   reconcile:
@@ -142,7 +149,7 @@ jobs:
         env:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
-          RHEA_STAGE42_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
+          RHEA_STAGE42_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '1292' }}
           RHEA_STAGE42_SOURCE_PATH: source/rhea-full-paged-index.json
           RHEA_STAGE42_SHARDS_DIR: shards
           RHEA_STAGE42_OUTPUT_PATH: stage42-reconciled-window.json
@@ -151,6 +158,30 @@ jobs:
           node --experimental-strip-types src/rhea/stage42-window-reconciliation-cli.ts > stage42-reconciliation-stdout.json
           jq -e '.everyHistoricalFindingVisited == true and .accountsVisited == 320 and .shardsReconciled == 4 and .maySignMainnet == false and .positiveNetProfitVerified == false' stage42-reconciled-window.json
           jq '{status,baseCursor,endCursor,accountsVisited,paperAtRisk,blockedInitialReads,failedRiskRefreshes,sourceReferencePlansForSandboxOnly,allCurrentHealthVerified,positiveNetProfitVerified}' stage42-reconciled-window.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Derive next window from independently reconciled 320-borrower evidence
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          STAGE47_EXPECTED_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '1292' }}
+          STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '3' || inputs.followups_remaining }}
+        run: |
+          set -euo pipefail
+          node scripts/stage47-next-market-window-cli.mjs stage42-reconciled-window.json
+          jq -e '.mode == "ARBIVANE_STAGE47_VERIFIED_MARKET_CONTINUATION" and .mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .positiveNetProfitVerified == false' stage47-next-window.json
+          jq '{reason,verifiedEndCursor,blockedInitialReads,blockedRiskRefreshes,sourcePlansForSandboxOnly,dispatch,nextCursor,followupsRemaining}' stage47-next-window.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Advance only to immediately contiguous verified historical borrower window
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if jq -e '.dispatch == true' stage47-next-window.json >/dev/null; then
+            next=$(jq -r '.nextCursor' stage47-next-window.json)
+            remaining=$(jq -r '.followupsRemaining' stage47-next-window.json)
+            [[ "$next" =~ ^[0-9]+$ && "$remaining" =~ ^[0-3]$ ]]
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/rhea-stage42-reconciled-continuation.yml/dispatches" \
+              -f ref=main -f "inputs[base_cursor]=$next" -f "inputs[followups_remaining]=$remaining"
+            echo "Dispatched next authentic read-only borrower window from finding $next" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Preserve final reconciled window artifact (or failure evidence)
         if: always()
         uses: actions/upload-artifact@v4
@@ -159,5 +190,6 @@ jobs:
           path: |
             stage42-reconciled-window.json
             stage42-reconciliation-stdout.json
+            stage47-next-window.json
           if-no-files-found: warn
           retention-days: 14
