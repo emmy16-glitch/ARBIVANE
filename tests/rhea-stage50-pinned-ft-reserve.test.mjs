@@ -121,7 +121,7 @@ test('Stage77 follows actual Rhea extra_decimals FT conversion even when interna
 test('Stage77 never authorizes overflowing raw FT to internal balance conversion',()=>{
  const data=structuredClone(input());
  data.pinnedAssets[0][1].config.extra_decimals=36;
- data.repayFtBalance='999999999999999999999999999999999999999';
+ data.repayFtBalance='340282366920938463463374607431768211455';
  assert.throws(()=>inspectStage50RepayReserve(data),
   /STAGE50_TOKEN_VAULT_INTERNAL_SCALE_OVERFLOWS_U128/);
 });
