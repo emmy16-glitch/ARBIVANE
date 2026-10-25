@@ -239,3 +239,20 @@ test('Stage78 rejects insecure, credential-bearing and same-as-primary alternati
   assert.equal(x.imports.length,0);
  }
 });
+
+
+test('Stage80 canonical archive validation rejects URL spelling aliases and private endpoints',async()=>{
+ const {validateStage80IndependentArchive}=await import('../scripts/stage46-paged-sandbox-clone.mjs');
+ const primary='https://archival-rpc.mainnet.fastnear.com';
+ for(const rejected of [
+  primary,primary+'/',primary+'/?apiKey=fake',
+  'http://archive.example/rpc','https://localhost/rpc',
+  'https://127.0.0.1/rpc','https://10.2.3.4/rpc',
+  'https://192.168.0.1/rpc','https://archive.local/rpc',
+  'https://user:pass@archive.example/rpc',
+  'https://archive.example:8899/rpc','https://archive.example/rpc#fragment'
+ ])assert.throws(()=>validateStage80IndependentArchive(primary,rejected),
+  /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+ const trusted='https://higher-limit-archive.example/rpc?key=TEST_VALUE';
+ assert.equal(validateStage80IndependentArchive(primary,trusted),trusted);
+});

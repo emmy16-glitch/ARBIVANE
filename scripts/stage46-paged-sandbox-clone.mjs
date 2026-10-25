@@ -9,6 +9,24 @@ import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
+/** Validate the independent archive by canonical origin, not string spelling.
+ * A slash/query alias to the same node is NOT a second provider.
+ * Never log deployment-owned RPC URLs or their query-key credentials.
+ */
+export function validateStage80IndependentArchive(primary,fallback){
+ let p,u;
+ try{p=new URL(primary);u=new URL(fallback);}
+ catch{throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');}
+ const h=u.hostname.toLowerCase();
+ if(typeof fallback!=='string'||fallback.length>2048||
+  u.protocol!=='https:'||u.username||u.password||u.hash||u.port||
+  !h||h==='localhost'||h==='[::1]'||h.endsWith('.local')||
+  /^(?:127\.|10\.|0\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)/.test(h)||
+  u.origin===p.origin)
+  throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ return fallback;
+}
+
 
 export async function clonePinnedContractWithState({
  root,rpc,endpoint,contractId,blockHeight,expectedCodeHash=null,
@@ -19,12 +37,9 @@ export async function clonePinnedContractWithState({
   typeof rpc.viewAccount!=='function'||!ID.test(contractId)||
   !bounded(blockHeight,1,Number.MAX_SAFE_INTEGER)||
   typeof endpoint!=='string'||new URL(endpoint).protocol!=='https:'||
-  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash))||
- typeof fallbackEndpoint!=='string'||
- !/^https:\/\//.test(fallbackEndpoint)||
- new URL(fallbackEndpoint).username||new URL(fallbackEndpoint).password||
- new URL(fallbackEndpoint).hash||fallbackEndpoint===endpoint)
+  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash)))
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ validateStage80IndependentArchive(endpoint,fallbackEndpoint);
  const o={
   maxQueries:budgets.maxQueries??1536,
   maxRecords:budgets.maxRecords??180000,

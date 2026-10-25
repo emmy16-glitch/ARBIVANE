@@ -41,6 +41,8 @@ jobs:
           NEAR_WORKSPACES_NETWORK: sandbox
           STAGE45_ALLOW_LOCAL_MUTATION: 'true'
           NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          # Optional higher-limit public-state endpoint, never a mainnet signer.
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL }}
           NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
           STAGE45_MAX_QUERIES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_prefix_queries || '1536' }}
           STAGE45_PAGE_SIZE: ${{ github.event_name == 'workflow_dispatch' && inputs.page_size || '128' }}

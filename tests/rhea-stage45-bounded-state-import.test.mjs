@@ -115,3 +115,16 @@ test('Stage45 actual-workflow safeguards prevent a false liquidation or mainnet 
  assert.ok(!runner.includes('broadcast_tx'));
  assert.ok(!runner.includes('callRaw('));
 });
+
+
+test('Stage80 standalone Rhea import shares validated owner archive without weakening Sandbox isolation',async()=>{
+ const runner=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
+ const flow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
+ assert.ok(runner.includes('validateStage80IndependentArchive'));
+ assert.ok(runner.includes('env.STAGE45_ARCHIVAL_FALLBACK_URL'));
+ assert.ok(runner.includes('secondary')||runner.includes('alternateRpc'));
+ assert.ok(runner.includes('recoveredOversizedEntry:true'));
+ assert.ok(flow.includes('secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL'));
+ assert.ok(runner.includes('realRheaLiquidationAttempted:false'));
+ assert.ok(!runner.includes('broadcast_tx'));
+});
