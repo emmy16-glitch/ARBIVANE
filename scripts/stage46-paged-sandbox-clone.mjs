@@ -9,10 +9,22 @@ import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
+const SAFE_ENDPOINT='https://archival-rpc.mainnet.near.org';
+function validateAlternateUrl(value,primary){
+ if(value===null)return SAFE_ENDPOINT;
+ if(typeof value!=='string'||value.length>2048)throw Error('STAGE78_INVALID_ARCHIVAL_PROVIDER_URL');
+ let u;
+ try{u=new URL(value);}catch{throw Error('STAGE78_INVALID_ARCHIVAL_PROVIDER_URL');}
+ if(u.protocol!=='https:'||u.username||u.password||u.hash||
+  !u.hostname||u.hostname==='localhost'||u.hostname.endsWith('.local')||
+  u.port||u.pathname.includes('..')||u.toString()===primary)
+  throw Error('STAGE78_INVALID_ARCHIVAL_PROVIDER_URL');
+ return value;
+}
 
 export async function clonePinnedContractWithState({
  root,rpc,endpoint,contractId,blockHeight,expectedCodeHash=null,
- fetcher=fetch,onProgress=()=>{},budgets={}
+ fallbackEndpoint=null,fetcher=fetch,onProgress=()=>{},budgets={}
 }){
  if(!root||typeof root.importContract!=='function'||!rpc||
   typeof rpc.viewAccount!=='function'||!ID.test(contractId)||
@@ -30,6 +42,9 @@ export async function clonePinnedContractWithState({
  };
  if(!bounded(o.maxPatchBytes,1024,64000)||!bounded(o.maxPatchRecords,1,250))
   throw Error('STAGE46_INVALID_SANDBOX_PATCH_BUDGET');
+ // The higher-limit endpoint is controlled by deployment configuration only;
+ // it receives public contract state queries, never wallet secrets or writes.
+ const secondaryUrl=validateAlternateUrl(fallbackEndpoint,endpoint);
  const remote=await rpc.viewAccount(contractId,blockHeight);
  if(remote.blockHeight!==String(blockHeight)||!HASH.test(remote.codeHash)||
   (expectedCodeHash!==null&&remote.codeHash!==expectedCodeHash))
@@ -54,7 +69,7 @@ export async function clonePinnedContractWithState({
  // Every alternate reply is checked by Stage45 against the exact pinned
  // source block height, hash and globally ordered storage keys.
  const legacyArchival=new ArchivalStateRpc({
-  endpoint:'https://archival-rpc.mainnet.near.org',
+  endpoint:secondaryUrl,
   accountId:contractId,blockHeight,paceMs:4000,timeoutMs:18000,maxRetries:0,
  },fetcher);
  let alternateSingleEntryReads=0,alternateFailures=0;
@@ -115,6 +130,7 @@ export async function clonePinnedContractWithState({
    sourceRpcAttempts:archive.getStats().transportAttempts,
    alternateSingleEntryReads,alternateFailures,
    alternateRpcAttempts:legacyArchival.getStats().transportAttempts,
+   customArchivalProviderConfigured:fallbackEndpoint!==null,
    sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,
   }
