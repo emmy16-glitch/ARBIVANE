@@ -31,7 +31,7 @@ export function createStage55PhaseLedger(){
    currentPhase:current>=0?phases[current]:null,
    completedPhases:[...visited],phaseCount:visited.length,
    localFundingAttempted:funding,
-   localLiquidationTransactionSubmitted:attempted,
+   localLiquidationCallInvoked:attempted,
    observedFailureCode:reasonCode,
    actualRheaSettlementVerified:complete,
    originalTransactionFinalityVerified:false,
