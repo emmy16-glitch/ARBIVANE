@@ -75,7 +75,7 @@ export async function qualifyStage38Candidates(
  if(!source||!prior||!HASH.test(o.expectedLendingCodeHash)||
   !HASH.test(o.expectedPythOracleCodeHash)||
   !number(o.startFinding,0,source.debtAccounts)||
-  !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,16)||
+  !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,80)||
   !number(o.concurrency,1,3)||
   !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27))
   throw Error('INVALID_STAGE38_CANDIDATE_OPTIONS');
@@ -101,9 +101,15 @@ export async function qualifyStage38Candidates(
    'ONLY_SANDBOX_MUTATION_POSSIBLE_AFTER_FRESH_SUCCESSFUL_REFERENCE_SIZING',
    'PRODUCTION_FUNDING_BALANCES_RECEIPTS_AND_NET_PNL_NOT_VERIFIED'],
  };
+ // The real Stage42 caller permits the entire 80-account authenticated shard.
+ // A narrower caller-defined cap must fail CLOSED rather than pretending all
+ // at-risk accounts were checked. No uncontrolled fan-out: concurrency <= 3.
  if(risk.length>o.maxRiskCandidates)return {...base,
   status:'BLOCKED_CANDIDATE_LIMIT',refreshed:0,positiveSourcePlans:0,failedFreshReads:0,
   rows:[],bestProposal:null,sandboxPlanReady:false};
+ // Every authentic at-risk finding in the completed source window must receive
+ // a fresh source evaluation, including cohorts larger than the old cap of 12.
+ // Only results actually verified as positive can produce a Sandbox plan.
  const rows:Stage38Row[]=new Array(risk.length);
  const proposals:SourceLiquidationSizing[]=[];
  let next=0;
