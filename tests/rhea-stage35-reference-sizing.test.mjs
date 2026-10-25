@@ -135,10 +135,26 @@ test('Stage57 fails closed on malformed market pool balances and false permissio
   a=>a[0][1].config.can_borrow=null
  ]){
   const rows=assets();bad(rows);
-  if(rows[0][1].config.can_borrow===null){
-   // Null is explicitly non-borrowable, never interpreted as yes.
-   assert.equal(sizeStage35SourceLiquidation(report(),rows,options).status,
-    'NO_SAFE_SOURCE_SCENARIO');
-  }else assert.throws(()=>sizeStage35SourceLiquidation(report(),rows,options));
+  assert.throws(()=>sizeStage35SourceLiquidation(report(),rows,options));
  }
+});
+
+test('Stage57 preserves valid alternative collateral when higher-priority source asset cannot withdraw',()=>{
+ const r=report();
+ const halfBad=source('collateral','collateral.near','500000000',8000);
+ const halfGood=source('collateral','goodcollateral.near','500000000',8000);
+ r.positions[0].legs=[debt(),halfBad,halfGood];
+ const pairs=assets();
+ pairs[1][1].config.can_withdraw=false;
+ pairs.push(['goodcollateral.near',{
+  config:{volatility_ratio:8000,can_borrow:false,can_withdraw:true},
+  supplied:{balance:'1000000000',shares:'1000000000'},
+  borrowed:{balance:'0',shares:'0'}
+ }]);
+ const out=sizeStage35SourceLiquidation(r,pairs,options);
+ assert.equal(out.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(out.repay.tokenId,'usd-debt.near');
+ assert.equal(out.seize.tokenId,'goodcollateral.near');
+ assert.equal(out.consideredPairs,2);
+ assert.equal(out.maySign,false);
 });
