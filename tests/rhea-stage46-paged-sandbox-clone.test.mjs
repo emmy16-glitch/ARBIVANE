@@ -239,3 +239,22 @@ test('Stage78 rejects insecure, credential-bearing and same-as-primary alternati
   assert.equal(x.imports.length,0);
  }
 });
+
+
+test('Stage79 cannot disguise the primary provider with URL normalization or local routing',async()=>{
+ const from='https://archival-rpc.mainnet.fastnear.com';
+ const bad=[from+'/',from+'/?alternate=1',
+  'http://archival-rpc.mainnet.near.org',
+  'https://127.0.0.1/rpc','https://10.0.0.9/rpc',
+  'https://192.168.1.20/rpc','https://archive.local/rpc',
+  'https://archive.example:8080/rpc',
+  'https://reader:secret@archive.example/rpc',
+  'https://archive.example/rpc#fragment'];
+ for(const fallbackEndpoint of bad){
+  const x=scenario({fallbackEndpoint});
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  assert.equal(x.imports.length,0);
+  assert.equal(x.requests.length,0);
+ }
+});
