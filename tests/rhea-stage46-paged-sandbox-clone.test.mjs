@@ -256,3 +256,30 @@ test('Stage80 canonical archive validation rejects URL spelling aliases and priv
  const trusted='https://higher-limit-archive.example/rpc?key=TEST_VALUE';
  assert.equal(validateStage80IndependentArchive(primary,trusted),trusted);
 });
+
+
+test('Stage81 blocks IP literal metadata endpoints, IPv6 and intranet DNS before Sandbox cloning',async()=>{
+ const {validateStage80IndependentArchive}=await import('../scripts/stage46-paged-sandbox-clone.mjs');
+ const primary='https://archival-rpc.mainnet.fastnear.com';
+ for(const fallbackEndpoint of [
+  'https://169.254.169.254/latest/meta-data',
+  'https://8.8.8.8/rpc',
+  'https://[::ffff:127.0.0.1]/rpc',
+  'https://[::1]/rpc',
+  'https://archive.internal/rpc',
+  'https://service.localhost/rpc',
+  'https://archive.local/rpc',
+  primary+'/?apiKey=different'
+ ]){
+  assert.throws(()=>validateStage80IndependentArchive(primary,fallbackEndpoint),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  const x=scenario({fallbackEndpoint});
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  assert.equal(x.requests.length,0);
+  assert.equal(x.imports.length,0);
+ }
+ assert.equal(validateStage80IndependentArchive(primary,
+  'https://independent-archive.example/api?key=REDACTED'),
+  'https://independent-archive.example/api?key=REDACTED');
+});
