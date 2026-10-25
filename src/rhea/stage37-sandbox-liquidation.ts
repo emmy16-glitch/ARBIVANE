@@ -65,8 +65,11 @@ export interface SandboxResult {
  mode:'ARBIVANE_STAGE37_SANDBOX_RESULT';
  chain:'NEAR_SANDBOX';
  status:'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'|'SANDBOX_RECEIPT_FAILURE'|
-  'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF';
+  'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF'|'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE';
  attemptedTransaction:boolean;transactionFinal:boolean;
+ transactionExecutionStatus?:'FINAL'|'EXECUTED_OPTIMISTIC';
+ persistedAtLaterFinalizedBlock?:boolean;
+ finalizedBlockBefore?:number;finalizedBlockAfter?:number;
  receiptCount:number;failedReceiptCount:number;gasBurntGasUnits:string|null;
  realMainnetExecuted:false;realProfitVerified:false;walletApproved:false;
  executionEnabled:false;mayBroadcastMainnet:false;blockers:string[];
@@ -120,8 +123,10 @@ export function summarizeStage37SandboxOutcome(
   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_ATTESTED');
  const status=result.status;
  const final=result.final_execution_status==='FINAL';
+ const optimistic=result.final_execution_status==='EXECUTED_OPTIMISTIC';
+ if(!final&&!optimistic)throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
  const overallFail=!!status&&typeof status==='object'&&Object.prototype.hasOwnProperty.call(status,'Failure');
- if(!final||(overallFail&&failed===0)||(!overallFail&&failed>0)||result.status===undefined)
+ if((overallFail&&failed===0)||(!overallFail&&failed>0)||result.status===undefined)
   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
  const gas=receipts.reduce((n,x)=>{
   const y=(x as {outcome:{gas_burnt:unknown}}).outcome.gas_burnt;
@@ -129,11 +134,15 @@ export function summarizeStage37SandboxOutcome(
   return n+BigInt(y);
  },0n).toString();
  const success=!overallFail&&failed===0;
- return {...base,status:success?'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF':'SANDBOX_RECEIPT_FAILURE',
-  attemptedTransaction:true,transactionFinal:true,receiptCount:receipts.length,
+ return {...base,status:!success?'SANDBOX_RECEIPT_FAILURE':final?
+  'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF':'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE',
+  attemptedTransaction:true,transactionFinal:final,
+  transactionExecutionStatus:final?'FINAL':'EXECUTED_OPTIMISTIC',
+  persistedAtLaterFinalizedBlock:false,receiptCount:receipts.length,
   failedReceiptCount:failed,gasBurntGasUnits:gas,
   blockers:[
    ...(!inspection.allStoredKeysAttested?['FULL_IMPORTED_CONTRACT_STORAGE_KEYSET_NOT_ATTESTED']:[]),
+   ...(optimistic?['OPTIMISTIC_TRANSACTION_REQUIRES_LATER_FINALIZED_SANDBOX_STATE_PROOF']:[]),
    'SANDBOX_CALL_ALONE_DOES_NOT_PROVE_FINANCING_SWAP_OR_NET_PROFIT',
    'REAL_MAINNET_WALLET_CAPITAL_RISK_LIMITS_AND_SIGNER_NOT_AUTHORIZED',
   ]};
