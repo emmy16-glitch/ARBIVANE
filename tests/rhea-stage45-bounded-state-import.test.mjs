@@ -128,3 +128,12 @@ test('Stage80 standalone Rhea import shares validated owner archive without weak
  assert.ok(runner.includes('realRheaLiquidationAttempted:false'));
  assert.ok(!runner.includes('broadcast_tx'));
 });
+
+
+test('Stage81 reruns pinned read-only standalone state import when fallback validation changes',async()=>{
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
+ assert.ok(workflow.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
+ assert.ok(workflow.includes('secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL'));
+ assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
+ assert.ok(!workflow.includes('MAINNET_PRIVATE_KEY'));
+});
