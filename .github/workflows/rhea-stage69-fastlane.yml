@@ -13,6 +13,7 @@ on:
       - 'scripts/stage45-archival-state-rpc.mjs'
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage96-lending-source-view-parity.mjs'
       - 'scripts/stage88-sandbox-clone-witness.mjs'
       - 'scripts/stage82-targeted-lending-clone.mjs'
       - 'scripts/stage89-targeted-wnear-clone.mjs'
@@ -197,6 +198,7 @@ jobs:
             stage82-one-borrower-parity.json
             stage89-wnear-parity.json
             stage91-linear-parity.json
+            stage96-lending-source-view-parity.json
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
