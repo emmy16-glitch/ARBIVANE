@@ -48,7 +48,7 @@ test('Stage50 blocks insufficient actual FT vault reserves, insufficient lending
    supplied:{balance:'300000000000000000000'},
    borrowed:{balance:'0'}
   }]]},
-  {repayFtMetadata:{decimals:5}},
+  {repayFtMetadata:{decimals:37}},
   {repayFtBalance:'-100'},
   {sourceBlockHeight:221440178},
   {plan:{...plan,executionEnabled:true}},
@@ -85,4 +85,43 @@ test('Stage50 reserves feed the genuine Sandbox runner and prevent mismatched cl
  assert.ok(runner.indexOf('readStage50PinnedRepayReserve')<runner.indexOf("await pkg.Worker.init"));
  assert.ok(runner.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!runner.includes('broadcast_tx'));
+});
+
+
+test('Stage77 follows actual Rhea extra_decimals FT conversion even when internal precision is NOT 24',()=>{
+ const examples=[
+  {decimals:6,extra:12,scale:1000000000000n}, // public Rhea USDT example: 18 internal
+  {decimals:6,extra:18,scale:1000000000000000000n}, // 24 internal
+  {decimals:24,extra:0,scale:1n}, // WNEAR native precision
+  {decimals:5,extra:7,scale:10000000n}, // metadata precision is independent
+ ];
+ for(const {decimals,extra,scale} of examples){
+  const amount=(100n*scale).toString();
+  const data=structuredClone(input());
+  data.repayFtMetadata={decimals};
+  data.pinnedAssets[0][1].config.extra_decimals=extra;
+  data.pinnedAssets[0][1].supplied.balance=(300n*scale).toString();
+  data.pinnedAssets[0][1].borrowed.balance=(100n*scale).toString();
+  data.plan={...data.plan,actions:[
+   {Borrow:{token_id:'usdt.tether-token.near',amount}},
+   {Liquidate:{account_id:'borrower.near',
+    in_assets:[{token_id:'usdt.tether-token.near',amount}],
+    out_assets:[{token_id:'wrap.near',amount}]}},
+   {Withdraw:{token_id:'wrap.near',amount}},
+  ]};
+  const output=inspectStage50RepayReserve(data);
+  assert.equal(output.requiredFtAtomicRoundedUp,'100');
+  assert.equal(output.rawFtToLendingInternalScale,scale.toString());
+  assert.equal(output.internalPrecisionDecimals,decimals+extra);
+  assert.equal(output.exactTokenConversionVerifiedAgainstDeployedWasm,false);
+  assert.equal(output.mayBroadcastMainnet,false);
+ }
+});
+
+test('Stage77 never authorizes overflowing raw FT to internal balance conversion',()=>{
+ const data=structuredClone(input());
+ data.pinnedAssets[0][1].config.extra_decimals=36;
+ data.repayFtBalance='999999999999999999999999999999999999999';
+ assert.throws(()=>inspectStage50RepayReserve(data),
+  /STAGE50_TOKEN_VAULT_INTERNAL_SCALE_OVERFLOWS_U128/);
 });
