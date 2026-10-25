@@ -36,7 +36,7 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
  const repay=plan.actions?.[0]?.Borrow?.token_id;
  const seize=plan.actions?.[2]?.Withdraw?.token_id;
  if(typeof repay!=='string'||typeof seize!=='string'||
-  !ID.test(repay)||!ID.test(seize)||repay===seize)
+  !ID.test(repay)||!ID.test(seize))
   throw Error('STAGE51_INVALID_CANDIDATE_TOKENS');
  const lenderClone=contracts.get(lender),oracleClone=contracts.get('aggregate-oracle.near');
  if(!lenderClone||!oracleClone||
@@ -61,7 +61,9 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
   'BAD_SANDBOX_PYTH_INFO');
  if(!equal(remoteInfo,cloneInfo))
   throw Error('STAGE51_TOKEN_PYTH_INFO_DIFFERENT_IN_SANDBOX');
- const tokens=[repay,seize],feeds=new Set(),derived=[];
+ // A same-token liquidation needs one fresh source/Sandbox quote identity,
+ // not two artificial independent Pyth observations of the same FT.
+ const tokens=[...new Set([repay,seize])],feeds=new Set(),derived=[];
  let defaultTokenCount=0;
  for(const id of tokens){
   const info=obj(remoteInfo[id],'POSITION_ASSET_HAS_NO_PYTH_INFO');
