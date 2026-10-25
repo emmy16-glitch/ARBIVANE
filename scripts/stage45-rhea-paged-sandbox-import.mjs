@@ -10,6 +10,7 @@ import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
+import {patchStage85AuthenticatedData} from './stage85-bounded-sandbox-patches.mjs';
 import {validateStage80IndependentArchive} from './stage46-paged-sandbox-clone.mjs';
 
 const env=process.env,BLOCK=221433162;
@@ -28,6 +29,7 @@ const report={
  paginationCursorExhausted:false,completePaginationCoverage:false,
  completePrefixCoverage:false,unresolvedExactBoundaryPrefixCount:null,
  dataRecordsRead:0,dataRecordsPatched:0,sourceBytesObserved:0,
+ patchWriteCalls:0,largeSingleRecordPatchCalls:0,largestPatchRecordBytes:0,
  prefixQueryCount:0,oversizeResponses:0,rateLimitResponses:0,
  alternateSingleEntryReads:0,alternateFailures:0,alternateRpcAttempts:0,
  stateAppliedIntoSandbox:false,configMatchesPinnedSource:false,
@@ -151,30 +153,33 @@ async function main(){
   throw Error('STAGE45_SANDBOX_WASM_CODE_HASH_MISMATCH');
  const patchBytes=integer('STAGE45_PATCH_MAX_JSON_BYTES',32000,1024,64000);
  const patchRecords=integer('STAGE45_PATCH_MAX_RECORDS',50,1,250);
- let records=[],size=0;
- async function flush(){
-  if(!records.length)return;
-  // Workspaces patches only local Sandbox storage (it may apply twice
-  // for delayed Sandbox view propagation). Never patches mainnet.
-  await lending.patchStateRecords({records});
-  report.dataRecordsPatched+=records.length;
-  records=[];size=0;
-  if(report.dataRecordsPatched%1000<patchRecords)
-   console.error(JSON.stringify({mode:'STAGE45_SANDBOX_PATCH_PROGRESS',
-    patched:report.dataRecordsPatched,total:report.dataRecordsRead,
-    mainnetExecutionEnabled:false}));
- }
+ const maxSinglePatchBytes=integer('STAGE45_PATCH_MAX_SINGLE_JSON_BYTES',
+  2097152,patchBytes,2097152);
  const reader=createInterface({input:createReadStream(spoolPath),crlfDelay:Infinity});
- for await(const line of reader){
-  if(!line)continue;
-  const row=JSON.parse(line);
-  const entry={Data:{account_id:LENDING,data_key:row.key,value:row.value}};
-  const bytes=Buffer.byteLength(JSON.stringify(entry));
-  if(bytes>patchBytes)throw Error('STAGE45_SINGLE_KEY_EXCEEDS_PATCH_LIMIT');
-  if(records.length>=patchRecords||size+bytes>patchBytes)await flush();
-  records.push(entry);size+=bytes;
+ async function* sourceRows(){
+  for await(const line of reader){
+   if(line)yield JSON.parse(line);
+  }
  }
- await flush();
+ const metrics=await patchStage85AuthenticatedData({
+  contract:lending,accountId:LENDING,rows:sourceRows(),
+  maxPatchBytes:patchBytes,maxPatchRecords:patchRecords,
+  maxSinglePatchBytes,
+  onProgress:metric=>{
+   report.dataRecordsPatched=metric.recordsPatched;
+   report.patchWriteCalls=metric.patchWriteCalls;
+   report.largeSingleRecordPatchCalls=metric.largeSingleRecordPatchCalls;
+   report.largestPatchRecordBytes=metric.largestPatchRecordBytes;
+   if(metric.recordsPatched%1000<patchRecords)
+    console.error(JSON.stringify({
+     mode:'STAGE45_SANDBOX_PATCH_PROGRESS',patched:metric.recordsPatched,
+     total:report.dataRecordsRead,largeSingleRecordPatchCalls:metric.largeSingleRecordPatchCalls,
+     mainnetExecutionEnabled:false,
+    }));
+  }
+ });
+ if(metrics.recordsPatched!==report.dataRecordsPatched)
+  throw Error('STAGE85_INCONSISTENT_SANDBOX_PATCH_WITNESS');
  if(report.dataRecordsPatched!==report.dataRecordsRead)
   throw Error('STAGE45_PATCHED_RECORD_COUNT_MISMATCH');
  report.stateAppliedIntoSandbox=true;
