@@ -172,3 +172,31 @@ test('Stage77 secondary archive cannot alter pinned block hash, skip keys, or cl
   assert.equal(x.reports.some(row=>row.complete),false);
  }
 });
+
+
+test('Stage77 resumes normal large pages after recovering just one oversized storage key',async()=>{
+ const x=scenario(),observed=[];
+ x.args.fetcher=async(url,req)=>{
+  const {params}=JSON.parse(req.body),cursor=params.after_key_base64??null;
+  observed.push({url,cursor,limit:params.limit});
+  if(cursor===b64('a')&&url==='https://archival-rpc.mainnet.fastnear.com')
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+  if(url==='https://archival-rpc.mainnet.near.org'&&cursor!==b64('a'))
+   throw Error('ONLY_ONE_PINNED_KEY_CAN_BE_RECOVERED');
+  const key=cursor===null?'a':cursor===b64('a')?'b':'c';
+  const result={block_height:221433162,block_hash:blockHash,
+   ...(key==='c'?{}:{last_key:b64(key)}),
+   values:[{key:b64(key),value:b64(key+'-value')}]};
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result})};
+ };
+ const evidence=(await clonePinnedContractWithState(x.args)).evidence;
+ assert.equal(evidence.recordsRead,3);
+ assert.equal(evidence.recordsPatched,3);
+ assert.equal(evidence.alternateSingleEntryReads,1);
+ const after=observed.find(c=>c.cursor===b64('b'));
+ assert.equal(after.url,'https://archival-rpc.mainnet.fastnear.com');
+ assert.equal(after.limit,128);
+ assert.equal(evidence.providerPaginationExhausted,true);
+ assert.equal(evidence.mainnetMutated,false);
+});
