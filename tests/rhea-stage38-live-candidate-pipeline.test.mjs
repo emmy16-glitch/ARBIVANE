@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {NearRpcHttpError} from '../src/rhea/rpc.ts';
 import {qualifyStage38Candidates} from '../src/rhea/stage38-live-candidate-pipeline.ts';
 const HASH='2'.repeat(43),ORACLE='3'.repeat(43),START=332,DEBT=800;
 const source=()=>({mode:'RHEA_COMPLETE_PAGED_INDEX_ATTESTATION',status:'COMPLETE_DEBT_INDEX_READ_ONLY',
@@ -152,4 +153,51 @@ test('Stage58 live CLI chooses full-shard exhaustive risk limit without enabling
  assert.ok(wf.includes('STAGE37_ALLOW_SANDBOX_MUTATION=true'));
  assert.ok(wf.includes('STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true'));
  assert.ok(!wf.includes('broadcast_tx'));
+});
+
+test('Stage60 recovers two genuinely at-risk borrowers after bounded sequential 429 retries',async()=>{
+ const attempts=new Map(),delays=[];
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,
+  async id=>{
+   const count=(attempts.get(id)??0)+1;attempts.set(id,count);
+   if(count===1)throw new NearRpcHttpError(429,'0');
+   return id==='borrower335.near'?ok(id):{...ok(id),
+    status:'NO_SAFE_SOURCE_SCENARIO',referenceRulesPass:false,repay:null,seize:null};
+  },async ms=>{delays.push(ms);});
+ assert.deepEqual([...attempts.values()],[2,2]);
+ assert.deepEqual(delays,[1500,1500]);
+ assert.equal(result.boundedRecoveryAttempts,2);
+ assert.equal(result.recoveredRateLimitedFindings,2);
+ assert.equal(result.failedFreshReads,0);
+ assert.equal(result.positiveSourcePlans,1);
+ assert.equal(result.bestProposal.borrowerAccountId,'borrower335.near');
+ assert.equal(result.sandboxPlanReady,true);
+ assert.equal(result.maySignMainnet,false);
+ assert.equal(result.mayBroadcastMainnet,false);
+ assert.equal(result.netProfitVerified,false);
+});
+test('Stage60 honors long provider Retry-After and never retries invalid source evidence',async()=>{
+ const calls=[];const delays=[];
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,
+  async id=>{calls.push(id);throw new NearRpcHttpError(429,'90');},
+  async ms=>{delays.push(ms);});
+ assert.equal(result.failedFreshReads,2);
+ assert.equal(result.boundedRecoveryAttempts,0);
+ assert.equal(result.recoveredRateLimitedFindings,0);
+ assert.equal(calls.length,2);
+ assert.deepEqual(delays,[]);
+ assert.equal(result.sandboxPlanReady,false);
+});
+test('Stage60 caps re-attempts and does not promote permanent 429 failures',async()=>{
+ let calls=0;const delays=[];
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,
+  async()=>{calls++;throw new NearRpcHttpError(429,'0');},
+  async ms=>{delays.push(ms);});
+ assert.equal(calls,6);
+ assert.equal(result.boundedRecoveryAttempts,4);
+ assert.equal(result.recoveredRateLimitedFindings,0);
+ assert.deepEqual(delays,[1500,3000,1500,3000]);
+ assert.equal(result.positiveSourcePlans,0);
+ assert.equal(result.sandboxPlanReady,false);
+ assert.equal(result.mayBroadcastMainnet,false);
 });
