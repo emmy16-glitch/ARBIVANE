@@ -112,3 +112,56 @@ test('Stage75 source drift never flushes unverified trailing records or marks st
  assert.equal(x.patches.length,0);
  assert.equal(x.reports.some(x=>x.complete),false);
 });
+
+
+test('Stage77 retrieves a single oversized entry from a second pinned archival provider without skipping it',async()=>{
+ const x=scenario();
+ const backup='https://archival-rpc.mainnet.near.org';
+ const calls=[];
+ x.args.fallbackEndpoint=backup;
+ x.args.fetcher=async(url,req)=>{
+  const v=JSON.parse(req.body);calls.push({url,params:v.params});
+  if(url!==backup)return {ok:false,status:413,headers:{get:()=>null},text:async()=>''};
+  const row=v.params.after_key_base64===b64('a')?x.pages[1]:x.pages[0];
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({jsonrpc:'2.0',result:row})};
+ };
+ const out=await clonePinnedContractWithState(x.args);
+ assert.equal(out.evidence.recordsRead,2);
+ assert.equal(out.evidence.recordsPatched,2);
+ assert.equal(out.evidence.alternatePagesAccepted,2);
+ assert.equal(out.evidence.oversizedSingleRecordRetries,2);
+ assert.equal(out.evidence.archivalFallbackConfigured,true);
+ assert.equal(out.evidence.alternateRpcAttempts,2);
+ assert.deepEqual(x.patches.map(v=>v.Data.data_key),[b64('a'),b64('b')]);
+ assert.ok(calls.filter(c=>c.url===backup).every(c=>c.params.limit===1));
+ assert.ok(calls.every(c=>c.params.block_id===221433162));
+ assert.equal(out.evidence.completeTrieRootParityVerified,false);
+ assert.equal(out.evidence.mainnetMutated,false);
+});
+
+test('Stage77 second archival provider must match the SAME pinned block, not just yield bytes',async()=>{
+ const x=scenario();x.args.fallbackEndpoint='https://archival-rpc.mainnet.near.org';
+ x.pages[0].block_hash='B'.repeat(43);
+ x.pages[1].block_hash='C'.repeat(43);
+ x.args.fetcher=async(url,req)=>{
+  if(url!==x.args.fallbackEndpoint)
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>''};
+  const v=JSON.parse(req.body);
+  return {ok:true,status:200,headers:{get:()=>null},text:async()=>JSON.stringify({
+   jsonrpc:'2.0',result:v.params.after_key_base64?x.pages[1]:x.pages[0]})};
+ };
+ await assert.rejects(()=>clonePinnedContractWithState(x.args),/STAGE45_PAGED_CROSS_BLOCK_OR_BAD_SHAPE/);
+ assert.equal(x.reports.some(v=>v.complete),false);
+});
+
+test('Stage77 explicitly rejects all-provider single entry limits and cannot forge a completed state clone',async()=>{
+ const x=scenario();x.args.fallbackEndpoint='https://archival-rpc.mainnet.near.org';
+ x.args.fetcher=async()=>({ok:false,status:413,headers:{get:()=>null},text:async()=>''});
+ await assert.rejects(()=>clonePinnedContractWithState(x.args),
+  /STAGE77_ALL_ARCHIVAL_PROVIDERS_INDIVIDUAL_ENTRY_LIMIT/);
+ assert.equal(x.patches.length,0);
+ assert.equal(x.reports.some(v=>v.complete),false);
+ const y=scenario({fallbackEndpoint:'http://insecure-rpc.example'});
+ await assert.rejects(()=>clonePinnedContractWithState(y.args),/STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+});
