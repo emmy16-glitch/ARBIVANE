@@ -24,7 +24,7 @@ const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 // transport/oversize errors; never retry deterministic contract-state errors.
 function stage105RetryableCodeImport(error){
  if(!(error instanceof Error))return false;
- return /(?:HTTP(?:Error)?[^\\n]{0,40}\\b(?:413|429|500|502|503|504)\\b|\\b(?:429|rate.limit|too.many.requests|response.too.large|payload.too.large|timeout|timed.out|ECONNRESET|ETIMEDOUT|fetch.failed|network.error|socket.hang.up|UNKNOWN_BLOCK|NOT_SYNCED)\\b)/i.test(error.message);
+ return /(?:HTTP(?:Error)?[^\n]{0,40}\b(?:413|429|500|502|503|504)\b|\b(?:429|rate.limit|too.many.requests|response.too.large|payload.too.large|timeout|timed.out|ECONNRESET|ETIMEDOUT|fetch.failed|network.error|socket.hang.up|UNKNOWN_BLOCK|NOT_SYNCED)\b)/i.test(error.message);
 }
 function bytes(str){
  if(typeof str!=='string'||str.length>3_000_000||
