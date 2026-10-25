@@ -112,3 +112,91 @@ test('Stage75 source drift never flushes unverified trailing records or marks st
  assert.equal(x.patches.length,0);
  assert.equal(x.reports.some(x=>x.complete),false);
 });
+
+
+test('Stage77 retries a truly oversized single pinned archive entry at a SECOND read-only archival provider',async()=>{
+ const x=scenario(), calls=[];
+ x.args.fetcher=async(url,req)=>{
+  const {params}=JSON.parse(req.body);
+  const cursor=params.after_key_base64??null;
+  calls.push({url,cursor,limit:params.limit});
+  const first={block_height:221433162,block_hash:blockHash,last_key:b64('a'),
+   values:[{key:b64('a'),value:b64('one')}]};
+  const second={block_height:221433162,block_hash:blockHash,
+   values:[{key:b64('b'),value:b64('two')}]};
+  if(cursor===null)return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result:first})};
+  if(url==='https://archival-rpc.mainnet.fastnear.com')
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+  assert.equal(url,'https://archival-rpc.mainnet.near.org');
+  assert.equal(params.limit,1);
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result:second})};
+ };
+ const out=await clonePinnedContractWithState(x.args);
+ assert.equal(out.evidence.alternateSingleEntryReads,1);
+ assert.equal(out.evidence.alternateFailures,0);
+ assert.equal(out.evidence.alternateRpcAttempts,1);
+ assert.equal(out.evidence.recordsRead,2);
+ assert.equal(out.evidence.recordsPatched,2);
+ assert.equal(out.evidence.providerPaginationExhausted,true);
+ assert.deepEqual(x.patches.map(k=>k.Data.data_key),[b64('a'),b64('b')]);
+ assert.ok(calls.some(c=>c.url==='https://archival-rpc.mainnet.fastnear.com'&&c.limit===1));
+ assert.equal(calls.filter(c=>c.url==='https://archival-rpc.mainnet.near.org').length,1);
+ assert.equal(out.evidence.mainnetMutated,false);
+ assert.equal(out.evidence.completeTrieRootParityVerified,false);
+});
+
+test('Stage77 secondary archive cannot alter pinned block hash, skip keys, or claim a complete clone on error',async()=>{
+ for(const kind of ['wrong-block','unavailable','skip-key']){
+  const x=scenario();
+  x.args.fetcher=async(url,req)=>{
+   const {params}=JSON.parse(req.body);
+   const cursor=params.after_key_base64??null;
+   if(cursor===null)return {ok:true,status:200,headers:{get:()=>null},
+    text:async()=>JSON.stringify({result:{
+     block_height:221433162,block_hash:blockHash,last_key:b64('a'),
+     values:[{key:b64('a'),value:b64('one')}]}})};
+   if(url==='https://archival-rpc.mainnet.fastnear.com'||kind==='unavailable')
+    return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+   const tail={block_height:221433162,
+    block_hash:kind==='wrong-block'?'C'.repeat(43):blockHash,
+    values:[{key:kind==='skip-key'?b64('a'):b64('b'),value:b64('two')}]};
+   return {ok:true,status:200,headers:{get:()=>null},
+    text:async()=>JSON.stringify({result:tail})};
+  };
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   kind==='unavailable'?/STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY/:
+   kind==='wrong-block'?/STAGE45_PAGED_CROSS_BLOCK_OR_BAD_SHAPE/:
+   /STAGE45_NONINCREASING_OR_DUPLICATE_STORAGE_KEY/);
+  assert.equal(x.reports.some(row=>row.complete),false);
+ }
+});
+
+
+test('Stage77 resumes normal large pages after recovering just one oversized storage key',async()=>{
+ const x=scenario(),observed=[];
+ x.args.fetcher=async(url,req)=>{
+  const {params}=JSON.parse(req.body),cursor=params.after_key_base64??null;
+  observed.push({url,cursor,limit:params.limit});
+  if(cursor===b64('a')&&url==='https://archival-rpc.mainnet.fastnear.com')
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+  if(url==='https://archival-rpc.mainnet.near.org'&&cursor!==b64('a'))
+   throw Error('ONLY_ONE_PINNED_KEY_CAN_BE_RECOVERED');
+  const key=cursor===null?'a':cursor===b64('a')?'b':'c';
+  const result={block_height:221433162,block_hash:blockHash,
+   ...(key==='c'?{}:{last_key:b64(key)}),
+   values:[{key:b64(key),value:b64(key+'-value')}]};
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result})};
+ };
+ const evidence=(await clonePinnedContractWithState(x.args)).evidence;
+ assert.equal(evidence.recordsRead,3);
+ assert.equal(evidence.recordsPatched,3);
+ assert.equal(evidence.alternateSingleEntryReads,1);
+ const after=observed.find(c=>c.cursor===b64('b'));
+ assert.equal(after.url,'https://archival-rpc.mainnet.fastnear.com');
+ assert.equal(after.limit,128);
+ assert.equal(evidence.providerPaginationExhausted,true);
+ assert.equal(evidence.mainnetMutated,false);
+});

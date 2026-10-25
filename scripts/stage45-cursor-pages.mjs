@@ -63,6 +63,14 @@ export async function coverPinnedPagedState(read,o,emit){
    if(cursor!==null&&Buffer.compare(decode(page.lastKey),decode(cursor))<=0)
     throw Error('STAGE45_NONADVANCING_CURSOR');
   }
+  // A previously oversized individual entry may be recovered from a
+  // different archive. Resume normal bounded page sizes AFTER that one
+  // record rather than crawling all remaining state at one key per call.
+  if(page.recoveredOversizedEntry===true){
+   if(currentSize!==1||rows.length!==1)
+    throw Error('STAGE77_INVALID_SINGLE_ENTRY_RECOVERY');
+   currentSize=o.pageSize;
+  }
   await emit(rows);pages++;
   if(!hasCursor)break;
   lastKey=page.lastKey;cursor=page.lastKey;

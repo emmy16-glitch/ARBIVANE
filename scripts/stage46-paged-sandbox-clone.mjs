@@ -4,6 +4,7 @@
  */
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
+import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
@@ -48,6 +49,15 @@ export async function clonePinnedContractWithState({
  },fetcher);
  // Keep a bounded patch batch across authenticated source RPC pages.
  // Source-block parity, cursor coverage and end-to-end receipt checks remain mandatory.
+ // The older NEAR.org archival RPC is severely rate-limited. Query it ONLY
+ // once the primary provider has proven a single-entry oversized failure.
+ // Every alternate reply is checked by Stage45 against the exact pinned
+ // source block height, hash and globally ordered storage keys.
+ const legacyArchival=new ArchivalStateRpc({
+  endpoint:'https://archival-rpc.mainnet.near.org',
+  accountId:contractId,blockHeight,paceMs:4000,timeoutMs:18000,maxRetries:0,
+ },fetcher);
+ let alternateSingleEntryReads=0,alternateFailures=0;
  let patched=0,patchWrites=0,batch=[],batchBytes=0;
  async function flush(){
   if(!batch.length)return;
@@ -57,7 +67,23 @@ export async function clonePinnedContractWithState({
   onProgress({contractId,patched,patchWrites,complete:false});
  }
  const coverage=await coverPinnedPagedState(
-  (cursor,limit)=>archive.viewPage(cursor,limit),
+  async(cursor,limit)=>{
+   try{return await archive.viewPage(cursor,limit);}
+   catch(error){
+    if(!(error instanceof StateResponseTooLarge)||limit!==1)throw error;
+    // Primary has exhausted adaptive paging down to one full raw record.
+    // A distinct, known archival node can sometimes serve a larger record.
+    // Do NOT skip, truncate or synthesize the source storage record.
+    try{
+     const page=await legacyArchival.viewPage(cursor,1);
+     alternateSingleEntryReads++;
+     return {...page,recoveredOversizedEntry:true};
+    }catch{
+     alternateFailures++;
+     throw Error('STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY');
+    }
+   }
+  },
   {blockHeight,maxQueries:o.maxQueries,maxRecords:o.maxRecords,
    maxBytes:o.maxBytes,pageSize:o.pageSize},
   async rows=>{
@@ -87,6 +113,8 @@ export async function clonePinnedContractWithState({
    recordsPatched:patched,patchWriteCalls:patchWrites,
    sourcePageCount:coverage.completedPages,
    sourceRpcAttempts:archive.getStats().transportAttempts,
+   alternateSingleEntryReads,alternateFailures,
+   alternateRpcAttempts:legacyArchival.getStats().transportAttempts,
    sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,
   }
