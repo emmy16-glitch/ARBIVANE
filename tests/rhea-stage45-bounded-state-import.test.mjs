@@ -115,3 +115,21 @@ test('Stage45 actual-workflow safeguards prevent a false liquidation or mainnet 
  assert.ok(!runner.includes('broadcast_tx'));
  assert.ok(!runner.includes('callRaw('));
 });
+
+
+test('Stage80 standalone importer uses owner-supplied high-limit archival RPC without skipping keys or enabling mainnet signing',async()=>{
+ const runner=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
+ assert.ok(runner.includes('validateStage80ArchivalFallback(env.NEAR_RPC_URL'));
+ assert.ok(runner.includes('env.STAGE45_ARCHIVAL_FALLBACK_URL?.trim()'));
+ assert.ok(runner.includes('alternateRpc.viewPage(afterKey,1)'));
+ assert.ok(runner.includes('recoveredOversizedEntry:true'));
+ assert.ok(runner.includes('report.alternateSingleEntryReads++'));
+ assert.ok(runner.includes('sourcePage,opts'));
+ assert.ok(runner.includes('dataRecordsPatched!==report.dataRecordsRead'));
+ assert.ok(workflow.includes('secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL'));
+ assert.ok(workflow.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
+ assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
+ assert.ok(!workflow.includes('MAINNET_PRIVATE_KEY'));
+ assert.ok(!runner.includes('broadcast_tx'));
+});
