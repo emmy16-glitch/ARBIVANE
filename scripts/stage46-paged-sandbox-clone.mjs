@@ -77,7 +77,7 @@ export async function clonePinnedContractWithState({
     try{
      const page=await legacyArchival.viewPage(cursor,1);
      alternateSingleEntryReads++;
-     return page;
+     return {...page,recoveredOversizedEntry:true};
     }catch{
      alternateFailures++;
      throw Error('STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY');
