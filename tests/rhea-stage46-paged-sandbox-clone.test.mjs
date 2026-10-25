@@ -200,3 +200,46 @@ test('Stage77 resumes normal large pages after recovering just one oversized sto
  assert.equal(evidence.providerPaginationExhausted,true);
  assert.equal(evidence.mainnetMutated,false);
 });
+
+
+test('Stage78 accepts a trusted high-limit archival RPC only for pinned one-entry retries',async()=>{
+ const x=scenario();
+ const trusted='https://higher-limit-archive.example/rpc?key=TEST_ONLY';
+ x.args.fallbackEndpoint=trusted;
+ const calls=[];
+ x.args.fetcher=async(url,req)=>{
+  const params=JSON.parse(req.body).params;
+  calls.push({url,params});
+  if(url!==trusted)return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+  const row=params.after_key_base64===b64('a')?x.pages[1]:x.pages[0];
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result:row})};
+ };
+ const r=(await clonePinnedContractWithState(x.args)).evidence;
+ assert.equal(r.customArchivalProviderConfigured,true);
+ assert.equal(r.alternateSingleEntryReads,2);
+ assert.equal(r.recordsRead,2);
+ assert.equal(r.recordsPatched,2);
+ assert.equal(r.mainnetMutated,false);
+ assert.ok(calls.filter(v=>v.url===trusted).every(v=>v.params.limit===1));
+ assert.ok(calls.every(v=>v.params.block_id===221433162));
+ assert.equal(JSON.stringify(r).includes('TEST_ONLY'),false);
+});
+
+test('Stage78 rejects insecure, same-provider and credential-bearing fallback before importing',async()=>{
+ const candidates=[
+  'http://archive.example/rpc',
+  'https://user:pass@archive.example/rpc',
+  'https://localhost:3030',
+  'https://archival-rpc.mainnet.fastnear.com',
+  'https://archive.example/#fragment',
+  'https://archive.example:1234',
+ ];
+ for(const fallbackEndpoint of candidates){
+  const x=scenario({fallbackEndpoint});
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   /STAGE78_INVALID_ARCHIVAL_PROVIDER_URL/);
+  assert.equal(x.imports.length,0);
+  assert.equal(x.requests.length,0);
+ }
+});
