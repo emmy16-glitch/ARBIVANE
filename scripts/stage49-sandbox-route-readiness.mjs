@@ -40,7 +40,7 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
  const repay=borrow?.token_id;
  const seize=withdraw?.token_id;
  if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||
-  !ID.test(seize)||repay===seize||
+  !ID.test(seize)||
   !Array.isArray(plan.actions)||plan.actions.length!==3||
   typeof plan.borrowerAccountId!=='string'||!ID.test(plan.borrowerAccountId)||
   liquidate?.account_id!==plan.borrowerAccountId||
@@ -75,6 +75,7 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   chain:'NEAR_MAINNET_READ_ONLY',sourceBlockHeight:String(blockHeight),
   repayTokenId:repay,seizeTokenId:seize,
   repayCanBorrow:true,seizedCanWithdraw:true,
+  repayAndSeizeShareToken:repay===seize,
   grossPoolDifferenceInternal:(supplied-borrowed).toString(),
   poolAvailabilityVerified:false,actualFtUnitsVerified:false,
   realFinancingVerified:false,mainnetExecutionEnabled:false,
@@ -136,10 +137,14 @@ export async function registerStage49SandboxActor({actor,contracts,plan}){
   throw Error('STAGE49_LOCAL_SANDBOX_ONLY');
  const repay=plan.actions?.[0]?.Borrow?.token_id;
  const seize=plan.actions?.[2]?.Withdraw?.token_id;
- if(typeof repay!=='string'||typeof seize!=='string'||repay===seize)
+ if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||!ID.test(seize))
   throw Error('STAGE49_INVALID_REGISTERED_ASSET_SET');
- const ids=[plan.lendingContract,repay,seize];
- if(new Set(ids).size!==3)throw Error('STAGE49_CONFLICTING_CONTRACT_ROLES');
+ // Reuse ONE NEP-141 registration when repay and seize are the same token.
+ // Never allow the lender itself to masquerade as the fungible token.
+ if(repay===plan.lendingContract||seize===plan.lendingContract)
+  throw Error('STAGE49_CONFLICTING_CONTRACT_ROLES');
+ const ids=[...new Set([plan.lendingContract,repay,seize])];
+ if(ids.length<2||ids.length>3)throw Error('STAGE49_CONFLICTING_CONTRACT_ROLES');
  // Check every storage minimum BEFORE ANY local Sandbox mutation, so an
  // excessive fee in the third dependency cannot partially register the actor.
  const registered=[];
@@ -170,6 +175,7 @@ export async function registerStage49SandboxActor({actor,contracts,plan}){
   registrations:registered,storagePaidYocto:registered.reduce(
    (n,row)=>n+BigInt(row.paidYocto),0n).toString(),
   status:'LOCAL_STORAGE_REGISTRATION_CONFIRMED',
+  repayAndSeizeShareToken:repay===seize,
   borrowingCapacityVerified:false,repayLiquidityVerified:false,
   tokenConversionVerified:false,completeRheaLiquidationVerified:false,
   positiveNetProfitVerified:false,executionEnabled:false,
