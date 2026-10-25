@@ -10,6 +10,7 @@ import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhe
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
+import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -23,17 +24,23 @@ async function main(){
  const plan=buildStage37SandboxPlan(proposal);
  const block=Number(plan.mainnetSourceBlockHeight);
  const rpc=new NearReadOnlyRpc(e.NEAR_RPC_URL);
- const [onchainLending,onchainOracle,config,borrower]=await Promise.all([
+ const [onchainLending,onchainOracle,config,borrower,assets]=await Promise.all([
   rpc.viewAccount(plan.lendingContract,block),
   rpc.viewAccount('aggregate-oracle.near',block),
   rpc.view(plan.lendingContract,'get_config',{},block),
   rpc.view(plan.lendingContract,'get_account_all_positions',{account_id:plan.borrowerAccountId},block),
+  rpc.view(plan.lendingContract,'get_assets_paged',{},block),
  ]);
  if(onchainLending.codeHash!==plan.sourceCodeHash||
   onchainOracle.codeHash!==plan.sourceOracleHash||
-  [onchainLending.blockHeight,onchainOracle.blockHeight,config.blockHeight,borrower.blockHeight]
+  [onchainLending.blockHeight,onchainOracle.blockHeight,config.blockHeight,borrower.blockHeight,assets.blockHeight]
    .some(h=>h!==plan.mainnetSourceBlockHeight))
   throw Error('SANDBOX_PROPOSAL_SOURCE_BLOCK_OR_CODE_CHANGED');
+ // Reject the known real-world failure where the Borrow leg uses a disabled
+ // asset. This pinned permission check is NOT proof of actual wallet liquidity.
+ const marketReadiness=inspectStage49RheaAssets(plan,assets.value,block);
+ await writeFile('stage49-sandbox-route-preflight.json',
+  JSON.stringify(marketReadiness,null,2)+'\n');
  let pkg;
  try{pkg=await import('near-workspaces');}catch{
   throw Error('NEAR_WORKSPACES_MUST_BE_INSTALLED_LOCALLY');
@@ -65,19 +72,29 @@ async function main(){
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
- const [sandboxConfig,sandboxBorrower]=await Promise.all([
+ const [sandboxConfig,sandboxBorrower,sandboxAssets]=await Promise.all([
   lending.view('get_config',{}),
   lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
+  lending.view('get_assets_paged',{}),
  ]);
  const pinnedConfigMatches=JSON.stringify(sandboxConfig)===JSON.stringify(config.value);
  const pinnedBorrowerMatches=JSON.stringify(sandboxBorrower)===JSON.stringify(borrower.value);
- if(!pinnedConfigMatches||!pinnedBorrowerMatches)
+ if(!pinnedConfigMatches||!pinnedBorrowerMatches||
+  JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
   throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
- const actor=await root.createSubAccount('arbivane-replay');
+ const actor=await root.createSubAccount('arbivane-replay',{
+  initialBalance:3n*10n**24n,
+ });
  if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
   throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
+ // Register the disposable actor with Rhea lending and BOTH selected FTs.
+ // Pay ONLY each contract's audited storage minimum, inside local Sandbox.
+ // A missing storage API, unexpected charge, or failed callback blocks replay.
+ const storageProof=await registerStage49SandboxActor({actor,contracts,plan});
+ await writeFile('stage49-sandbox-registration.json',
+  JSON.stringify(storageProof,null,2)+'\n');
  // Observe actual lending positions and NEP-141 balances BEFORE the Sandbox call.
  // No zero-balance fallback: missing storage/views must block settlement claims.
  const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
