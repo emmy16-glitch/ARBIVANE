@@ -105,6 +105,7 @@ jobs:
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
             stage52-actor-borrow-capacity.json
+            stage55-sandbox-phase-evidence.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
           retention-days: 14
