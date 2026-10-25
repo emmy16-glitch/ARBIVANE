@@ -16,11 +16,19 @@ import {attestStage51PythParity} from './stage51-active-pyth-sandbox-parity.mjs'
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
+import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
 let sandboxFundingAttempted=false;
+const stage55=createStage55PhaseLedger();
+const stage55Path='stage55-sandbox-phase-evidence.json';
+async function recordStage55(value){
+ await writeFile(stage55Path,JSON.stringify(value,null,2)+'\n');
+}
+async function markStage55(phase){await recordStage55(stage55.enter(phase));}
 async function main(){
+ await markStage55('SOURCE_ADMISSION');
  if(e.NEAR_WORKSPACES_NETWORK!=='sandbox'||e.EXECUTION_ENABLED!=='false'||
   e.STAGE37_ALLOW_SANDBOX_MUTATION!=='true'||
   e.STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING!=='true'||
@@ -31,6 +39,7 @@ async function main(){
  const plan=buildStage37SandboxPlan(proposal);
  const block=Number(plan.mainnetSourceBlockHeight);
  const rpc=new NearReadOnlyRpc(e.NEAR_RPC_URL);
+ await markStage55('PINNED_SOURCE_VIEWS');
  const [onchainLending,onchainOracle,config,borrower,assets]=await Promise.all([
   rpc.viewAccount(plan.lendingContract,block),
   rpc.viewAccount('aggregate-oracle.near',block),
@@ -51,11 +60,13 @@ async function main(){
  // Verify that the Rhea lending contract actually controls a sufficient
  // NEP-141 reserve and reference pool capacity at the SAME pinned block.
  // Preflight comes before Sandbox imports, lowering wasted clone costs.
+ await markStage55('SOURCE_REPAY_RESERVE');
  const repayReserve=await readStage50PinnedRepayReserve({
   rpc,plan,pinnedAssets:assets.value,blockHeight:block,
  });
  await writeFile('stage50-pinned-repay-reserve.json',
   JSON.stringify(repayReserve,null,2)+'\n');
+ await markStage55('SANDBOX_STARTUP');
  let pkg;
  try{pkg=await import('near-workspaces');}catch{
   throw Error('NEAR_WORKSPACES_MUST_BE_INSTALLED_LOCALLY');
@@ -65,6 +76,7 @@ async function main(){
  if(!root||typeof root.importContract!=='function')throw Error('NO_SANDBOX_IMPORT_API');
  // Reconstruct pinned lending, oracle and NEP-141 storage using bounded native
  // archival cursors. Code-only import MUST be followed by complete local patch.
+ await markStage55('SANDBOX_STATE_CLONE');
  const contracts=new Map();
  const cloneEvidence=[];
  const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
@@ -100,11 +112,13 @@ async function main(){
  // The liquidation uses Rhea's active Pyth callback, not priceoracle.near.
  // Reject source/Sandbox quote and derived-token ratio disagreement before
  // funding or attempting any local liquidation transaction.
+ await markStage55('SANDBOX_PYTH_PARITY');
  const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block});
  await writeFile('stage51-active-pyth-sandbox-parity.json',
   JSON.stringify(pythParity,null,2)+'\n');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
+ await markStage55('SANDBOX_ACTOR_REGISTRATION');
  const actor=await root.createSubAccount('arbivane-replay',{
   initialBalance:3n*10n**24n,
  });
@@ -131,7 +145,9 @@ async function main(){
   throw Error('STAGE50_CLONED_FT_VAULT_MISMATCH');
  // Strict active Pyth parity, pinned vault, and source actor registration were
  // completed before this genuinely funded (but sandbox-only) loan attempt.
+ await markStage55('SANDBOX_COLLATERAL_FUNDING');
  sandboxFundingAttempted=true;
+ await recordStage55(stage55.fundingAttempted());
  const collateralFunding=await seedSandboxLiquidatorWithWrappedNear({
   actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
  });
@@ -144,6 +160,7 @@ async function main(){
  });
  // Source-pinned, active-Pyth price accounting of the REAL actor collateral:
  // merely "positive" WNEAR is not enough to support the intermediate Borrow.
+ await markStage55('SANDBOX_BORROW_CAPACITY');
  const boundedCapacity=await attestStage52BorrowCollateralCapacity({
   rpc,contracts,plan,proposal,actorPositions:actorPositionsForFunding,
   pinnedAssets:assets.value,blockHeight:block,
@@ -167,9 +184,11 @@ async function main(){
   seizeToken.view('ft_balance_of',{account_id:actor.accountId}),
  ]);
  const [actorBefore,repayFtBefore,seizeFtBefore]=await snapshot();
+ await markStage55('SANDBOX_LIQUIDATION_TRANSACTION');
  let raw;
  try{
   sandboxTransactionSubmitted=true;
+  await recordStage55(stage55.transactionSubmitted());
   raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
    gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
@@ -177,6 +196,7 @@ async function main(){
   // Never interpret a thrown error as a successful on-chain liquidation.
   throw Error('SANDBOX_CALL_REJECTED_BEFORE_FINAL_RECEIPTS');
  }
+ await markStage55('SANDBOX_CALLBACK_RECEIPTS');
  const report=summarizeStage37SandboxOutcome(raw,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   importedContractCount:contracts.size,allStoredKeysAttested:false,
@@ -197,6 +217,7 @@ async function main(){
   if(!worker?.provider||typeof worker.provider.block!=='function'||
    typeof worker.provider.fastForward!=='function')
    throw Error('STAGE48_FINALIZED_SANDBOX_PROVIDER_NOT_AVAILABLE');
+  await markStage55('SANDBOX_FINALIZED_STATE');
   const beforeFinalBlock=await worker.provider.block({finality:'final'});
   // Stage44's actual NEAR Sandbox proof showed fastForward(8) was not
   // enough to advance finalized height; Workspaces uses 10,000.
@@ -214,6 +235,7 @@ async function main(){
   await writeFile('stage37-sandbox-execution.json',
    JSON.stringify(verifiedReport,null,2)+'\n');
  }
+ await markStage55('SANDBOX_BALANCE_SETTLEMENT');
  const settlement=attestStage41SandboxSettlement({
   plan,positionId:proposal.positionId,receipt:verifiedReport,
   borrowerBefore:sandboxBorrower,borrowerAfter:post.borrower,
@@ -222,18 +244,26 @@ async function main(){
   actorSeizeFtBefore:seizeFtBefore,actorSeizeFtAfter:post.seizeFt,
  });
  await writeFile('stage41-sandbox-balance-settlement.json',JSON.stringify(settlement,null,2)+'\n');
+ // The terminal local proof requires all independent receipt AND balance gates.
+ // A healthy-looking callback without seized FT or borrower debt decrease
+ // remains BLOCKED, and never produces a completed Stage55 phase artifact.
+ const success=stage55.finish({receipt:verifiedReport,settlement});
+ await recordStage55(success);
  console.log(JSON.stringify({...verifiedReport,settlementStatus:settlement.status,
   borrowerMutationVerified:settlement.borrowerMutationVerified,
   assetTransferObserved:settlement.assetTransferObserved,
+  stage55Status:success.status,
   positiveNetProfitVerified:false},null,2));
- if(verifiedReport.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
-  settlement.status!=='POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD')process.exitCode=2;
 }
-main().catch(err=>{
+main().catch(async err=>{
+ const failure=stage55.blocked(err);
+ await recordStage55(failure).catch(()=>{});
+ // Bounded, machine-readable error taxonomy only; untrusted RPC/SDK
+ // exception strings may contain credentials or hostile provider content.
  console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
   status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:sandboxTransactionSubmitted,
-  sandboxFundingAttempted,
-  reason:err instanceof Error?err.message:'UNKNOWN',
+  sandboxFundingAttempted,stage55Phase:failure.currentPhase,
+  stage55ReasonCode:failure.observedFailureCode,
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
  process.exitCode=2;
