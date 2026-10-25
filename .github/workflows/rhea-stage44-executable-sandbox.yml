@@ -42,18 +42,21 @@ jobs:
           set -euo pipefail
           node --experimental-strip-types scripts/stage44-executable-local-sandbox.mjs > stage44-local-summary.json
           jq -e '.mode == "ARBIVANE_STAGE44_EXECUTABLE_LOCAL_SANDBOX_WITNESS" and
-            .status == "LOCAL_CONTRACT_TRANSACTION_AND_STATE_CHANGE_VERIFIED" and
+            .status == "LOCAL_CONTRACT_STATE_VERIFIED_AFTER_FINAL_BLOCK_ADVANCE" and
             .chain == "NEAR_SANDBOX" and
-            .transactionFinal == true and
+            (.transactionExecutionStatus == "FINAL" or .transactionExecutionStatus == "EXECUTED_OPTIMISTIC") and
+            .transactionFinal == (.transactionExecutionStatus == "FINAL") and
             .transactionSucceeded == true and
+            .persistedAtLaterFinalizedBlock == true and
+            (.finalizedBlockAfter >= .finalizedBlockBefore + 2) and
             .contractStateMutationVerified == true and
             .receiptCount > 0 and .failedReceiptCount == 0 and
             .realRheaLiquidationAttempted == false and
             .profitVerified == false and
             .executionEnabled == false and .maySignMainnet == false and
             .mayBroadcastMainnet == false' stage44-local-sandbox-execution.json
-          jq '{status,contractAccountId,actorAccountId,receiptCount,gasBurntGasUnits,contractStateMutationVerified,realRheaLiquidationAttempted,profitVerified}' stage44-local-sandbox-execution.json >> "$GITHUB_STEP_SUMMARY"
-          echo 'Local test contract state mutation only. NOT an executed Rhea liquidation or mainnet profit.' >> "$GITHUB_STEP_SUMMARY"
+          jq '{status,transactionExecutionStatus,transactionFinal,contractAccountId,actorAccountId,receiptCount,gasBurntGasUnits,finalizedBlockBefore,finalizedBlockAfter,persistedAtLaterFinalizedBlock,realRheaLiquidationAttempted,profitVerified}' stage44-local-sandbox-execution.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'Local test contract state persisted after later finalized Sandbox blocks. An optimistic transaction response is NOT direct proof of finalized transaction status; no Rhea liquidation or mainnet profit.' >> "$GITHUB_STEP_SUMMARY"
       - name: Attempt independent stateful Rhea lending import at pinned historical block (diagnostic only)
         env:
           EXECUTION_ENABLED: 'false'

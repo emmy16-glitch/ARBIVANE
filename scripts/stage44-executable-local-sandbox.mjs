@@ -41,10 +41,21 @@ async function main(){
   gas:100000000000000n,attachedDeposit:0n,
  });
  const after=await contract.view('get_status',{account_id:actor.accountId});
+ // An optimistic execution response alone is not NEAR finality. Explicitly
+ // advance the *local* Sandbox chain, then read persistent contract state again
+ // at a later finalized block. This never sends anything to mainnet.
+ const finalizedBefore=await worker.provider.block({finality:'final'});
+ await worker.provider.fastForward(8);
+ const finalizedAfter=await worker.provider.block({finality:'final'});
+ const afterFastForward=await contract.view('get_status',{account_id:actor.accountId});
+ const beforeHeight=finalizedBefore?.header?.height;
+ const afterHeight=finalizedAfter?.header?.height;
  const result=raw?.result??raw;
  const status=result?.status;
  transactionDiagnostic={
   beforeWasNull:before===null,afterMatched:after===MESSAGE,
+  persistsAtLaterFinalizedBlock:afterFastForward===MESSAGE,
+  finalizedBlockBefore:beforeHeight??null,finalizedBlockAfter:afterHeight??null,
   finalExecutionStatus:typeof result?.final_execution_status==='string'?
    result.final_execution_status:null,
   statusType:typeof status,
@@ -54,7 +65,9 @@ async function main(){
  };
  const report=attestStage44LocalContractExecution({
   transaction:raw,actorAccountId:actor.accountId,contractAccountId:contract.accountId,
-  before,after,expectedMessage:MESSAGE,
+  before,after,afterFastForward,
+  finalizedBlockBefore:beforeHeight,finalizedBlockAfter:afterHeight,
+  expectedMessage:MESSAGE,
  });
  await save(report);
  console.log(JSON.stringify(report,null,2));

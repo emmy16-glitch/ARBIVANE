@@ -7,7 +7,8 @@ const message='ARBIVANE_STAGE44_SANDBOX_STATE_CHANGED';
 const options=()=>({
  actorAccountId:'arbivane-actor.test.near',
  contractAccountId:'arbivane-contract.test.near',
- before:null,after:message,expectedMessage:message,
+ before:null,after:message,afterFastForward:message,
+ finalizedBlockBefore:15,finalizedBlockAfter:23,expectedMessage:message,
  transaction:{result:{
   final_execution_status:'FINAL',status:{SuccessValue:''},
   receipts_outcome:[
@@ -18,7 +19,9 @@ const options=()=>({
 });
 test('local receipt and observed contract state delta prove ONLY Sandbox contract execution',()=>{
  const report=attestStage44LocalContractExecution(options());
- assert.equal(report.status,'LOCAL_CONTRACT_TRANSACTION_AND_STATE_CHANGE_VERIFIED');
+ assert.equal(report.status,'LOCAL_CONTRACT_STATE_VERIFIED_AFTER_FINAL_BLOCK_ADVANCE');
+ assert.equal(report.persistedAtLaterFinalizedBlock,true);
+ assert.equal(report.finalizedBlockAfter,23);
  assert.equal(report.chain,'NEAR_SANDBOX');
  assert.equal(report.receiptCount,2);
  assert.equal(report.failedReceiptCount,0);
@@ -31,10 +34,23 @@ test('local receipt and observed contract state delta prove ONLY Sandbox contrac
  assert.equal(report.executionEnabled,false);
  assert.equal(report.mayBroadcastMainnet,false);
 });
+test('optimistic Workspaces receipts can prove executed local state but never direct tx finality',()=>{
+ const a=options();
+ a.transaction.result.final_execution_status='EXECUTED_OPTIMISTIC';
+ const report=attestStage44LocalContractExecution(a);
+ assert.equal(report.transactionExecutionStatus,'EXECUTED_OPTIMISTIC');
+ assert.equal(report.transactionFinal,false);
+ assert.equal(report.contractStateMutationVerified,true);
+ assert.equal(report.persistedAtLaterFinalizedBlock,true);
+ assert.equal(report.profitVerified,false);
+ assert.ok(report.blockers.some(x=>x.includes('OPTIMISTIC')));
+});
 test('no state change, wrong actor, bad message or forged accounts reject',()=>{
  const valid=options();
  for(const change of [
   {before:message},{after:null},{after:'not the submitted message'},
+  {afterFastForward:null},{afterFastForward:'stale'},
+  {finalizedBlockBefore:0},{finalizedBlockAfter:16},
   {expectedMessage:'other message'},
   {actorAccountId:'BAD ACCOUNT'},
   {contractAccountId:valid.actorAccountId},
@@ -46,7 +62,7 @@ test('no state change, wrong actor, bad message or forged accounts reject',()=>{
 test('failed or nonfinal contract receipts must not claim transaction execution',()=>{
  const valid=options();
  const variants=[
-  {...valid.transaction.result,final_execution_status:'EXECUTED'},
+  {...valid.transaction.result,final_execution_status:'NOT_STARTED'},
   {...valid.transaction.result,status:{Failure:{ActionError:'denied'}}},
   {...valid.transaction.result,receipts_outcome:[]},
   {...valid.transaction.result,receipts_outcome:[{outcome:{status:{Failure:'failed'},gas_burnt:'1'}}]},
@@ -67,6 +83,10 @@ test('workflow starts actual near-workspaces and refuses unpinned or unaudited c
  assert.ok(runner.includes("Worker.init({network:'sandbox'})"));
  assert.ok(runner.includes("actor.callRaw(contract,'set_status'"));
  assert.ok(runner.includes("contract.view('get_status'"));
+ assert.ok(runner.includes('provider.fastForward(8)'));
+ assert.ok(wf.includes('persistedAtLaterFinalizedBlock'));
+ assert.ok(wf.includes('transactionExecutionStatus'));
+ assert.ok(wf.includes('transactionFinal == (.transactionExecutionStatus == "FINAL")'));
  assert.ok(runner.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!runner.includes('broadcast_tx'));
  assert.ok(!runner.includes('signAndSend'));
