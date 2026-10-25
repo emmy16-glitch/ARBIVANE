@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {refreshIndexedBorrowerCandidates} from '../src/rhea/active-pyth-debt-queue.ts';
+import {NearRpcHttpError} from '../src/rhea/rpc.ts';
 
 const HASH='2'.repeat(43),ORACLE='3'.repeat(43);
 const F=id=>({accountId:id,classification:'DEBT_SHARES_DISCOVERED_UNVALUED',
@@ -93,4 +94,18 @@ test('untrusted reprice attempt cannot claim execution authorization',async()=>{
  assert.equal(out.blocked,2);
  assert.equal(out.paperAtRisk,0);
  assert.equal(out.items[0].reason,'UNTRUSTED_REPRICE_RESULT');
+});
+
+test('Stage67 preserves machine-readable transient failures without recording HTTP details',async()=>{
+ const out=await refreshIndexedBorrowerCandidates(rpc,src(),options,async id=>{
+  if(id==='alice.near')throw new NearRpcHttpError(429,'0');
+  throw Error('invalid permanent oracle schema');
+ });
+ assert.equal(out.blocked,2);
+ assert.equal(out.items[0].classification,'BLOCKED_RPC');
+ assert.equal(out.items[0].reason,'RPC_TRANSIENT_RATE_LIMIT_OR_TIMEOUT');
+ assert.equal(out.items[1].reason,'RPC_OR_ORACLE_READ_FAILED');
+ assert.equal(JSON.stringify(out).includes('invalid permanent oracle schema'),false);
+ assert.equal(out.executionEnabled,false);
+ assert.equal(out.mayBroadcast,false);
 });
