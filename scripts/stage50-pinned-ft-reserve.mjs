@@ -50,9 +50,12 @@ export function inspectStage50RepayReserve({
  const extra=whole(config.extra_decimals,'INVALID_EXTRA_DECIMALS',0,36);
  const ftMeta=record(repayFtMetadata,'INVALID_FT_METADATA');
  const decimals=whole(ftMeta.decimals,'INVALID_FT_DECIMALS',0,36);
- // The lending source's 24-decimal normalization cannot be assumed when
- // metadata/config do not match; do not invent token conversion in that case.
- if(decimals+extra!==24)throw Error('STAGE50_UNVERIFIED_FT_INTERNAL_PRECISION');
+ // Burrow's deployed FT contract scales balances by 10^extra_decimals;
+ // its internal precision is NOT universally 24 decimals. The public
+ // Burrow source explicitly permits e.g. USDT 6 + 12 = 18 decimals.
+ // Verify both pinned components, bound the combined precision, and keep
+ // actual lending-to-FT unit conversion proof separate from this preflight.
+ if(decimals+extra>36)throw Error('STAGE50_UNVERIFIED_FT_INTERNAL_PRECISION');
  const balance=amount(repayFtBalance,'INVALID_REPAY_FT_VAULT_BALANCE');
  const supplied=amount(record(pool.supplied,'MISSING_SUPPLIED_POOL').balance,'INVALID_SUPPLIED_POOL');
  const borrowed=amount(record(pool.borrowed,'MISSING_BORROWED_POOL').balance,'INVALID_BORROWED_POOL');
@@ -75,7 +78,7 @@ export function inspectStage50RepayReserve({
   tokenVaultFtAtomic:balance.toString(),
   requiredFtAtomicRoundedUp:requiredFt.toString(),
   indicativeFtReserveInternal:reserveInternal.toString(),
-  tokenDecimals:decimals,extraDecimals:extra,
+  tokenDecimals:decimals,extraDecimals:extra,internalDecimals:decimals+extra,
   status:'PINNED_SOURCE_POOL_AND_TOKEN_VAULT_CAPACITY_OBSERVED',
   exactTokenConversionVerifiedAgainstDeployedWasm:false,
   actorCollateralAndFundingVerified:false,
