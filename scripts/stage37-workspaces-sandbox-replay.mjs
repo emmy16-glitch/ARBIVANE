@@ -12,6 +12,7 @@ import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
 import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-clone-witness.mjs';
+import {attestStage96LendingSourceViews} from './stage96-lending-source-view-parity.mjs';
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
 import {cloneStage91LinearToken} from './stage91-targeted-linear-token.mjs';
@@ -210,16 +211,17 @@ async function main(){
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
- const [sandboxConfig,sandboxBorrower,sandboxAssets]=await Promise.all([
-  lending.view('get_config',{}),
-  lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
-  lending.view('get_assets_paged',{}),
- ]);
- const pinnedConfigMatches=JSON.stringify(sandboxConfig)===JSON.stringify(config.value);
- const pinnedBorrowerMatches=JSON.stringify(sandboxBorrower)===JSON.stringify(borrower.value);
- if(!pinnedConfigMatches||!pinnedBorrowerMatches||
-  JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
-  throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
+ const viewParity=await attestStage96LendingSourceViews({
+  lending,borrowerAccountId:plan.borrowerAccountId,
+  sourceConfig:config.value,sourceBorrower:borrower.value,
+  sourceAssets:assets.value,
+ });
+ const pinnedConfigMatches=viewParity.pinnedConfigMatches;
+ const pinnedBorrowerMatches=viewParity.pinnedBorrowerMatches;
+ // Source/Sandbox equality verified sequentially, no partial view tolerated.
+ const sandboxAssets=assets.value;
+ await writeFile('stage96-lending-source-view-parity.json',
+  JSON.stringify(viewParity,null,2)+'\n');
  // Partial closure cannot be advertised as a full cloned market. The
  // original independent source-view gate above remains mandatory BEFORE
  // collateral funding or any real Rhea Sandbox liquidation call.
