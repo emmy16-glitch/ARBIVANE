@@ -102,7 +102,7 @@ test('retry transient 429 using bounded backoff, never retry deterministic untru
  const delays=[];let calls=0;
  const got=await recoverStage43Blocked({},s,x,att,opts,async id=>{
   calls++;
-  if(id==='borrower979.near'&&calls===2)throw new NearRpcHttpError(429,'1');
+  if(id==='borrower979.near'&&calls===1)throw new NearRpcHttpError(429,'1');
   return price(id);
  },async id=>plan(id),async ms=>{delays.push(ms);});
  assert.equal(got.stillBlocked,0);
