@@ -19,6 +19,7 @@ function fixture({fail=null,canCollateral=true,zeroAfter=false}={}){
   return receipt();
  }};
  const lending={accountId:'contract.main.burrow.near',view:async(method)=>{
+  if(method==='storage_balance_bounds')return {min:'1250000000000000000000'};
   if(method==='storage_balance_of')return storage.lending?{total:NEAR}:null;
   if(method==='get_account_all_positions')
    return {positions:{REGULAR:{collateral:tokenSent&&!zeroAfter?
@@ -26,6 +27,7 @@ function fixture({fail=null,canCollateral=true,zeroAfter=false}={}){
   throw Error('unknown lending view');
  }};
  const wnear={accountId:'wrap.near',view:async(method)=>{
+  if(method==='storage_balance_bounds')return {min:'1250000000000000000000'};
   if(method==='storage_balance_of')return storage.wnear?{total:NEAR}:null;
   if(method==='ft_balance_of')return wrapped.toString();
   throw Error('unknown token view');
