@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rhea-stage37-sandbox-execution.yml'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage46-paged-sandbox-clone.mjs'
   workflow_dispatch:
     inputs:
       stage35_run_id:
@@ -61,7 +63,7 @@ jobs:
     needs: preflight
     if: ${{ github.event_name == 'workflow_dispatch' && needs.preflight.outputs.allowed == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -96,5 +98,6 @@ jobs:
           path: |
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
+            stage46-sandbox-clone-evidence.json
           if-no-files-found: warn
           retention-days: 14
