@@ -212,3 +212,61 @@ test('Stage60 caps re-attempts and does not promote permanent 429 failures',asyn
  assert.equal(result.sandboxPlanReady,false);
  assert.equal(result.mayBroadcastMainnet,false);
 });
+
+test('Stage94 recovers a genuinely refreshed Pyth candidate without relaxing valuation guards',async()=>{
+ const attempts=new Map(),delays=[];
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,
+  async borrower=>{
+   const n=(attempts.get(borrower)??0)+1;attempts.set(borrower,n);
+   if(n===1)throw Error('STALE_OR_FUTURE_PYTH_PRICE');
+   return borrower==='borrower335.near'?ok(borrower):{
+    ...ok(borrower),status:'NO_SAFE_SOURCE_SCENARIO',referenceRulesPass:false,
+    repay:null,seize:null,
+   };
+  },async ms=>delays.push(ms));
+ assert.deepEqual([...attempts.values()],[2,2]);
+ assert.deepEqual(delays,[4000,4000]);
+ assert.equal(result.boundedRecoveryAttempts,2);
+ assert.equal(result.recoveredPriceFreshnessFindings,2);
+ assert.equal(result.recoveredRateLimitedFindings,0);
+ assert.equal(result.positiveSourcePlans,1);
+ assert.equal(result.bestProposal.borrowerAccountId,'borrower335.near');
+ assert.equal(result.noEligibleMainnetTrades,true);
+ assert.equal(result.mainnetExecutionEnabled,false);
+ assert.equal(result.mayBroadcastMainnet,false);
+ assert.equal(result.netProfitVerified,false);
+});
+
+test('Stage94 permanently stale or low-confidence Pyth is never promoted to Sandbox',async()=>{
+ for(const failure of ['STALE_OR_FUTURE_PYTH_PRICE','PYTH_CONFIDENCE_TOO_WIDE']){
+  const delays=[];let calls=0;
+  const result=await qualifyStage38Candidates({},source(),stage32(),options,
+   async()=>{calls++;throw Error(failure);},async ms=>delays.push(ms));
+  assert.equal(calls,6);
+  assert.deepEqual(delays,[4000,8000,4000,8000]);
+  assert.equal(result.failedFreshReads,2);
+  assert.equal(result.positiveSourcePlans,0);
+  assert.equal(result.recoveredPriceFreshnessFindings,0);
+  assert.equal(result.boundedRecoveryAttempts,4);
+  assert.equal(result.sandboxPlanReady,false);
+  assert.equal(result.bestProposal,null);
+  assert.ok(result.rows.every(v=>v.reasonCode==='PYTH_PRICE_STALE_OR_UNCERTAIN'));
+  assert.equal(result.maySignMainnet,false);
+  assert.equal(result.mayBroadcastMainnet,false);
+ }
+});
+
+test('Stage94 stops retrying if a formerly stale quote changes to unrelated invalid source evidence',async()=>{
+ let calls=0;const attempts=new Map(),delays=[];
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,
+  async borrower=>{
+   calls++;const n=(attempts.get(borrower)??0)+1;attempts.set(borrower,n);
+   throw Error(n===1?
+    'STALE_OR_FUTURE_PYTH_PRICE':'MISSING_EXECUTION_PRICE_SOURCE');
+  },async ms=>delays.push(ms));
+ assert.equal(calls,4);
+ assert.deepEqual(delays,[4000,4000]);
+ assert.equal(result.recoveredPriceFreshnessFindings,0);
+ assert.equal(result.sandboxPlanReady,false);
+ assert.ok(result.rows.every(x=>x.reasonCode==='PYTH_FEED_OR_ASSET_METADATA'));
+});

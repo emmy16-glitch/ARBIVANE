@@ -31,6 +31,7 @@ export interface Stage38Result {
  startFinding:number;nextFinding:number;reviewed:number;paperAtRiskFromPreviousScan:number;
  refreshed:number;positiveSourcePlans:number;failedFreshReads:number;
  boundedRecoveryAttempts:number;recoveredRateLimitedFindings:number;
+ recoveredPriceFreshnessFindings:number;
  rows:Stage38Row[];
  bestProposal:SourceLiquidationSizing|null;
  sandboxPlanReady:boolean;noEligibleMainnetTrades:true;
@@ -98,6 +99,7 @@ export async function qualifyStage38Candidates(
   startFinding:prior.startFinding,nextFinding:prior.nextFinding,
   reviewed:prior.processed,paperAtRiskFromPreviousScan:risk.length,
   boundedRecoveryAttempts:0,recoveredRateLimitedFindings:0,
+  recoveredPriceFreshnessFindings:0,
   noEligibleMainnetTrades:true as const,mainnetExecutionEnabled:false as const,
   maySignMainnet:false as const,mayBroadcastMainnet:false as const,
   sandboxReplaySucceeded:false as const,liquidationRuleParityVerified:false as const,
@@ -163,32 +165,45 @@ export async function qualifyStage38Candidates(
  await Promise.all(Array.from({length:Math.min(o.concurrency,risk.length)},async()=>{
   while(next<risk.length)await assess(next++);
  }));
- // Stage60: the older Stage39 retry was tied to historical workflow artifacts.
- // Recover transient Stage38 failures IN THIS active, source-attested window.
- // Recheck serially after initial fan-out, with eight retries total per shard,
- // at most two per borrower, and never before a provider's Retry-After hint.
+ // Stage94: an authentic quote may be stale at the first read even though
+ // the earlier Pyth classification still reports risk. Never waive contract
+ // valid_seconds, confidence bands, source block pinning, or exact sizing.
+ // Retry at most twice per affected borrower; each attempt fetches a NEW
+ // finalized block and verifies the original deployed source again.
+ // Price freshness and HTTP 429 retries share one strict eight-attempt budget.
  let boundedRecoveryAttempts=0,recoveredRateLimitedFindings=0;
+ let recoveredPriceFreshnessFindings=0;
+ const recoverable=new Set(['HTTP_RATE_LIMIT_OR_TIMEOUT','PYTH_PRICE_STALE_OR_UNCERTAIN']);
  for(let i=0;i<risk.length&&boundedRecoveryAttempts<8;i++){
-  if(rows[i]?.status!=='BLOCKED_FRESH_READ'||
-   rows[i]?.reasonCode!=='HTTP_RATE_LIMIT_OR_TIMEOUT')continue;
+  const firstReason=rows[i]?.reasonCode;
+  if(rows[i]?.status!=='BLOCKED_FRESH_READ'||!firstReason||
+   !recoverable.has(firstReason))continue;
   for(let attempt=0;attempt<2&&boundedRecoveryAttempts<8;attempt++){
-   const waitMs=Math.max(1500*2**attempt,retryAfterMs[i]??0);
-   if(waitMs>30000)break; // Never ignore a long provider cooling period.
+   const reason=rows[i]?.reasonCode;
+   if(reason!==firstReason)break;
+   // Respect 429 cooling periods; a stale feed is retried only after a
+   // bounded delay, never by relaxing the historical price timestamp.
+   const waitMs=reason==='PYTH_PRICE_STALE_OR_UNCERTAIN'?
+    4000*2**attempt:
+    Math.max(1500*2**attempt,retryAfterMs[i]??0);
+   if(waitMs>30000)break;
    await delay(waitMs);
    boundedRecoveryAttempts++;
    await assess(i);
    if(rows[i]?.status!=='BLOCKED_FRESH_READ'){
-    recoveredRateLimitedFindings++;
+    if(firstReason==='HTTP_RATE_LIMIT_OR_TIMEOUT')
+     recoveredRateLimitedFindings++;
+    else recoveredPriceFreshnessFindings++;
     break;
    }
-   if(rows[i]?.reasonCode!=='HTTP_RATE_LIMIT_OR_TIMEOUT')break;
+   if(rows[i]?.reasonCode!==firstReason)break;
   }
  }
  proposals.sort((a,b)=>BigInt(b.paperGrossUsdE27??'0')>BigInt(a.paperGrossUsdE27??'0')?1:
   BigInt(b.paperGrossUsdE27??'0')<BigInt(a.paperGrossUsdE27??'0')?-1:0);
  return {...base,status:proposals.length?'SANDBOX_PLAN_READY_NOT_AUTHORIZED':'NO_EXECUTABLE_SOURCE_REFERENCE',
   refreshed:risk.length,boundedRecoveryAttempts,recoveredRateLimitedFindings,
-  positiveSourcePlans:proposals.length,
+  recoveredPriceFreshnessFindings,positiveSourcePlans:proposals.length,
   failedFreshReads:rows.filter(x=>x.status==='BLOCKED_FRESH_READ').length,
   rows,bestProposal:proposals[0]??null,sandboxPlanReady:proposals.length>0};
 }

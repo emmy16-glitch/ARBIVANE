@@ -7,6 +7,7 @@ on:
       - '.github/workflows/rhea-stage93-borrower-settlement.yml'
       - 'scripts/stage49-sandbox-route-readiness.mjs'
       - 'scripts/stage51-active-pyth-sandbox-parity.mjs'
+      - 'src/rhea/stage38-live-candidate-pipeline.ts'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
       - 'scripts/stage50-pinned-ft-reserve.mjs'
       - 'scripts/stage45-cursor-pages.mjs'
