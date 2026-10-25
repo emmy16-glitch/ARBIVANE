@@ -107,7 +107,7 @@ test('Stage45 actual-workflow safeguards prevent a false liquidation or mainnet 
  assert.ok(workflow.includes("EXECUTION_ENABLED: 'false'"));
  assert.ok(workflow.includes('rhea-stage45-pinned-rhea-import'));
  assert.ok(runner.includes('withData:false'));
- assert.ok(runner.includes('lending.patchStateRecords('));
+ assert.ok(runner.includes('patchStage85AuthenticatedData({'));
  assert.ok(runner.includes("configMatchesPinnedSource"));
  assert.ok(runner.includes('unresolvedExactBoundaryPrefixCount'));
  assert.ok(runner.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
