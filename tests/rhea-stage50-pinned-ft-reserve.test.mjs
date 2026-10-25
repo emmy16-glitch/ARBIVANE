@@ -48,7 +48,8 @@ test('Stage50 blocks insufficient actual FT vault reserves, insufficient lending
    supplied:{balance:'300000000000000000000'},
    borrowed:{balance:'0'}
   }]]},
-  {repayFtMetadata:{decimals:5}},
+  {repayFtMetadata:{decimals:37}},
+  {repayFtMetadata:{decimals:30}},
   {repayFtBalance:'-100'},
   {sourceBlockHeight:221440178},
   {plan:{...plan,executionEnabled:true}},
@@ -85,4 +86,32 @@ test('Stage50 reserves feed the genuine Sandbox runner and prevent mismatched cl
  assert.ok(runner.indexOf('readStage50PinnedRepayReserve')<runner.indexOf("await pkg.Worker.init"));
  assert.ok(runner.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!runner.includes('broadcast_tx'));
+});
+
+
+test('Stage77 honors deployed Burrow 10^extraDecimals internal scaling for non-24 precision',()=>{
+ // Real Burrow source example: USDT has 6 FT decimals + 12 extra = 18 internal.
+ const v=inspectStage50RepayReserve({...input(),
+  pinnedAssets:[['usdt.tether-token.near',{
+   config:{can_borrow:true,extra_decimals:12},
+   supplied:{balance:'300000000000000000000'},
+   borrowed:{balance:'100000000000000000000'}}]],
+  repayFtBalance:'20000000000'
+ });
+ assert.equal(v.internalDecimals,18);
+ assert.equal(v.requiredFtAtomicRoundedUp,'9500000000');
+ assert.equal(v.guaranteedExecutionLiquidity,false);
+ assert.equal(v.maySignMainnet,false);
+ const six=inspectStage50RepayReserve({...input(),repayFtBalance:'200',
+  pinnedAssets:[['usdt.tether-token.near',{
+   config:{can_borrow:true,extra_decimals:0},
+   supplied:{balance:'1000000000000000000000'},
+   borrowed:{balance:'0'}}]],
+  plan:{...plan,actions:[
+   {Borrow:{token_id:'usdt.tether-token.near',amount:'95'}},
+   {Liquidate:{account_id:'borrower.near',in_assets:[{token_id:'usdt.tether-token.near',amount:'95'}],out_assets:[]}},
+   {Withdraw:{token_id:'wrap.near',amount:'100'}}]}
+ });
+ assert.equal(six.internalDecimals,6);
+ assert.equal(six.requiredFtAtomicRoundedUp,'95');
 });
