@@ -129,6 +129,8 @@ test('Stage77 retries a truly oversized single pinned archive entry at a SECOND 
   if(url==='https://archival-rpc.mainnet.fastnear.com')
    return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
   assert.equal(url,'https://archival-rpc.mainnet.near.org');
+  if(params.limit>1)
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
   assert.equal(params.limit,1);
   return {ok:true,status:200,headers:{get:()=>null},
    text:async()=>JSON.stringify({result:second})};
@@ -136,13 +138,14 @@ test('Stage77 retries a truly oversized single pinned archive entry at a SECOND 
  const out=await clonePinnedContractWithState(x.args);
  assert.equal(out.evidence.alternateSingleEntryReads,1);
  assert.equal(out.evidence.alternateFailures,0);
- assert.equal(out.evidence.alternateRpcAttempts,1);
+ assert.equal(out.evidence.alternateRpcAttempts,2);
+ assert.equal(out.evidence.alternateHighLimitFailures,1);
  assert.equal(out.evidence.recordsRead,2);
  assert.equal(out.evidence.recordsPatched,2);
  assert.equal(out.evidence.providerPaginationExhausted,true);
  assert.deepEqual(x.patches.map(k=>k.Data.data_key),[b64('a'),b64('b')]);
  assert.ok(calls.some(c=>c.url==='https://archival-rpc.mainnet.fastnear.com'&&c.limit===1));
- assert.equal(calls.filter(c=>c.url==='https://archival-rpc.mainnet.near.org').length,1);
+ assert.equal(calls.filter(c=>c.url==='https://archival-rpc.mainnet.near.org').length,2);
  assert.equal(out.evidence.mainnetMutated,false);
  assert.equal(out.evidence.completeTrieRootParityVerified,false);
 });
@@ -217,13 +220,14 @@ test('Stage78 explicitly configured higher-limit archival RPC recovers a pinned 
    text:async()=>JSON.stringify({result:x.pages[1]})};
  };
  const v=(await clonePinnedContractWithState(x.args)).evidence;
- assert.equal(v.alternateSingleEntryReads,1);
+ assert.equal(v.alternateSingleEntryReads,0);
+ assert.equal(v.alternateHighLimitPages,1);
  assert.equal(v.recordsRead,2);
  assert.equal(v.recordsPatched,2);
  assert.equal(v.mainnetMutated,false);
  assert.equal(v.completeTrieRootParityVerified,false);
  assert.equal(calls.filter(c=>c.endpoint===url).length,1);
- assert.ok(calls.some(c=>c.endpoint===url&&c.limit===1));
+ assert.ok(calls.some(c=>c.endpoint===url&&c.limit===128));
 });
 
 test('Stage78 rejects insecure, credential-bearing and same-as-primary alternative endpoints',async()=>{
@@ -329,4 +333,65 @@ test('Stage84 alternate archive must actually supply one oversized key, never em
   /STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY/);
  assert.ok(calls>2);
  assert.equal(x.reports.some(v=>v.complete===true),false);
+});
+
+test('Stage86 restores a pinned oversized page through high-capacity archive without 7 smaller primary queries',async()=>{
+ const x=scenario(),calls=[];
+ x.args.fetcher=async(url,req)=>{
+  const p=JSON.parse(req.body).params;
+  calls.push({url,limit:p.limit,cursor:p.after_key_base64??null});
+  if(p.after_key_base64===undefined)return new Response(JSON.stringify({
+   result:x.pages[0]
+  }),{status:200});
+  if(url===x.args.endpoint)return new Response('Response too large',{status:413});
+  return new Response(JSON.stringify({result:x.pages[1]}),{status:200});
+ };
+ const result=await clonePinnedContractWithState(x.args);
+ assert.equal(result.evidence.recordsPatched,2);
+ assert.equal(result.evidence.alternateHighLimitPages,1);
+ assert.equal(result.evidence.alternateSingleEntryReads,0);
+ assert.equal(result.evidence.alternateHighLimitFailures,0);
+ assert.equal(result.evidence.maxSourceQueries,6144);
+ assert.equal(result.evidence.providerPaginationExhausted,true);
+ assert.equal(calls.filter(c=>c.cursor===b64('a')&&c.url===x.args.endpoint).length,1);
+ assert.equal(calls.filter(c=>c.cursor===b64('a')&&c.url!==x.args.endpoint).length,1);
+ assert.equal(result.evidence.mainnetMutated,false);
+ assert.equal(result.evidence.completeTrieRootParityVerified,false);
+});
+
+test('Stage86 rejects cross-block high-limit recovery rather than falsely attesting source parity',async()=>{
+ const x=scenario();
+ x.args.fetcher=async(url,req)=>{
+  const p=JSON.parse(req.body).params;
+  if(p.after_key_base64===undefined)
+   return new Response(JSON.stringify({result:x.pages[0]}),{status:200});
+  if(url===x.args.endpoint)return new Response('Response too large',{status:413});
+  return new Response(JSON.stringify({result:{
+   ...x.pages[1],block_hash:'C'.repeat(43)
+  }}),{status:200});
+ };
+ await assert.rejects(()=>clonePinnedContractWithState(x.args),
+  /STAGE45_PAGED_CROSS_BLOCK_OR_BAD_SHAPE/);
+ assert.equal(x.reports.some(v=>v.complete===true),false);
+});
+
+test('Stage86 probes costly high-limit fallback once per cursor, then retains original single-key fail-closed recovery',async()=>{
+ const x=scenario(),requests=[];
+ x.args.fetcher=async(url,req)=>{
+  const params=JSON.parse(req.body).params;
+  const cursor=params.after_key_base64??null;
+  requests.push({url,limit:params.limit,cursor});
+  if(cursor===null)return new Response(JSON.stringify({result:x.pages[0]}),{status:200});
+  if(url===x.args.endpoint)return new Response('Oversized storage key',{status:413});
+  if(params.limit!==1)return new Response('Backup large page still oversized',{status:413});
+  return new Response(JSON.stringify({result:x.pages[1]}),{status:200});
+ };
+ const result=await clonePinnedContractWithState(x.args);
+ assert.equal(result.evidence.alternateHighLimitFailures,1);
+ assert.equal(result.evidence.alternateSingleEntryReads,1);
+ assert.equal(result.evidence.alternateHighLimitPages,0);
+ assert.equal(result.evidence.recordsPatched,2);
+ assert.equal(requests.filter(q=>q.url!==x.args.endpoint&&q.limit>1).length,1);
+ assert.equal(requests.filter(q=>q.url!==x.args.endpoint&&q.limit===1).length,1);
+ assert.equal(result.evidence.mainnetMutated,false);
 });
