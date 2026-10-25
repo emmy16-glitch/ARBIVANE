@@ -124,6 +124,10 @@ jobs:
               stage56-sandbox-attempt-evidence.json
             jq '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,actualRheaSettlementVerified}' \
               stage56-sandbox-attempt-evidence.json >> "$GITHUB_STEP_SUMMARY"
+            if test -s stage37-sandbox-execution.json; then
+              jq '{status,attemptedTransaction,transactionExecutionStatus,transactionFinal,receiptCount,failedReceiptCount,callbackReceiptCount,failedCallbackReceiptCount,topLevelFailureObserved,gasBurntGasUnits}' \
+                stage37-sandbox-execution.json >> "$GITHUB_STEP_SUMMARY"
+            fi
           else
             echo 'No fresh valid positive source plan; no transaction attempted.' >> "$GITHUB_STEP_SUMMARY"
           fi
