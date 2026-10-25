@@ -265,7 +265,10 @@ export async function attestStage96PinnedRheaViews({
    witness.status='BLOCKED_PINNED_PARITY_MISMATCH';await store();
    // Stage103: if borrower differs, collect ONE additional read-only market
    // view before blocking. Config failure remains an immediate hard stop.
-   if(id!=='BORROWER')throw Error(firstMismatch.code);
+   if(id!=='BORROWER'&&
+      !(allowSandboxTemporalAccrual===true&&id==='ASSETS'&&
+        firstMismatch.id==='BORROWER'))
+    throw Error(firstMismatch.code);
    continue;
   }
   await store();
