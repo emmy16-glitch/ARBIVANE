@@ -1,4 +1,4 @@
-# Stage49 — genuine local liquidator financing and Rhea borrow preflight
+# Stage49B — genuine local collateral funding after existing Stage49 route and storage preflight
 
 ## Why this is necessary
 
@@ -11,9 +11,9 @@ Stage49 adds actual disposable Sandbox-only financing, without inventing a Rhea 
 After the strict authentic Stage35 proposal gate and completed bounded source-state import, the runner:
 
 1. Adds a pinned copy of **real `wrap.near` bytecode and storage**, in addition to Rhea lending, oracle and candidate FTs. It independently compares lending config, borrower positions and **all pool assets** between source pinned block and clone.
-2. Creates `arbivane-replay` with **8 disposable local Sandbox NEAR**, never a mainnet key or wallet.
+2. Creates `arbivane-replay` with **3 disposable local Sandbox NEAR**, never a mainnet key or wallet.
 3. Requires `wrap.near` to have **`can_use_as_collateral: true`** in the source-cloned Rhea asset registry.
-4. Registers the temporary actor in Rhea and wrapped NEAR storage where not already registered, with tightly bounded local-only registration deposits (0.1 Sandbox NEAR maximum per contract).
+4. Registers the temporary actor in Rhea and wrapped NEAR storage where not already registered, with tightly bounded local-only registration deposits (each contract's verified NEP-145 minimum (capped at 0.1 Sandbox NEAR)).
 5. Calls the actual imported `wrap.near.near_deposit` with **1 Sandbox NEAR** and verifies that its NEP-141 FT balance genuinely rose.
 6. Calls actual imported `wrap.near.ft_transfer_call` with `receiver_id=contract.main.burrow.near`, `amount=10^24` and `msg='"OnlyIncreaseCollateral"'`; verifies successful callback receipt, reduced FT balance and new actual liquidator collateral recorded by cloned Rhea.
 7. Independently tests that the repay asset is currently in `get_assets_paged`, `can_borrow === true`, its supplied-versus-borrowed internal pool headroom is sufficient for the exact proposed internal Borrow amount and that the new actor now has non-zero lending collateral.
@@ -34,3 +34,5 @@ One Sandbox NEAR of collateral may be insufficient for a particular borrower: **
 ## Verification
 
 Run `npm run check` and inspect the GitHub Safety Actions result. Later, for **authentic positive source evidence only**, inspect `stage49-sandbox-funding.json`, `stage37-sandbox-execution.json` and `stage41-sandbox-balance-settlement.json` from the Stage37/42/44 workflows. A missing Stage49 artifact, unverified collateral deposit or blocked capacity means **no Rhea liquidation**. Existing current-evidence scans continue with read-only mainnet queries.
+
+This implementation builds upon merged Stage49 PR #71: its pinned permission gate and three-account NEP-145 storage registration remain in place. The real wrapper collateral seed is performed afterward, before the exact borrow-capacity preflight and Sandbox call. Tests and future live artifacts must establish outcomes separately.
