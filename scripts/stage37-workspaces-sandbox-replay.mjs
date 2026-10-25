@@ -10,6 +10,7 @@ import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhe
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
+import {inspectStage49BorrowRoute,registerStage49SandboxTokenStorage} from './stage49-sandbox-asset-storage-preflight.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -75,11 +76,32 @@ async function main(){
   throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
- const actor=await root.createSubAccount('arbivane-replay');
+ const actor=await root.createSubAccount('arbivane-replay',{
+  initialBalance:3n*10n**24n,
+ });
  if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
   throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
  // Observe actual lending positions and NEP-141 balances BEFORE the Sandbox call.
  // No zero-balance fallback: missing storage/views must block settlement claims.
+ // A disabled Rhea borrow asset is a known real historical failure.
+ // Validate the imported lending pool against the SAME pinned mainnet block;
+ // install only required NEP-145 storage with disposable Sandbox native NEAR.
+ const pinnedAssets=await rpc.view(plan.lendingContract,'get_assets_paged',{},block);
+ if(pinnedAssets.blockHeight!==plan.mainnetSourceBlockHeight)
+  throw Error('STAGE49_PINNED_ASSET_VIEW_BLOCK_MISMATCH');
+ const sandboxAssets=await lending.view('get_assets_paged',{});
+ const stage49Route=inspectStage49BorrowRoute(plan,pinnedAssets.value,sandboxAssets);
+ const stage49Storage=await registerStage49SandboxTokenStorage({
+  actor,tokens:contracts,plan,
+ });
+ await writeFile('stage49-sandbox-asset-storage-preflight.json',JSON.stringify({
+  mode:'ARBIVANE_STAGE49_SANDBOX_BORROW_AND_STORAGE_PREFLIGHT',
+  chain:'NEAR_SANDBOX',sourceBlockHeight:plan.mainnetSourceBlockHeight,
+  assetRoute:stage49Route,tokenStorage:stage49Storage,
+  availableRealMainnetCapitalVerified:false,
+  actualBorrowAndLiquidationVerified:false,positiveNetProfitVerified:false,
+  mainnetExecutionEnabled:false,mayBroadcastMainnet:false,
+ },null,2)+'\n');
  const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
  const seizeToken=contracts.get(plan.actions[2].Withdraw.token_id);
  if(!repayToken||!seizeToken)throw Error('SANDBOX_FT_CONTRACT_NOT_IMPORTED');
@@ -93,7 +115,7 @@ async function main(){
  try{
   sandboxTransactionSubmitted=true;
   raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
-   gas:plan.gasUnits,attachedDeposit:plan.depositYocto,
+   gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
  }catch(error){
   // Never interpret a thrown error as a successful on-chain liquidation.
