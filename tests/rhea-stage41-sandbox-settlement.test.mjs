@@ -93,7 +93,8 @@ test('Stage37 runner now captures actual pre/post Sandbox borrower, actor, FT ba
  const {readFile}=await import('node:fs/promises');
  const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
  assert.ok(script.includes("STAGE37_ALLOW_SANDBOX_MUTATION!=='true'"));
- assert.ok(script.includes('withData:true'));
+ assert.ok(!script.includes('withData:true'));
+ assert.ok(script.includes('clonePinnedContractWithState'));
  assert.ok(script.includes('ft_balance_of'));
  assert.ok(script.includes("stage41-sandbox-balance-settlement.json"));
  assert.ok(script.includes('attestStage41SandboxSettlement'));
