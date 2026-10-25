@@ -36,6 +36,7 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
  e.maySign!==false||e.mayBroadcast!==false||
  !e.repay||!e.seize||!e.positionId||
  !ID.test(e.borrowerAccountId)||!ID.test(e.repay.tokenId)||!ID.test(e.seize.tokenId)||
+ e.repay.tokenId===e.seize.tokenId||
  !/^[1-9][0-9]{0,15}$/.test(e.blockHeight)||
  !/^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(e.lendingCodeHash)||
  !/^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(e.pythOracleCodeHash)||
