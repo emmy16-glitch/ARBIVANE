@@ -62,7 +62,7 @@ test('Stage73 fresh main code preempts stale fast-lane runs but manual runs rema
 
 test('Stage74 accepts only a later-finalized persistent optimistic Sandbox receipt or original FINAL receipt',async()=>{
  const {spawnSync}=await import('node:child_process');
- const match=text.match(/jq -e '([^']*persistedAtLaterFinalizedBlock[^']*)' "\\$receipt"/);
+ const match=text.match(/jq -e '([^']*persistedAtLaterFinalizedBlock[^']*)' "\$receipt"/);
  assert.ok(match,'Stage69 verifier must enforce later finalized state persistence');
  const filter=match[1];
  const available=spawnSync('jq',['--version'],{encoding:'utf8'});
