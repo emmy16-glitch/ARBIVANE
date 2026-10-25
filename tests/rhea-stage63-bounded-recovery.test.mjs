@@ -13,6 +13,8 @@ test('bounded recovery prioritizes the authentic tail then disjoint unscanned cu
  assert.match(text,/max-parallel: 2/);
  assert.match(text,/cron: '17 \*\/6 \* \* \*'/);
  assert.match(text,/cancel-in-progress: false/);
+ assert.match(text,/push:[\\s\\S]*branches: \\[main\\][\\s\\S]*stage35-atomic-reference-sizing\\.ts/);
+ assert.match(text,/\\.event == \\"push\\"/);
 });
 
 test('bounded recovery invokes real execute_with_pyth path but never enables mainnet signing',async()=>{
