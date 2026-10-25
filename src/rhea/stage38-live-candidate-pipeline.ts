@@ -1,4 +1,4 @@
-import type {NearReadOnlyRpc} from './rpc.ts';
+import {NearRpcHttpError,type NearReadOnlyRpc} from './rpc.ts';
 import {ResilientNearReadOnlyRpc} from './resilient-readonly-rpc.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 import {checkSweepCheckpoint,type SweepCheckpoint,type SweepOptions} from './full-active-pyth-sweep.ts';
@@ -28,6 +28,7 @@ export interface Stage38Result {
  sourceBlockHeight:string;sourceDebtAccounts:number;
  startFinding:number;nextFinding:number;reviewed:number;paperAtRiskFromPreviousScan:number;
  refreshed:number;positiveSourcePlans:number;failedFreshReads:number;
+ boundedRecoveryAttempts:number;recoveredRateLimitedFindings:number;
  rows:Stage38Row[];
  bestProposal:SourceLiquidationSizing|null;
  sandboxPlanReady:boolean;noEligibleMainnetTrades:true;
@@ -71,6 +72,7 @@ export async function qualifyStage38Candidates(
  rpc:Pick<NearReadOnlyRpc,'view'|'viewAccount'>,
  source:CompletePagedIndex,prior:SweepCheckpoint,o:Stage38Options,
  evaluator:(borrower:string)=>Promise<SourceLiquidationSizing>=(id)=>evaluateActualCandidate(rpc,id,o),
+ delay:(ms:number)=>Promise<void>=(ms)=>new Promise(resolve=>setTimeout(resolve,ms)),
 ):Promise<Stage38Result>{
  if(!source||!prior||!HASH.test(o.expectedLendingCodeHash)||
   !HASH.test(o.expectedPythOracleCodeHash)||
@@ -93,6 +95,7 @@ export async function qualifyStage38Candidates(
   sourceBlockHeight:source.blockHeight,sourceDebtAccounts:source.debtAccounts,
   startFinding:prior.startFinding,nextFinding:prior.nextFinding,
   reviewed:prior.processed,paperAtRiskFromPreviousScan:risk.length,
+  boundedRecoveryAttempts:0,recoveredRateLimitedFindings:0,
   noEligibleMainnetTrades:true as const,mainnetExecutionEnabled:false as const,
   maySignMainnet:false as const,mayBroadcastMainnet:false as const,
   sandboxReplaySucceeded:false as const,liquidationRuleParityVerified:false as const,
@@ -112,47 +115,75 @@ export async function qualifyStage38Candidates(
  // Only results actually verified as positive can produce a Sandbox plan.
  const rows:Stage38Row[]=new Array(risk.length);
  const proposals:SourceLiquidationSizing[]=[];
+ const retryAfterMs:(number|undefined)[]=new Array(risk.length);
+ // Each retry observes current deployed code and a NEW pinned final block.
+ // A failed, expired, malformed or untrusted oracle result is never promoted.
+ const assess=async(i:number)=>{
+  const f=risk[i]!,borrower=f.v.borrowerAccountId;
+  let row:Stage38Row={
+   borrowerAccountId:borrower,historicalFindingIndex:f.index,
+   status:'BLOCKED_FRESH_READ',observationBlockHeight:null,
+   reasonCode:'UNCLASSIFIED_READ_ERROR',referenceInitialHealthBps:null,
+   paperGrossUsdE27:null,executionEligible:false,netProfitVerified:false,
+  };
+  try{
+   const evidence=await evaluator(borrower);
+   if(!evidence||evidence.mode!=='RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING'||
+    evidence.borrowerAccountId!==borrower||evidence.chain!=='NEAR_MAINNET'||
+    evidence.lendingCodeHash!==o.expectedLendingCodeHash||
+    evidence.pythOracleCodeHash!==o.expectedPythOracleCodeHash||
+    evidence.executionEnabled!==false||evidence.maySign!==false||
+    evidence.mayBroadcast!==false||evidence.mainnetWalletApproved!==false||
+    evidence.sandboxStateReplaySucceeded!==false||
+    evidence.gasAndSwapNetProfitVerified!==false)
+    throw Error('STAGE38_UNTRUSTED_SIZING_EVIDENCE');
+   const positive=evidence.status==='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'&&
+    evidence.referenceRulesPass===true;
+   if(positive){
+    buildStage37SandboxPlan(evidence);
+    proposals.push(evidence);
+   }
+   row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
+    observationBlockHeight:evidence.blockHeight,reasonCode:null,
+    referenceInitialHealthBps:evidence.referenceInitialHealthBps,
+    paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null};
+   retryAfterMs[i]=undefined;
+  }catch(err){
+   row={...row,reasonCode:classifyStage33Failure(err)};
+   retryAfterMs[i]=err instanceof NearRpcHttpError?err.retryAfterMs:undefined;
+  }
+  rows[i]=row;
+ };
  let next=0;
  await Promise.all(Array.from({length:Math.min(o.concurrency,risk.length)},async()=>{
-  while(next<risk.length){
-   const i=next++,f=risk[i]!;
-   const borrower=f.v.borrowerAccountId;
-   let row:Stage38Row={
-    borrowerAccountId:borrower,historicalFindingIndex:f.index,
-    status:'BLOCKED_FRESH_READ',observationBlockHeight:null,
-    reasonCode:'UNCLASSIFIED_READ_ERROR',referenceInitialHealthBps:null,
-    paperGrossUsdE27:null,executionEligible:false,netProfitVerified:false,
-   };
-   try{
-    const evidence=await evaluator(borrower);
-    if(!evidence||evidence.mode!=='RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING'||
-     evidence.borrowerAccountId!==borrower||evidence.chain!=='NEAR_MAINNET'||
-     evidence.lendingCodeHash!==o.expectedLendingCodeHash||
-     evidence.pythOracleCodeHash!==o.expectedPythOracleCodeHash||
-     evidence.executionEnabled!==false||evidence.maySign!==false||
-     evidence.mayBroadcast!==false||evidence.mainnetWalletApproved!==false||
-     evidence.sandboxStateReplaySucceeded!==false||
-     evidence.gasAndSwapNetProfitVerified!==false)
-     throw Error('STAGE38_UNTRUSTED_SIZING_EVIDENCE');
-    const positive=evidence.status==='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'&&
-     evidence.referenceRulesPass===true;
-    if(positive){
-     // Independent fail-closed action-shape verification.
-     buildStage37SandboxPlan(evidence);
-     proposals.push(evidence);
-    }
-    row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
-     observationBlockHeight:evidence.blockHeight,reasonCode:null,
-     referenceInitialHealthBps:evidence.referenceInitialHealthBps,
-     paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null};
-   }catch(err){row={...row,reasonCode:classifyStage33Failure(err)};}
-   rows[i]=row;
-  }
+  while(next<risk.length)await assess(next++);
  }));
+ // Stage60: the older Stage39 retry was tied to historical workflow artifacts.
+ // Recover transient Stage38 failures IN THIS active, source-attested window.
+ // Recheck serially after initial fan-out, with eight retries total per shard,
+ // at most two per borrower, and never before a provider's Retry-After hint.
+ let boundedRecoveryAttempts=0,recoveredRateLimitedFindings=0;
+ for(let i=0;i<risk.length&&boundedRecoveryAttempts<8;i++){
+  if(rows[i]?.status!=='BLOCKED_FRESH_READ'||
+   rows[i]?.reasonCode!=='HTTP_RATE_LIMIT_OR_TIMEOUT')continue;
+  for(let attempt=0;attempt<2&&boundedRecoveryAttempts<8;attempt++){
+   const waitMs=Math.max(1500*2**attempt,retryAfterMs[i]??0);
+   if(waitMs>30000)break; // Never ignore a long provider cooling period.
+   await delay(waitMs);
+   boundedRecoveryAttempts++;
+   await assess(i);
+   if(rows[i]?.status!=='BLOCKED_FRESH_READ'){
+    recoveredRateLimitedFindings++;
+    break;
+   }
+   if(rows[i]?.reasonCode!=='HTTP_RATE_LIMIT_OR_TIMEOUT')break;
+  }
+ }
  proposals.sort((a,b)=>BigInt(b.paperGrossUsdE27??'0')>BigInt(a.paperGrossUsdE27??'0')?1:
   BigInt(b.paperGrossUsdE27??'0')<BigInt(a.paperGrossUsdE27??'0')?-1:0);
  return {...base,status:proposals.length?'SANDBOX_PLAN_READY_NOT_AUTHORIZED':'NO_EXECUTABLE_SOURCE_REFERENCE',
-  refreshed:risk.length,positiveSourcePlans:proposals.length,
+  refreshed:risk.length,boundedRecoveryAttempts,recoveredRateLimitedFindings,
+  positiveSourcePlans:proposals.length,
   failedFreshReads:rows.filter(x=>x.status==='BLOCKED_FRESH_READ').length,
   rows,bestProposal:proposals[0]??null,sandboxPlanReady:proposals.length>0};
 }
