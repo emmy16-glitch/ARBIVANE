@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/rhea/full-active-pyth-sweep.ts'
+      - 'src/rhea/stage38-live-candidate-cli.ts'
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -137,6 +138,11 @@ jobs:
           RHEA_STAGE38_SOURCE_RUN: '40128285853'
           RHEA_STAGE38_SOURCE_FILE: source/rhea-full-paged-index.json
           RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
+          # Sandbox replay admission only: an actual four-rule positive gross
+          # may be tested regardless of economic profitability. Mainnet remains
+          # fully disabled and success still requires callback + FT debt deltas.
+          NEAR_WORKSPACES_NETWORK: sandbox
+          RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '1'
           RHEA_RPC_SPACING_MS: '700'
         run: |
           set -euo pipefail
