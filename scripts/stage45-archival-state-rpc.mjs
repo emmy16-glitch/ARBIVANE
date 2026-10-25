@@ -68,7 +68,22 @@ export class ArchivalStateRpc {
    try{data=JSON.parse(body);}catch{throw Error('STAGE45_ARCHIVAL_BAD_JSON');}
    if(!data||typeof data!=='object')throw Error('STAGE45_ARCHIVAL_BAD_RPC_SHAPE');
    if(data.error){
-    if(SIZE.test(JSON.stringify(data.error))){
+    const e=data.error,body=JSON.stringify(e);
+    const first=e&&typeof e==='object'?e:{};
+    const cause=first.cause&&typeof first.cause==='object'?first.cause:{};
+    // Mainnet storage is public; expose only bounded error taxonomy in job logs.
+    // Never log RPC request URLs, token headers or whole response bodies.
+    const fingerprint={
+     mode:'STAGE45_READ_ONLY_RPC_ERROR_DIAGNOSTIC',
+     errorCode:typeof first.code==='number'?first.code:null,
+     errorName:typeof first.name==='string'?first.name.slice(0,80):null,
+     causeName:typeof cause.name==='string'?cause.name.slice(0,80):null,
+     message:typeof first.message==='string'?first.message.slice(0,250):null,
+     causeMessage:typeof cause.info?.error_message==='string'?
+      cause.info.error_message.slice(0,250):null,
+    };
+    console.error(JSON.stringify(fingerprint));
+    if(SIZE.test(body)){
      this.oversizeResponses++;throw new StateResponseTooLarge();
     }
     throw Error('STAGE45_ARCHIVAL_RPC_QUERY_REJECTED');
