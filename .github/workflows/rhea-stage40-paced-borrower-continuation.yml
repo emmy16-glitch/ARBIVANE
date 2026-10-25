@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           node --experimental-strip-types src/rhea/stage38-live-candidate-cli.ts > stage38-summary.json
-          jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .netProfitVerified == false and .refreshed <= 16' stage38-summary.json
+          jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .netProfitVerified == false and .reviewed <= 80 and .refreshed == .paperAtRiskFromPreviousScan and .refreshed <= 80 and .status != "BLOCKED_CANDIDATE_LIMIT"' stage38-summary.json
           jq '{startFinding,nextFinding,reviewed,paperAtRiskFromPreviousScan,refreshed,positiveSourcePlans,failedFreshReads,sandboxPlanReady}' stage38-summary.json >> "$GITHUB_STEP_SUMMARY"
           echo 'Only source-reference safe candidates may trigger isolated Sandbox attempts; no mainnet signing.' >> "$GITHUB_STEP_SUMMARY"
           if jq -e '.sandboxPlanReady == true' stage38-summary.json >/dev/null; then
