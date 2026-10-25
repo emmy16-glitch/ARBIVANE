@@ -75,6 +75,6 @@ test('runner has no mainnet tx API and must be explicitly sandbox-gated',async()
  const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
  assert.ok(script.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(script.includes("STAGE37_ALLOW_SANDBOX_MUTATION!=='true'"));
- assert.ok(script.includes('withData:true'));assert.ok(script.includes("callRaw("));
+ assert.ok(!script.includes('withData:true'));assert.ok(script.includes('clonePinnedContractWithState'));assert.ok(script.includes("callRaw("));
  assert.ok(!script.includes('broadcast_tx'));assert.ok(!script.includes('send_tx'));
 });
