@@ -89,3 +89,26 @@ test('Stage104 rejects mismatched immutable market state even with explicit Sand
   allowSandboxTemporalAccrual:true,persist:async()=>{},
  }),/STAGE96_BORROWER_VIEW_MISMATCH/);
 });
+
+test('Stage106 emits only hash-only field and shape fingerprints for non-accrual drift',()=>{
+ const altered=b.map(([id,v],i)=>[id,i===0?{
+  ...v,oracle_cache:{token:'private-account.near',rate:'123456789'},
+  config:{can_borrow:false}
+ }:v]);
+ const proof=stage104AttestTemporalAccrual({
+  sourceBorrower:src,sandboxBorrower:dst,sourceAssets:a,sandboxAssets:altered
+ });
+ assert.equal(proof.verified,false);
+ assert.equal(proof.class,'MARKET_NON_ACCRUAL_STATE_DRIFT');
+ assert.equal(proof.stage106FieldDiffFingerprints.length,2);
+ assert.ok(proof.stage106FieldDiffFingerprints.every(v=>
+  /^[a-f0-9]{64}$/.test(v.fieldNameSha256)&&
+  ['VALUE_DIFFERENT','PRESENCE_DIFFERENT'].includes(v.changeKind)));
+ const json=JSON.stringify(proof);
+ for(const text of ['private-account.near','123456789','oracle_cache','can_borrow',
+  'wrap.near','linear-protocol.near','token','rate']){
+  assert.equal(json.includes(text),false);
+ }
+ assert.equal(proof.actualRheaSettlementVerified,false);
+ assert.equal(proof.mayBroadcastMainnet,false);
+});

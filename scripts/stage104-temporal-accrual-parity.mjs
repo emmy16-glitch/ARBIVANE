@@ -2,6 +2,7 @@
  * Only verifies a restricted, non-exact economic replay inside NEAR Sandbox.
  * Never invent, patch or silently normalize source amounts.
  */
+import {createHash} from 'node:crypto';
 const UINT=/^(0|[1-9][0-9]{0,38})$/;
 const ORDERED=new Set(['supplied','collateral','borrowed','farms','rewards']);
 const MAX_NS_DELTA=3n*60n*60n*1000000000n;
@@ -27,7 +28,30 @@ function canon(v,field=''){
 }
 const validNumber=x=>typeof x==='string'&&UINT.test(x);
 const monotone=(before,after)=>validNumber(before)&&validNumber(after)&&BigInt(after)>=BigInt(before);
-function marketCheck(source,observed){
+// Stage106: never publish raw market values, account IDs, token IDs, endpoints
+// or even untrusted JSON field names. Hash only bounded names of fields that
+// must remain exact and visibly differ. This is evidence, NOT a bypass.
+const STAGE106_ACCRUAL_FIELDS=new Set([
+ 'supplied','borrowed','reserved','last_update_timestamp'
+]);
+function stage106SafeFieldDiff(a,b){
+ const shape=v=>v===undefined?'ABSENT':v===null?'NULL':
+  Array.isArray(v)?'ARRAY':typeof v==='object'?'OBJECT':
+  typeof v==='string'?'STRING':typeof v==='number'?'NUMBER':'OTHER';
+ const differing=[];
+ for(const key of new Set([...Object.keys(a),...Object.keys(b)])){
+  if(STAGE106_ACCRUAL_FIELDS.has(key))continue;
+  if(stable(canon(a[key]))===stable(canon(b[key])))continue;
+  differing.push({
+   fieldNameSha256:createHash('sha256').update('STAGE106_MARKET_FIELD:'+key).digest('hex'),
+   sourceShape:shape(a[key]),sandboxShape:shape(b[key]),
+   changeKind:Object.hasOwn(a,key)&&Object.hasOwn(b,key)?'VALUE_DIFFERENT':'PRESENCE_DIFFERENT',
+  });
+  if(differing.length===16)break;
+ }
+ return differing.sort((x,y)=>x.fieldNameSha256.localeCompare(y.fieldNameSha256));
+}
+function marketCheck(source,observed,diagnostic){
  if(!Array.isArray(source)||!Array.isArray(observed)||
   source.length<1||source.length>512||observed.length!==source.length)
   return 'MARKET_COLLECTION_NOT_VERIFIABLE';
@@ -47,8 +71,10 @@ function marketCheck(source,observed){
   // Any unrecognized top-level field must still match EXACTLY.
   const fixed=o=>Object.fromEntries(Object.entries(o).filter(([k])=>
    !['supplied','borrowed','reserved','last_update_timestamp'].includes(k)));
-  if(stable(canon(fixed(a)))!==stable(canon(fixed(b))))
+  if(stable(canon(fixed(a)))!==stable(canon(fixed(b)))){
+   diagnostic.stage106FieldDiffFingerprints=stage106SafeFieldDiff(a,b);
    return 'MARKET_NON_ACCRUAL_STATE_DRIFT';
+  }
   for(const name of ['supplied','borrowed']){
    const poolA=a[name],poolB=b[name];
    if(!poolA||!poolB||typeof poolA!=='object'||typeof poolB!=='object'||
@@ -81,9 +107,10 @@ export function stage104AttestTemporalAccrual({sourceBorrower,sandboxBorrower,so
    return {...result,class:'BORROWER_VIEW_INVALID'};
   if(stable(canon(sourceBorrower))!==stable(canon(sandboxBorrower)))
    return {...result,class:'BORROWER_SHARES_OR_NON_ACCRUAL_STATE_DRIFT'};
-  const classification=marketCheck(sourceAssets,sandboxAssets);
+  const diagnostic={};
+  const classification=marketCheck(sourceAssets,sandboxAssets,diagnostic);
   if(classification!=='BOUNDED_TEMPORAL_ACCRUAL_ONLY')
-   return {...result,class:classification};
+   return {...result,class:classification,...diagnostic};
   return {...result,verified:true,class:'BOUNDED_SOURCE_BACKED_TEMPORAL_ACCRUAL_ONLY'};
  }catch{return {...result,class:'TEMPORAL_PARITY_VERIFICATION_FAILED'};}
 }
