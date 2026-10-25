@@ -28,9 +28,16 @@ async function pinned(rpc,id,method,args,block,fallback){
  if(v?.blockHeight!==String(block))throw Error('STAGE51_SOURCE_BLOCK_DRIFT');
  return v.value;
 }
-async function local(contract,method,args){
+// Stage109: persist only the failing method class, never SDK errors, account
+// IDs, feed identifiers, oracle values, secrets or Wasm panic messages.
+async function local(contract,method,args,viewClass){
  try{return await contract.view(method,args);}
- catch{throw Error('STAGE51_SANDBOX_VIEW_UNAVAILABLE');}
+ catch{
+  const known=new Set(['LENDING_CONFIG','LENDING_PYTH_INFO',
+   'ORACLE_FRESH_QUOTE','DERIVED_TOKEN_RATIO']);
+  if(!known.has(viewClass))throw Error('STAGE51_SANDBOX_VIEW_UNAVAILABLE');
+  throw Error('STAGE109_SANDBOX_'+viewClass+'_VIEW_FAILED');
+ }
 }
 /** Stage72: trim the expensive complete state import only when the pinned
  * Rhea source config proves legacy pricing is disabled and Pyth is active.
@@ -97,12 +104,12 @@ export async function attestStage51PythParity({
   Number(remoteConfig.pyth_price_valid_duration_sec)<1||
   Number(remoteConfig.pyth_price_valid_duration_sec)>180)
   throw Error('STAGE51_ACTIVE_PYTH_CONFIGURATION_REQUIRED');
- const cloneConfig=await local(lenderClone,'get_config',{});
+ const cloneConfig=await local(lenderClone,'get_config',{},'LENDING_CONFIG');
  if(!equal(remoteConfig,cloneConfig))
   throw Error('STAGE51_LENDING_PYTH_CONFIG_DIFFERENT_IN_SANDBOX');
  const remoteInfo=obj(await pinned(primary,lender,'get_all_token_pyth_infos',{},blockHeight,alternate),
   'BAD_TOKEN_PYTH_INFO');
- const cloneInfo=obj(await local(lenderClone,'get_all_token_pyth_infos',{}),
+ const cloneInfo=obj(await local(lenderClone,'get_all_token_pyth_infos',{},'LENDING_PYTH_INFO'),
   'BAD_SANDBOX_PYTH_INFO');
  if(!equal(remoteInfo,cloneInfo))
   throw Error('STAGE51_TOKEN_PYTH_INFO_DIFFERENT_IN_SANDBOX');
@@ -140,7 +147,7 @@ export async function attestStage51PythParity({
   const args={price_id:feed,age};
   const source=await pinned(primary,'aggregate-oracle.near','get_price_no_older_than',
    args,blockHeight,alternate);
-  const mirrored=await local(oracleClone,'get_price_no_older_than',args);
+  const mirrored=await local(oracleClone,'get_price_no_older_than',args,'ORACLE_FRESH_QUOTE');
   const quote=obj(source,'INVALID_ACTIVE_PYTH_QUOTE');
   if(!/^[1-9][0-9]*$/.test(String(quote.price))||
    !UINT.test(String(quote.conf))||
@@ -156,7 +163,7 @@ export async function attestStage51PythParity({
   if(!imported||imported.accountId!==token||typeof imported.view!=='function')
    throw Error('STAGE51_DERIVED_PRICE_TOKEN_NOT_IMPORTED');
   const source=await pinned(primary,token,method,{},blockHeight,alternate);
-  const mirrored=await local(imported,method,{});
+  const mirrored=await local(imported,method,{},'DERIVED_TOKEN_RATIO');
   if(!UINT.test(String(source))||BigInt(source)===0n||
    !equal(source,mirrored))
    throw Error('STAGE51_IMPORTED_PRICE_RATIO_DIFFERENT');
