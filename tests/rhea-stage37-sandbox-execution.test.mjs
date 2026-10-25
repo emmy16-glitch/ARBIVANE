@@ -176,3 +176,37 @@ test('Stage71 cannot withdraw same-token balance with no surplus or borrow not f
    amountLendingInternalAtomic:v}}),/STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER/);
  }
 });
+
+test('Stage72 uses only pinned active Pyth storage clones with cross-token and Stage71 same-token routes',async()=>{
+ const {selectPinnedActivePythSandboxDependencies}=await import(
+  '../scripts/stage51-active-pyth-sandbox-parity.mjs');
+ const config={enable_pyth_oracle:true,enable_price_oracle:false,
+  pyth_oracle_account_id:'aggregate-oracle.near'};
+ const cross=buildStage37SandboxPlan(proposal());
+ assert.deepEqual(selectPinnedActivePythSandboxDependencies(config,cross),
+  ['contract.main.burrow.near','aggregate-oracle.near','wrap.near','meta-pool.near']);
+ const singleProposal=proposal();singleProposal.seize.tokenId=singleProposal.repay.tokenId;
+ const same=buildStage37SandboxPlan(singleProposal);
+ assert.deepEqual(same.actions.map(x=>Object.keys(x)[0]),
+  ['Borrow','Liquidate','Repay','Withdraw']);
+ assert.deepEqual(selectPinnedActivePythSandboxDependencies(config,same),
+  ['contract.main.burrow.near','aggregate-oracle.near','wrap.near']);
+ for(const bad of [
+  {...config,enable_pyth_oracle:false},
+  {...config,enable_price_oracle:true},
+  {...config,pyth_oracle_account_id:'unexpected-oracle.near'},
+ ])assert.throws(()=>selectPinnedActivePythSandboxDependencies(bad,cross),
+  /STAGE72_PINNED_ACTIVE_PYTH_ONLY_REQUIRED/);
+ assert.throws(()=>selectPinnedActivePythSandboxDependencies(config,
+  {...cross,mayBroadcastMainnet:true}),/STAGE72_UNTRUSTED_SANDBOX_PLAN/);
+ assert.throws(()=>selectPinnedActivePythSandboxDependencies(config,
+  {...cross,actions:[{Borrow:{token_id:'priceoracle.near'}},...cross.actions.slice(1)]}),
+  /STAGE72_INVALID_ACTIVE_PYTH_ASSET_ROUTE/);
+ const script=await (await import('node:fs/promises')).readFile(
+  new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(script.includes('selectPinnedActivePythSandboxDependencies(config.value,plan)'));
+ assert.ok(script.includes('disabledLegacyPriceOracleExcluded:true'));
+ assert.ok(!script.includes("'priceoracle.near',\n  'wrap.near'"));
+ assert.ok(script.includes('clonePinnedContractWithState'));
+ assert.ok(script.includes('STAGE37_ALLOW_SANDBOX_MUTATION'));
+});
