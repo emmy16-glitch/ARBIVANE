@@ -1,0 +1,86 @@
+name: Stage44 executable isolated NEAR Sandbox witness
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage44-executable-sandbox.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: arbivane-stage44-local-sandbox
+  cancel-in-progress: false
+jobs:
+  actual-local-contract-transaction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install isolated Sandbox runtime, never a production signer
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Fetch immutable upstream test WASM and verify Git object hash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 --max-time 60 \
+            'https://raw.githubusercontent.com/near/near-workspaces-js/d0eba4afcd17aebbb8a71db57eef898866901dbf/__tests__/build/debug/status_message.wasm' \
+            -o stage44-upstream-status-message.wasm
+          test "$(git hash-object stage44-upstream-status-message.wasm)" = '313f4fda3a2917739b9a76b770a57c33dcb6d0ef'
+          test "$(wc -c < stage44-upstream-status-message.wasm)" = '124513'
+      - name: Execute a REAL local contract mutation; verify final receipts and pre/post storage
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_WORKSPACES_NETWORK: sandbox
+          STAGE44_ALLOW_LOCAL_MUTATION: 'true'
+          STAGE44_CONTRACT_FILE: stage44-upstream-status-message.wasm
+          STAGE44_REPORT_PATH: stage44-local-sandbox-execution.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/stage44-executable-local-sandbox.mjs > stage44-local-summary.json
+          jq -e '.mode == "ARBIVANE_STAGE44_EXECUTABLE_LOCAL_SANDBOX_WITNESS" and
+            .status == "LOCAL_CONTRACT_TRANSACTION_AND_STATE_CHANGE_VERIFIED" and
+            .chain == "NEAR_SANDBOX" and
+            .transactionFinal == true and
+            .transactionSucceeded == true and
+            .contractStateMutationVerified == true and
+            .receiptCount > 0 and .failedReceiptCount == 0 and
+            .realRheaLiquidationAttempted == false and
+            .profitVerified == false and
+            .executionEnabled == false and .maySignMainnet == false and
+            .mayBroadcastMainnet == false' stage44-local-sandbox-execution.json
+          jq '{status,contractAccountId,actorAccountId,receiptCount,gasBurntGasUnits,contractStateMutationVerified,realRheaLiquidationAttempted,profitVerified}' stage44-local-sandbox-execution.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'Local test contract state mutation only. NOT an executed Rhea liquidation or mainnet profit.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Attempt independent stateful Rhea lending import at pinned historical block (diagnostic only)
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_WORKSPACES_NETWORK: sandbox
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE44_IMPORT_REPORT_PATH: stage44-rhea-state-import-readiness.json
+        run: |
+          set -euo pipefail
+          # Large Rhea contracts may hit the public RPC state-size ceiling.
+          # Preserve that failure as a BLOCKER; never call it a successful import.
+          timeout 240s node --experimental-strip-types scripts/stage44-rhea-sandbox-import-probe.mjs > stage44-import-summary.json || true
+          if test -s stage44-rhea-state-import-readiness.json; then
+            jq -e '.chain == "NEAR_SANDBOX" and .contractLiquidationAttempted == false and
+              .positiveNetProfitVerified == false and .maySignMainnet == false and
+              .mayBroadcastMainnet == false' stage44-rhea-state-import-readiness.json
+            jq '{status,stateImported,configurationMatches,allStoredKeysAttested,contractLiquidationAttempted,blocker,blockers}' stage44-rhea-state-import-readiness.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Rhea state import was interrupted; NO import or liquidation parity can be claimed.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload raw Sandbox receipts summary and Rhea import readiness
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage44-executable-local-sandbox
+          path: |
+            stage44-local-sandbox-execution.json
+            stage44-local-summary.json
+            stage44-rhea-state-import-readiness.json
+            stage44-import-summary.json
+          retention-days: 14
+          if-no-files-found: warn
