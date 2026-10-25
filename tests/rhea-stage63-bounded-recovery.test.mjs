@@ -12,7 +12,10 @@ test('bounded recovery prioritizes the authentic tail then disjoint unscanned cu
  assert.match(text,/base=\$\(\(2252\+\(attempts-1\)\*320\)\)/);
  assert.match(text,/max-parallel: 2/);
  assert.match(text,/cron: '17 \*\/6 \* \* \*'/);
- assert.match(text,/cancel-in-progress: false/);
+ assert.match(text,/cancel-in-progress: \$\{\{ github\.event_name == 'push' \}\}/);
+ assert.ok(text.includes("- '.github/workflows/rhea-stage63-bounded-recovery.yml'"));
+ assert.match(text,/\.conclusion == "failure" or \.conclusion == "success"/);
+ assert.doesNotMatch(text,/cancel-in-progress: false/);
  assert.ok(text.includes('branches: [main]'));
  assert.ok(text.includes("- 'src/rhea/full-active-pyth-sweep.ts'"));
  assert.ok(text.includes('.event == "push"'));
@@ -54,4 +57,18 @@ test('Stage65 rechecks authenticated prior risk windows without replacing disjoi
  assert.match(text,/STAGE37_ALLOW_SANDBOX_MUTATION=true/);
  assert.match(text,/sandboxPlanReady == true/);
  assert.doesNotMatch(text,/MAINNET_PRIVATE_KEY|broadcast_tx/);
+});
+
+test('Stage69 preempts stale scan work on main push while keeping cancelled windows retryable',async()=>{
+ const contents=await readFile(workflow,'utf8');
+ assert.ok(contents.includes("cancel-in-progress: ${{ github.event_name == 'push' }}"));
+ assert.ok(contents.includes("- '.github/workflows/rhea-stage63-bounded-recovery.yml'"));
+ const line=contents.split('\n').find(x=>x.trim().startsWith('attempts=$(jq '));
+ assert.ok(line?.includes('.conclusion == "failure"'));
+ assert.ok(line?.includes('.conclusion == "success"'));
+ assert.ok(!line.includes('.conclusion == "cancelled"'));
+ assert.match(contents,/base=\$\(\(2252\+\(attempts-1\)\*320\)\)/);
+ assert.ok(contents.includes("if (( successes > 0 || attempts >= 18 )); then"));
+ assert.ok(contents.includes("EXECUTION_ENABLED: 'false'"));
+ assert.ok(contents.includes('mayBroadcastMainnet == false'));
 });
