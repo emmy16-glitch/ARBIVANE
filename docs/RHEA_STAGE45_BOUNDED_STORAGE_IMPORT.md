@@ -1,3 +1,15 @@
+## Stage 45B — native RPC cursor pagination (supersedes prefix splitting)
+
+After executing the prefix-only workflow, the archive returned `TOO_LARGE_CONTRACT_STATE` even for a four-byte zero prefix. That led to a crucial improvement: the current NEAR `view_state` API supports **`limit`** and **`after_key_base64`**. Stage 45 now uses the server's continuation key rather than speculative prefix splitting.
+
+The client starts with a bounded 128-entry page, holds every query to the exact historical block, verifies consistent block hash/height, requires strictly increasing unique binary storage keys, and checks that each `last_key` matches the final key actually returned on that page. It keeps following `last_key` until the server explicitly returns no further continuation. If one page still hits the 50 KiB limit, its requested page size is halved. An individual storage record bigger than the RPC cap is a hard blocker, not silently omitted.
+
+When the cursor is exhausted, the artifact records `completePaginationCoverage=true`, the number of pages and adaptive downsizings, record count and witness digest. This avoids the **exact-prefix-key gap** of the earlier splitter (`unresolvedExactBoundaryPrefixCount=0`). It is still only verified *server pagination exhaustion*, not a cryptographic proof of the entire on-chain trie state. The local Sandbox patch and `get_config` comparison remain separate validation steps.
+
+Official references: https://docs.fastnear.com/rpc/contract/view-state and https://docs.rs/near-kit/latest/near_kit/client/struct.RpcClient.html .
+
+---
+
 # Stage 45 — bounded archival Rhea state reconstruction into isolated Sandbox
 
 The verified Stage 44 Sandbox run executed a real local contract transaction, but its separate full-data Rhea import failed with `RPC_RESPONSE_OR_CONTRACT_STORAGE_TOO_LARGE`. NEAR Workspaces `importContract({withData:true})` issues one root `view_state` request for the complete contract. The archival provider does not return that oversized response.
