@@ -12,6 +12,7 @@ import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
+import {attestStage51PythParity} from './stage51-active-pyth-sandbox-parity.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -91,6 +92,12 @@ async function main(){
  if(!pinnedConfigMatches||!pinnedBorrowerMatches||
   JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
   throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
+ // The liquidation uses Rhea's active Pyth callback, not priceoracle.near.
+ // Reject source/Sandbox quote and derived-token ratio disagreement before
+ // funding or attempting any local liquidation transaction.
+ const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block});
+ await writeFile('stage51-active-pyth-sandbox-parity.json',
+  JSON.stringify(pythParity,null,2)+'\n');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
  const actor=await root.createSubAccount('arbivane-replay',{
