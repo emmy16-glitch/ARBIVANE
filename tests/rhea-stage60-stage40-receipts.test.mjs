@@ -22,7 +22,10 @@ test('Stage60 retains actual Sandbox Workspaces call failures as audited evidenc
  assert.ok(w.includes('stage37-workspaces-sandbox-replay.mjs > stage38-sandbox-actual.json; then'));
  assert.ok(w.includes('sandbox_exit=$?'));
  assert.ok(w.includes('node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit"'));
- assert.ok(w.includes('stage55-sandbox-phase-evidence.json stage37-sandbox-execution.json'));
+ assert.ok(w.includes('stage55-sandbox-phase-evidence.json'));
+ assert.ok(w.includes('stage37-sandbox-execution.json'));
+ assert.ok(w.includes('stage56-sandbox-attempt-evidence.json'));
+ assert.ok(w.includes('stage60-sandbox-attempt-stdout.json'));
  assert.ok(w.includes('stage41-sandbox-balance-settlement.json'));
  assert.ok(w.includes('.readOnlyMarketContinuationAllowed == true'));
  assert.ok(w.includes('.mayBroadcastMainnet == false and .maySignMainnet == false'));
