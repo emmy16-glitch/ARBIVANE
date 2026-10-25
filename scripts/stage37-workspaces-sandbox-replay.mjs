@@ -15,6 +15,7 @@ import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-cl
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
 import {cloneStage91LinearToken} from './stage91-targeted-linear-token.mjs';
+import {attestStage96PinnedRheaViews} from './stage96-rhea-view-parity.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -210,6 +211,14 @@ async function main(){
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
+ // Isolated, durable view-by-view diagnosis after authentic clone completion.
+ // Never mark a clone or matching view as a successful liquidation.
+ await attestStage96PinnedRheaViews({
+  lending,borrowerAccountId:plan.borrowerAccountId,
+  config:config.value,borrower:borrower.value,assets:assets.value,
+ });
+ // Source-vs-Sandbox comparisons are separately persisted above and
+ // fail closed on the specific config, borrower or asset read.
  const [sandboxConfig,sandboxBorrower,sandboxAssets]=await Promise.all([
   lending.view('get_config',{}),
   lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
@@ -219,7 +228,7 @@ async function main(){
  const pinnedBorrowerMatches=JSON.stringify(sandboxBorrower)===JSON.stringify(borrower.value);
  if(!pinnedConfigMatches||!pinnedBorrowerMatches||
   JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
-  throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
+  throw Error('STAGE96_POST_PROBE_SOURCE_VIEWS_DRIFTED');
  // Partial closure cannot be advertised as a full cloned market. The
  // original independent source-view gate above remains mandatory BEFORE
  // collateral funding or any real Rhea Sandbox liquidation call.
