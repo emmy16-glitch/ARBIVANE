@@ -8,6 +8,8 @@ import {createHash} from 'node:crypto';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 import {validateStage80IndependentArchive} from './stage46-paged-sandbox-clone.mjs';
+import {PacedNearReadOnlyRpc} from '../src/rhea/paced-readonly-rpc.ts';
+import {ResilientNearReadOnlyRpc,isTransientNearRpcError} from '../src/rhea/resilient-readonly-rpc.ts';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 const UINT=/^(0|[1-9][0-9]{0,38})$/;
@@ -45,10 +47,24 @@ export async function cloneStage91LinearToken({
    ['storage_balance_of',{account_id}],
   ]),
  ];
- const [remote,...views]=await Promise.all([
-  rpc.viewAccount(contractId,blockHeight),
-  ...methods.map(([method,args])=>rpc.view(contractId,method,args,blockHeight)),
- ]);
+ // Stage95: concurrent pinned NEP-141 views can exhaust the shared archival
+ // RPC burst quota before authentic Sandbox replay begins. Serialize source
+ // reads and retry ONLY network/429/5xx failures, preserving exact block.
+ const paced=paceMs>=100?new PacedNearReadOnlyRpc(rpc,paceMs):rpc;
+ const reads=new ResilientNearReadOnlyRpc(paced,{
+  maxRetries:2,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:32,
+ });
+ let remote,views;
+ try{
+  remote=await reads.viewAccount(contractId,blockHeight);
+  views=[];
+  for(const [method,args] of methods)
+   views.push(await reads.view(contractId,method,args,blockHeight));
+ }catch(error){
+  throw Error(isTransientNearRpcError(error)?
+   'STAGE95_PINNED_LINEAR_RPC_RETRIES_EXHAUSTED':
+   'STAGE95_PINNED_LINEAR_SOURCE_VIEW_UNAVAILABLE');
+ }
  if(remote?.blockHeight!==height||!HASH.test(remote.codeHash)||
   views.some(x=>x?.blockHeight!==height)||
   !UINT.test(views[0]?.value)||
@@ -71,9 +87,11 @@ export async function cloneStage91LinearToken({
  async function exact(key,mandatory=true){
   let page;
   try{page=await main.viewState(key,null,1);}
-  catch(e){
-   if(!(e instanceof StateResponseTooLarge))throw e;
-   page=await alt.viewState(key,null,1);alternate++;
+  catch(error){
+   if(!(error instanceof StateResponseTooLarge))
+    throw Error('STAGE95_ARCHIVAL_LINEAR_KEY_QUERY_FAILED');
+   try{page=await alt.viewState(key,null,1);alternate++;}
+   catch{throw Error('STAGE95_INDEPENDENT_LINEAR_KEY_RECOVERY_FAILED');}
   }
   queries++;
   if(page?.blockHeight!==height||!HASH.test(page.blockHash)||
@@ -121,9 +139,12 @@ export async function cloneStage91LinearToken({
  }
  if(views[4].value==='0'||views[5].value===null)
   throw Error('STAGE91_RHEA_LINEAR_VAULT_UNREGISTERED_OR_EMPTY');
- const contract=await root.importContract({
+ let contract;
+ try{contract=await root.importContract({
   mainnetContract:contractId,blockId:blockHeight,withData:false
- });
+ });}catch{
+  throw Error('STAGE95_LOCAL_LINEAR_WASM_IMPORT_FAILED');
+ }
  if(contract?.accountId!==contractId||
   typeof contract.patchStateRecords!=='function'||
   typeof contract.accountView!=='function'||
@@ -138,7 +159,8 @@ export async function cloneStage91LinearToken({
   const record={Data:{account_id:contractId,data_key:key,value}};
   if(Buffer.byteLength(JSON.stringify(record))>2097152)
    throw Error('STAGE91_SINGLE_INDEXED_RECORD_TOO_LARGE');
-  await contract.patchStateRecords({records:[record]});
+  try{await contract.patchStateRecords({records:[record]});}
+  catch{throw Error('STAGE95_LOCAL_LINEAR_INDEX_PATCH_FAILED');}
  }
  for(let i=0;i<methods.length;i++){
   const [method,args]=methods[i];

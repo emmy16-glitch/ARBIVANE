@@ -123,3 +123,42 @@ test('Stage91 canary never enables signing, lending transaction or fabricated li
  assert.ok(!canary.includes('callRaw('));
  assert.ok(!canary.includes('broadcast_tx'));
 });
+
+test('Stage95 retries authentic pinned LiNEAR source RPC 429 without weakening code or index parity',async()=>{
+ const x=scenario();const original=x.args.rpc.view;let failed=false,calls=0;
+ x.args.rpc.view=async(...args)=>{
+  calls++;
+  if(!failed&&args[1]==='ft_total_supply'){
+   failed=true;
+   const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+   throw new NearRpcHttpError(429,'0');
+  }
+  return original(...args);
+ };
+ const out=await cloneStage91LinearToken(x.args);
+ assert.equal(failed,true);
+ assert.ok(calls>8);
+ assert.equal(out.evidence.recordsRead,7);
+ assert.equal(out.evidence.criticalFtViewsAgreeWithSource,true);
+ assert.equal(out.evidence.mainnetMutated,false);
+ assert.equal(out.evidence.realLiquidationVerified,false);
+});
+
+test('Stage95 produces a bounded actionable error when LiNEAR source RPC cannot be trusted',async()=>{
+ const x=scenario();const orig=x.args.rpc.view;
+ x.args.rpc.view=async(...args)=>{
+  if(args[1]==='ft_metadata')throw Error('auth token=PRIVATE_VALUE https://vault.example/rpc');
+  return orig(...args);
+ };
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE95_PINNED_LINEAR_SOURCE_VIEW_UNAVAILABLE/);
+ assert.equal(x.imports.length,0);
+});
+
+test('Stage95 still rejects falsified source registration and partial local state after paced reads',async()=>{
+ const x=scenario({badSourceBalance:true});
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE91_PINNED_SOURCE_AND_SANDBOX_FT_VIEW_DIFFER/);
+ assert.equal(x.imports.length,1);
+ assert.equal(x.patches.length,7);
+});
