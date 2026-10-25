@@ -42,6 +42,62 @@ function stage101CanonicalBorrower(value,field=''){
  }
  return value;
 }
+// Stage102: identify which *type* of derived asset field disagrees.
+// Do not persist token IDs, amounts, APR values, RPC errors, or source data.
+export function stage102BorrowerAssetDifferenceClasses(source,sandbox){
+ const issues=new Set(),MAX_POSITIONS=64,MAX_ASSETS=128;
+ function compareAssets(a,b){
+  if(!Array.isArray(a)||!Array.isArray(b)||
+    a.length>MAX_ASSETS||b.length>MAX_ASSETS){
+   issues.add('ASSET_COLLECTION_SHAPE_OR_BUDGET');return;
+  }
+  const sorted=x=>[...x].sort((u,v)=>{
+   const left=typeof u?.token_id==='string'?u.token_id:'';
+   const right=typeof v?.token_id==='string'?v.token_id:'';
+   return left<right?-1:left>right?1:0;
+  });
+  const left=sorted(a),right=sorted(b);
+  if(left.length!==right.length||
+   left.some((v,i)=>v?.token_id!==right[i]?.token_id)){
+   issues.add('ASSET_MEMBERSHIP_DIFFERENT');return;
+  }
+  for(let i=0;i<left.length;i++){
+   const x=left[i],y=right[i];
+   if(x?.shares!==y?.shares)issues.add('ASSET_SHARES_DIFFERENT');
+   if(x?.balance!==y?.balance)issues.add('ASSET_BALANCE_DIFFERENT');
+   if(JSON.stringify(stage101CanonicalBorrower(x?.apr))!==
+      JSON.stringify(stage101CanonicalBorrower(y?.apr)))
+    issues.add('ASSET_APR_DIFFERENT');
+   if(!stage101SameBorrowerView(
+    Object.fromEntries(Object.entries(x??{}).filter(([k])=>!
+     ['shares','balance','apr'].includes(k))),
+    Object.fromEntries(Object.entries(y??{}).filter(([k])=>!
+     ['shares','balance','apr'].includes(k)))))
+    issues.add('ASSET_OTHER_FIELDS_DIFFERENT');
+  }
+ }
+ compareAssets(source?.supplied,sandbox?.supplied);
+ const lp=source?.positions,rp=sandbox?.positions;
+ if(!lp||!rp||typeof lp!=='object'||typeof rp!=='object'||
+  Array.isArray(lp)||Array.isArray(rp)){
+  issues.add('POSITION_COLLECTION_SHAPE');return [...issues].sort();
+ }
+ const keys=Object.keys(lp),other=Object.keys(rp);
+ if(keys.length>MAX_POSITIONS||other.length>MAX_POSITIONS){
+  issues.add('POSITION_COLLECTION_BUDGET');return [...issues].sort();
+ }
+ if(keys.length!==other.length||keys.some(k=>!Object.hasOwn(rp,k))){
+  issues.add('POSITION_MEMBERSHIP_DIFFERENT');return [...issues].sort();
+ }
+ for(const key of keys){
+  compareAssets(lp[key]?.collateral,rp[key]?.collateral);
+  compareAssets(lp[key]?.borrowed,rp[key]?.borrowed);
+ }
+ if(issues.size===0&&!stage101SameBorrowerView(source,sandbox))
+  issues.add('NON_ASSET_BORROWER_FIELDS_DIFFERENT');
+ return [...issues].sort();
+}
+
 export function stage101SameBorrowerView(source,sandbox){
  return stable(stage101CanonicalBorrower(source))===
   stable(stage101CanonicalBorrower(sandbox));
@@ -139,6 +195,8 @@ export async function attestStage96PinnedRheaViews({
     stable(stage101CanonicalBorrower(observed)):actual)};
   if(id==='BORROWER'&&!match)
    check.stage101DifferentSections=stage101BorrowerDifferenceSections(expected[i],observed);
+  if(id==='BORROWER'&&!match)
+   check.stage102AssetDifferenceClasses=stage102BorrowerAssetDifferenceClasses(expected[i],observed);
   witness.checks.push(check);
   if(!match){
    witness.failedView=id;witness.failureCode='STAGE96_'+id+'_VIEW_MISMATCH';
