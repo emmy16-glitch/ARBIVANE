@@ -11,6 +11,7 @@ import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settle
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
+import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -87,26 +88,52 @@ async function main(){
  // Two completely independent archival clones at a time; 450 ms pacing per
  // RPC reader caps aggregate request pressure near previous serial pacing.
  // Keep the exact deterministic pinned dependency list and source code hashes.
- const clones=await cloneStage76Dependencies({ids,concurrency:2,
+ // In one-borrower mode, preserve real deployed lending WASM and only the
+ // targeted borrower's indexed storage plus shared market records. Other
+ // dependencies still need complete proven clones until their layouts are
+ // independently authenticated. Never mislabel a partial closure as full.
+ const oneBorrower=e.STAGE82_SINGLE_BORROWER==='true';
+ if(oneBorrower){
+  const targeted=await cloneStage82BorrowerLending({
+   root,rpc,endpoint:e.NEAR_RPC_URL,contractId:plan.lendingContract,
+   blockHeight:block,expectedCodeHash:plan.sourceCodeHash,
+   borrowerAccountId:plan.borrowerAccountId,
+   assetIds:assets.value.map(row=>row[0]),
+   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
+    'https://archival-rpc.mainnet.near.org',
+   budgets:{paceMs:450},
+  });
+  contracts.set(plan.lendingContract,targeted.contract);
+  cloneEvidence.push(targeted.evidence);
+ }
+ const dependencyIds=oneBorrower?ids.filter(id=>id!==plan.lendingContract):ids;
+ const clones=await cloneStage76Dependencies({
+  ids:dependencyIds,concurrency:2,
   clone:(id)=>clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
-   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||'https://archival-rpc.mainnet.near.org',
+   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
+    'https://archival-rpc.mainnet.near.org',
    expectedCodeHash:id===plan.lendingContract?plan.sourceCodeHash:
     id==='aggregate-oracle.near'?plan.sourceOracleHash:null,
    budgets:{paceMs:450},
-   onProgress:entry=>console.error(JSON.stringify({mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry})),
-  })
+   onProgress:entry=>console.error(JSON.stringify({
+    mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry
+   })),
+  }),
  });
- for(let i=0;i<ids.length;i++){
-  contracts.set(ids[i],clones[i].contract);
+ for(let i=0;i<dependencyIds.length;i++){
+  contracts.set(dependencyIds[i],clones[i].contract);
   cloneEvidence.push(clones[i].evidence);
  }
+ if(contracts.size!==ids.length)
+  throw Error('STAGE82_MISSING_REQUIRED_DEPENDENCY_CONTRACT');
  if(new Set(cloneEvidence.map(row=>row.sourceBlockHash)).size!==1)
   throw Error('STAGE46_CROSS_CONTRACT_SOURCE_BLOCK_HASH_MISMATCH');
  await writeFile('stage46-sandbox-clone-evidence.json',JSON.stringify({
   mode:'STAGE46_PINNED_SANDBOX_DEPENDENCY_CLONES',chain:'NEAR_SANDBOX',
   contracts:cloneEvidence,pinnedActivePythOnlyConfigVerified:true,
   disabledLegacyPriceOracleExcluded:true,completeTrieRootParityVerified:false,
+  partialOneBorrowerState:oneBorrower,fullMarketImported:!oneBorrower,
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
@@ -120,6 +147,22 @@ async function main(){
  if(!pinnedConfigMatches||!pinnedBorrowerMatches||
   JSON.stringify(sandboxAssets)!==JSON.stringify(assets.value))
   throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
+ // Partial closure cannot be advertised as a full cloned market. The
+ // original independent source-view gate above remains mandatory BEFORE
+ // collateral funding or any real Rhea Sandbox liquidation call.
+ if(oneBorrower){
+  const witness={
+   mode:'STAGE82_SOURCE_PINNED_BORROWER_VIEW_WITNESS',
+   contractId:plan.lendingContract,borrowerAccountId:plan.borrowerAccountId,
+   pinnedConfigMatches,pinnedBorrowerMatches,
+   pinnedAssetsMatch:JSON.stringify(sandboxAssets)===JSON.stringify(assets.value),
+   fullMarketImported:false,fullTrieRootParityVerified:false,
+   mainnetExecutionEnabled:false,localLiquidationVerified:false,
+  };
+  await writeFile('stage82-one-borrower-parity.json',
+   JSON.stringify(witness,null,2)+'\\n');
+ }
+
  // The liquidation uses Rhea's active Pyth callback, not priceoracle.near.
  // Reject source/Sandbox quote and derived-token ratio disagreement before
  // funding or attempting any local liquidation transaction.
