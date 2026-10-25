@@ -162,3 +162,39 @@ test('Stage95 still rejects falsified source registration and partial local stat
  assert.equal(x.imports.length,1);
  assert.equal(x.patches.length,7);
 });
+
+test('Stage101 safely restarts all pinned LiNEAR source views on independent archival RPC after 429 exhaustion',async()=>{
+ const x=scenario(),independent=x.args.rpc;
+ let fallbackCalls=0;
+ x.args.rpc={...independent,
+  view:async()=>{const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');throw new NearRpcHttpError(429,'0');}};
+ x.args.fallbackRpc={...independent,
+  viewAccount:async(...args)=>{fallbackCalls++;return independent.viewAccount(...args);},
+  view:async(...args)=>{fallbackCalls++;return independent.view(...args);}};
+ const result=await cloneStage91LinearToken(x.args);
+ assert.equal(result.evidence.sourceViewFallbackUsed,true);
+ assert.equal(fallbackCalls,9);
+ assert.equal(result.evidence.criticalFtViewsAgreeWithSource,true);
+ assert.equal(result.evidence.mainnetMutated,false);
+ assert.equal(result.evidence.realLiquidationVerified,false);
+});
+test('Stage101 rejects historical block drift on fallback without importing Sandbox state',async()=>{
+ const x=scenario(),independent=x.args.rpc;
+ x.args.rpc={...independent,
+  view:async()=>{const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');throw new NearRpcHttpError(503,'0');}};
+ x.args.fallbackRpc={...independent,
+  view:async(...args)=>({...await independent.view(...args),blockHeight:String(H+1)})};
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE91_HISTORICAL_LINEAR_SOURCE_INVALID/);
+ assert.equal(x.imports.length,0);
+});
+test('Stage101 never routes deterministic contract errors through a fallback provider',async()=>{
+ const x=scenario(),independent=x.args.rpc;let fallbackCalls=0;
+ x.args.rpc={...independent,view:async()=>{throw Error('contract view rejected');}};
+ x.args.fallbackRpc={...independent,
+  view:async(...args)=>{fallbackCalls++;return independent.view(...args);}};
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE95_PINNED_LINEAR_SOURCE_VIEW_UNAVAILABLE/);
+ assert.equal(fallbackCalls,0);
+ assert.equal(x.imports.length,0);
+});
