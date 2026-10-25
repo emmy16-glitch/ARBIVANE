@@ -65,8 +65,14 @@ export async function clonePinnedContractWithState({
    if(!(error instanceof StateResponseTooLarge)||limit!==1||!backup)
     throw error;
    singleEntryFallbacks++;
-   try{return await backup.viewPage(cursor,1);}
-   catch{throw Error('STAGE77_BOTH_ARCHIVAL_PROVIDERS_REFUSED_REQUIRED_STORAGE_RECORD');}
+   try{
+    const page=await backup.viewPage(cursor,1);
+    if(!page||!Array.isArray(page.values)||page.values.length!==1)
+     throw Error('STAGE77_FALLBACK_MUST_RETURN_ONE_REQUIRED_STORAGE_RECORD');
+    return page;
+   }catch{
+    throw Error('STAGE77_BOTH_ARCHIVAL_PROVIDERS_REFUSED_REQUIRED_STORAGE_RECORD');
+   }
   }
  }
  // Keep a bounded patch batch across authenticated source RPC pages.
