@@ -48,9 +48,17 @@ test('fail-closed on skipped async callback or failed receipt despite successful
  assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');assert.equal(r.failedReceiptCount,1);
  assert.equal(r.realMainnetExecuted,false);assert.equal(r.realProfitVerified,false);
  assert.equal(r.gasBurntGasUnits,'8000000000000');
- assert.throws(()=>summarizeStage37SandboxOutcome({
-  final_execution_status:'FINAL',status:{SuccessValue:''},receipts_outcome:[success,failure],receipts:[callbackReceipt('5'.repeat(43))],
- },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,importedContractCount:4,allStoredKeysAttested:false}),/CONTRADICTION/);
+ const mixed=summarizeStage37SandboxOutcome({
+  final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts_outcome:[success,failure],receipts:[callbackReceipt('5'.repeat(43))],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,importedContractCount:4,allStoredKeysAttested:false});
+ assert.equal(mixed.status,'SANDBOX_RECEIPT_FAILURE');
+ assert.equal(mixed.failedReceiptCount,1);
+ assert.equal(mixed.callbackReceiptCount,1);
+ assert.equal(mixed.failedCallbackReceiptCount,1);
+ assert.equal(mixed.topLevelFailureObserved,false);
+ assert.equal(mixed.gasBurntGasUnits,'8000000000000');
+ assert.ok(mixed.blockers.includes('SANDBOX_RHEA_ASYNC_CALLBACK_FAILED'));
 });
 test('even locally successful callback never authorizes spending or claims mainnet profits',()=>{
  const r=summarizeStage37SandboxOutcome({
@@ -77,4 +85,71 @@ test('runner has no mainnet tx API and must be explicitly sandbox-gated',async()
  assert.ok(script.includes("STAGE37_ALLOW_SANDBOX_MUTATION!=='true'"));
  assert.ok(!script.includes('withData:true'));assert.ok(script.includes('clonePinnedContractWithState'));assert.ok(script.includes("callRaw("));
  assert.ok(!script.includes('broadcast_tx'));assert.ok(!script.includes('send_tx'));
+});
+
+test('Stage57 preserves top-level failure even if all child receipts return success',()=>{
+ const success=receipt({SuccessValue:''});
+ const r=summarizeStage37SandboxOutcome({
+  final_execution_status:'FINAL',status:{Failure:{ActionError:'failed'}},
+  receipts_outcome:[success],
+  receipts:[callbackReceipt('4'.repeat(43))],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+  importedContractCount:4,allStoredKeysAttested:false});
+ assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');
+ assert.equal(r.failedReceiptCount,0);
+ assert.equal(r.failedCallbackReceiptCount,0);
+ assert.equal(r.topLevelFailureObserved,true);
+ assert.ok(r.blockers.includes('SANDBOX_TOP_LEVEL_TRANSACTION_FAILED'));
+ assert.equal(r.realProfitVerified,false);
+});
+test('Stage57 preserves failed dependency in an otherwise successful Pyth callback',()=>{
+ const callback=receipt({SuccessValue:''},'4'.repeat(43));
+ const child=receipt({Failure:{ActionError:'FT callback failed'}},'5'.repeat(43));
+ const r=summarizeStage37SandboxOutcome({
+  final_execution_status:'EXECUTED_OPTIMISTIC',status:{SuccessValue:''},
+  receipts_outcome:[callback,child],receipts:[callbackReceipt('4'.repeat(43))],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+  importedContractCount:4,allStoredKeysAttested:false});
+ assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');
+ assert.equal(r.failedReceiptCount,1);
+ assert.equal(r.failedCallbackReceiptCount,0);
+ assert.equal(r.transactionExecutionStatus,'EXECUTED_OPTIMISTIC');
+ assert.equal(r.transactionFinal,false);
+ assert.ok(r.blockers.includes('SANDBOX_ASYNC_DEPENDENCY_RECEIPT_FAILED'));
+ assert.equal(r.mayBroadcastMainnet,false);
+});
+test('Stage57 refuses missing unknown or duplicated receipt statuses, not promoting them',()=>{
+ const base={
+  final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts:[callbackReceipt('4'.repeat(43))],
+ };
+ const cases=[
+  [receipt({},'4'.repeat(43))],
+  [receipt({Unknown:'opaque'},'4'.repeat(43))],
+  [receipt({SuccessValue:'',Failure:'fake'},'4'.repeat(43))],
+  [receipt({SuccessValue:''},'4'.repeat(43)),
+   receipt({SuccessValue:''},'4'.repeat(43))],
+ ];
+ for(const receipts_outcome of cases)
+  assert.throws(()=>summarizeStage37SandboxOutcome({...base,receipts_outcome},{
+   pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+   importedContractCount:4,allStoredKeysAttested:false,
+  }),/SANDBOX_MALFORMED_RECEIPTS/);
+ assert.throws(()=>summarizeStage37SandboxOutcome({
+  ...base,status:{},
+  receipts_outcome:[receipt({SuccessValue:''},'4'.repeat(43))],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+  importedContractCount:4,allStoredKeysAttested:false}),/SANDBOX_RECEIPT_FINALITY_CONTRADICTION/);
+});
+test('Stage57 tracks Rhea async callback receipt without leaking provider failure text',()=>{
+ const secret='private token https://example.test/password';
+ const r=summarizeStage37SandboxOutcome({
+  final_execution_status:'FINAL',status:{SuccessReceiptId:'4'.repeat(43)},
+  receipts_outcome:[receipt({Failure:{ActionError:secret}},'4'.repeat(43))],
+  receipts:[callbackReceipt('4'.repeat(43))],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+  importedContractCount:4,allStoredKeysAttested:false});
+ assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');
+ assert.equal(r.failedCallbackReceiptCount,1);
+ assert.equal(JSON.stringify(r).includes(secret),false);
 });
