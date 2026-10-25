@@ -52,7 +52,7 @@ async function save(){
 }
 function reason(err){
  const msg=err instanceof Error?err.message:'';
- return /^STAGE(?:45|77)_[A-Z0-9_]+$/.test(msg)?msg:
+ return /^STAGE(?:45|77|85)_[A-Z0-9_]+$/.test(msg)?msg:
   'STAGE45_UNVERIFIED_ARCHIVAL_OR_SANDBOX_FAILURE';
 }
 async function main(){
