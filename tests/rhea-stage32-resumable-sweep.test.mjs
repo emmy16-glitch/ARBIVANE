@@ -84,3 +84,41 @@ test('workflow never signs and only uses the verified full-scan artifact',async(
  assert.ok(y.includes('rhea-full-paged-verified-market'));assert.ok(y.includes('EXECUTION_ENABLED: \'false\''));
  assert.ok(y.includes('stage32-reprice-checkpoint'));assert.ok(!y.includes('broadcast_tx'));
 });
+
+test('Stage66 recovers a genuine first-pass RPC failure before committing cursor',async()=>{
+ const calls=new Map(),sleeps=[];
+ const out=await sweepIndexedDebtWithActivePyth({},source(),
+  {...options,maxFindings:5,batchSize:5},undefined,undefined,
+  async id=>{
+   const n=(calls.get(id)??0)+1;calls.set(id,n);
+   if(id==='borrower4.near'&&n===1)throw Error('temporary RPC timeout');
+   return evaluation(id,id==='borrower4.near');
+  },async ms=>{sleeps.push(ms);});
+ assert.equal(out.processed,5);
+ assert.equal(out.paperAtRisk,1);
+ assert.equal(out.paperHealthy,4);
+ assert.equal(out.blocked,0);
+ assert.equal(out.items[2].borrowerAccountId,'borrower4.near');
+ assert.equal(out.items[2].classification,'PAPER_AT_RISK_UNAPPROVED');
+ assert.equal(out.items[2].executionEligible,false);
+ assert.equal(out.profitVerified,false);
+ assert.equal(calls.get('borrower4.near'),2);
+ assert.deepEqual(sleeps,[1500]);
+ checkSweepCheckpoint(source(),{...options,maxFindings:5,batchSize:5},out);
+});
+
+test('Stage66 caps retry volume and never clears persistent unknown health',async()=>{
+ const calls=new Map();
+ const out=await sweepIndexedDebtWithActivePyth({},source(),
+  {...options,maxFindings:6,batchSize:6},undefined,undefined,
+  async id=>{calls.set(id,(calls.get(id)??0)+1);throw Error('RPC unavailable');},
+  async()=>{});
+ assert.equal(out.processed,6);
+ assert.equal(out.blocked,6);
+ assert.equal(out.paperHealthy,0);
+ assert.equal(out.paperAtRisk,0);
+ assert.equal([...calls.values()].reduce((a,b)=>a+b,0),10);
+ assert.equal(out.completeSnapshotPriced,false);
+ assert.equal(out.maySign,false);
+ assert.equal(out.mayBroadcast,false);
+});
