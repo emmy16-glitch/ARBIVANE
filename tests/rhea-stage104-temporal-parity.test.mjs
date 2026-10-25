@@ -112,3 +112,47 @@ test('Stage106 emits only hash-only field and shape fingerprints for non-accrual
  assert.equal(proof.actualRheaSettlementVerified,false);
  assert.equal(proof.mayBroadcastMainnet,false);
 });
+
+test('Stage107 admits only source-backed beneficiary fee growth bounded by borrowed interest',()=>{
+ const base=pool('1780000000000000000','600','450','5').map(([id,v])=>[
+  id,{...v,beneficiary_fees:{'treasury.near':'10','rewards.near':'4'}}
+ ]);
+ const accrued=pool('1780000002000000000','601','454','6').map(([id,v])=>[
+  id,{...v,beneficiary_fees:{'treasury.near':'12','rewards.near':'5'}}
+ ]);
+ const proof=stage104AttestTemporalAccrual({
+  sourceBorrower:src,sandboxBorrower:dst,sourceAssets:base,sandboxAssets:accrued
+ });
+ assert.equal(proof.verified,true);
+ assert.equal(proof.class,'BOUNDED_SOURCE_BACKED_TEMPORAL_ACCRUAL_ONLY');
+ assert.equal(proof.fullHistoricalViewParity,false);
+ assert.equal(JSON.stringify(proof).includes('treasury.near'),false);
+ assert.equal(JSON.stringify(proof).includes('rewards.near'),false);
+ assert.equal(proof.mayBroadcastMainnet,false);
+});
+test('Stage107 rejects beneficiary theft, new keys, decreasing balances and growth exceeding interest',()=>{
+ const before=pool('1780000000000000000','600','450','5').map(([id,v])=>[
+  id,{...v,beneficiary_fees:{'treasury.near':'10','rewards.near':'4'}}
+ ]);
+ const after=pool('1780000002000000000','601','451','6').map(([id,v])=>[
+  id,{...v,beneficiary_fees:{'treasury.near':'11','rewards.near':'4'}}
+ ]);
+ const proof=assets=>stage104AttestTemporalAccrual({
+  sourceBorrower:src,sandboxBorrower:dst,sourceAssets:before,sandboxAssets:assets
+ });
+ assert.equal(proof(after).verified,true);
+ const variants=[
+  after.map(([id,v])=>[id,{...v,beneficiary_fees:{'treasury.near':'13','rewards.near':'4'}}]),
+  after.map(([id,v])=>[id,{...v,beneficiary_fees:{'treasury.near':'9','rewards.near':'4'}}]),
+  after.map(([id,v])=>[id,{...v,beneficiary_fees:{'treasury.near':'11','evil.near':'4'}}]),
+  after.map(([id,v])=>[id,{...v,beneficiary_fees:{'treasury.near':'11','rewards.near':'4','new.near':'0'}}]),
+  after.map(([id,v])=>[id,{...v,beneficiary_fees:{'treasury.near':'11','rewards.near':'INVALID'}}])
+ ];
+ for(const altered of variants){
+  const p=proof(altered);
+  assert.equal(p.verified,false);
+  assert.equal(p.class,'MARKET_BENEFICIARY_FEE_ACCOUNTING_DRIFT');
+  assert.equal(p.actualRheaSettlementVerified,false);
+  assert.equal(p.mayBroadcastMainnet,false);
+ }
+});
