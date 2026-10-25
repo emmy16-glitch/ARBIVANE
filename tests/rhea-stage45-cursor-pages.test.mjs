@@ -74,7 +74,7 @@ test('workflow and runner use cursor pages, preserve read-only mainnet and local
  assert.ok(script.includes('coverPinnedPagedState'));
  assert.ok(script.includes('stateRpc.viewPage(afterKey,limit)'));
  assert.ok(script.includes('withData:false'));
- assert.ok(script.includes('lending.patchStateRecords('));
+ assert.ok(script.includes('patchStage85AuthenticatedData({'));
  assert.ok(script.includes('completePaginationCoverage'));
  assert.ok(script.includes('mayBroadcastMainnet:false'));
  assert.ok(!script.includes('broadcast_tx'));
