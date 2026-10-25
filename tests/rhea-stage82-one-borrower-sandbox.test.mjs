@@ -274,3 +274,37 @@ test('Stage97 rejects unknown VAccount layout instead of assuming nested account
   assert.equal(a.patches.length,0);
  }finally{target.value=old;}
 });
+
+test('Stage99 accepts authentic VAccount V3 and Current tags without changing imported bytes',async()=>{
+ const target=rows.find(v=>v.key===b64(join([0,118],u64(17))));
+ const original=target.value;
+ try{
+  for(const tag of [3,4]){
+   target.value=b64([tag,7,8]);
+   const scenarioData=scenario();
+   const cloned=await cloneStage82BorrowerLending(scenarioData.args);
+   assert.equal(cloned.evidence.borrowerAccountVersion,tag);
+   assert.equal(cloned.evidence.recordsPatched,rows.length);
+   assert.equal(cloned.evidence.fullMarketImported,false);
+   assert.equal(cloned.evidence.verifiedLiquidationReceipts,false);
+   assert.equal(cloned.evidence.mainnetMutated,false);
+   const expected=target.value;
+   assert.equal(scenarioData.patches.find(p=>p.Data.data_key===target.key)?.Data.value,expected);
+  }
+ }finally{target.value=original;}
+});
+
+test('Stage99 rejects unsupported future VAccount discriminant before Sandbox import',async()=>{
+ const target=rows.find(v=>v.key===b64(join([0,118],u64(17))));
+ const original=target.value;
+ try{
+  for(const tag of [5,255]){
+   target.value=b64([tag,7,8]);
+   const data=scenario();
+   await assert.rejects(()=>cloneStage82BorrowerLending(data.args),
+    /STAGE97_UNKNOWN_VERSIONED_BORROWER_ACCOUNT_LAYOUT/);
+   assert.equal(data.imports.length,0);
+   assert.equal(data.patches.length,0);
+  }
+ }finally{target.value=original;}
+});

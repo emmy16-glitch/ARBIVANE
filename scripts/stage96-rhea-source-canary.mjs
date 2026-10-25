@@ -70,6 +70,19 @@ try{
  report.status='SOURCE_PINNED_BORROWER_SANDBOX_VIEWS_MATCH_NOT_LIQUIDATION';
 }catch(error){
  report.failureCode=stage96SafeError(error);
+ // Stage96 writes safe hash-only parity checkpoints before throwing. Preserve
+ // the existing witness in the top-level artifact; never swallow its blocker.
+ if(report.parityEvidence===null){
+  try{
+   const checkpoint=JSON.parse(await readFile('stage96-rhea-view-parity.json','utf8'));
+   if(checkpoint?.chain==='NEAR_SANDBOX'&&
+      checkpoint?.mode==='STAGE96_PINNED_RHEA_POST_CLONE_VIEW_PARITY'&&
+      checkpoint?.allSourceViewsVerified===false&&
+      checkpoint?.mayBroadcastMainnet===false&&
+      typeof checkpoint.failureCode==='string')
+    report.parityEvidence=checkpoint;
+  }catch{/* no persisted view diagnosis available */}
+ }
  process.exitCode=2;
 }finally{
  if(worker)await worker.tearDown().catch(()=>{});

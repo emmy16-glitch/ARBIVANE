@@ -149,7 +149,7 @@ export async function cloneStage82BorrowerLending({
  // Copy EVERY original entry in both namespaces with checked pagination.
  // VAccount::Current stores inline maps; scanning the two prefixes is still
  // read-only and safe, and avoids assuming orphan storage is a live balance.
- if(versionedAccount.length===0||versionedAccount[0]>2)
+ if(versionedAccount.length===0||versionedAccount[0]>4)
   throw Error('STAGE97_UNKNOWN_VERSIONED_BORROWER_ACCOUNT_LAYOUT');
  const accountStoragePrefixes=[
   raw([1],accountKey), // StorageKey::AccountAssets {account_id}
