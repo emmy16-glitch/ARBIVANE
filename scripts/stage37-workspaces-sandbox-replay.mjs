@@ -10,6 +10,7 @@ import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhe
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
+import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -83,15 +84,21 @@ async function main(){
  // disabled before omitting that unused full-state clone. Preserve Stage71's
  // single-token Repay+Withdraw route and all genuine dependency contracts.
  const ids=selectPinnedActivePythSandboxDependencies(config.value,plan);
- for(const id of ids){
-  const {contract,evidence}=await clonePinnedContractWithState({
+ // Two completely independent archival clones at a time; 450 ms pacing per
+ // RPC reader caps aggregate request pressure near previous serial pacing.
+ // Keep the exact deterministic pinned dependency list and source code hashes.
+ const clones=await cloneStage76Dependencies({ids,concurrency:2,
+  clone:(id)=>clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
    expectedCodeHash:id===plan.lendingContract?plan.sourceCodeHash:
     id==='aggregate-oracle.near'?plan.sourceOracleHash:null,
+   budgets:{paceMs:450},
    onProgress:entry=>console.error(JSON.stringify({mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry})),
-  });
-  contracts.set(id,contract);
-  cloneEvidence.push(evidence);
+  })
+ });
+ for(let i=0;i<ids.length;i++){
+  contracts.set(ids[i],clones[i].contract);
+  cloneEvidence.push(clones[i].evidence);
  }
  if(new Set(cloneEvidence.map(row=>row.sourceBlockHash)).size!==1)
   throw Error('STAGE46_CROSS_CONTRACT_SOURCE_BLOCK_HASH_MISMATCH');

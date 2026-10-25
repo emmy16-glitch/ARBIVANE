@@ -51,8 +51,8 @@ test('Stage69 genuine Workspaces execution remains keyless and never fabricates 
 });
 
 
-test('Stage73 fresh main code preempts stale fast-lane runs but manual runs remain serial',()=>{
- assert.ok(text.includes("cancel-in-progress: ${{ github.event_name == 'push' }}"));
+test('Stage76 protects ongoing source-pinned fast-lane clones against later code pushes',()=>{
+ assert.ok(text.includes("cancel-in-progress: false"));
  assert.ok(text.includes("group: arbivane-stage69-fastlane"));
  assert.ok(text.includes("- '.github/workflows/rhea-stage69-fastlane.yml'"));
  assert.ok(text.includes("EXECUTION_ENABLED: 'false'"));
@@ -103,9 +103,20 @@ test('Stage74 accepts only a later-finalized persistent optimistic Sandbox recei
 
 test('Stage75 pins cloned state batching changes to an authentic new fast-lane run',()=>{
  assert.ok(text.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
- assert.ok(text.includes("cancel-in-progress: ${{ github.event_name == 'push' }}"));
+ assert.ok(text.includes("cancel-in-progress: false"));
  assert.ok(text.includes('stage46-sandbox-clone-evidence.json'));
  assert.ok(text.includes('stage55-sandbox-phase-evidence.json'));
  assert.ok(text.includes('borrowerDebtDecreaseInternal != "0"'));
  assert.ok(!text.includes('broadcast_tx'));
+});
+
+
+test('Stage76 changes launch another authenticated fast lane without cancelling expensive real imports',()=>{
+ assert.ok(text.includes("cancel-in-progress: false"));
+ assert.ok(text.includes("- 'scripts/stage76-bounded-clone-queue.mjs'"));
+ assert.ok(text.includes("- 'scripts/stage37-workspaces-sandbox-replay.mjs'"));
+ assert.ok(text.includes("stage46-sandbox-clone-evidence.json"));
+ assert.ok(text.includes("actualRheaSettlementVerified"));
+ assert.ok(text.includes("localLiquidationCallInvoked == true"));
+ assert.ok(!text.includes("MAINNET_PRIVATE_KEY"));
 });
