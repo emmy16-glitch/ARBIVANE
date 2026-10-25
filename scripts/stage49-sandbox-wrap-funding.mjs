@@ -9,7 +9,7 @@ import {actorCollateralInternal} from './stage49-sandbox-borrow-preflight.mjs';
 const NEAR=10n**24n;
 const DEPOSIT=NEAR; // one disposable Sandbox NEAR, not user's real money
 const STORAGE=NEAR/10n; // bounded 0.1 Sandbox NEAR per storage registration
-const MAX_GAS='100000000000000';
+const MAX_GAS=100000000000000n;
 const ID=/^[a-z0-9._-]{2,64}$/;
 function success(result,label){
  const v=result?.result??result;
@@ -45,7 +45,7 @@ async function registerIfNeeded(actor,contract,label){
  }
  const result=await actor.callRaw(contract,'storage_deposit',{
   account_id:actor.accountId,registration_only:true,
- },{gas:MAX_GAS,attachedDeposit:min});
+ },{gas:MAX_GAS,attachedDeposit:BigInt(min)});
  success(result,label+'_STORAGE_REGISTRATION');
  const now=await contract.view('storage_balance_of',{account_id:actor.accountId});
  if(!now||typeof now!=='object')throw Error('STAGE49_'+label+'_STORAGE_NOT_REGISTERED');
@@ -70,7 +70,7 @@ export async function seedSandboxLiquidatorWithWrappedNear({
  await registerIfNeeded(actor,lending,'LENDING');
  await registerIfNeeded(actor,wrapped,'WNEAR');
  const rawWrap=await actor.callRaw(wrapped,'near_deposit',{},{
-  gas:MAX_GAS,attachedDeposit:DEPOSIT.toString()
+  gas:MAX_GAS,attachedDeposit:DEPOSIT
  });
  success(rawWrap,'WNEAR_WRAP');
  const ftBalance=await wrapped.view('ft_balance_of',{account_id:actor.accountId});
@@ -80,7 +80,7 @@ export async function seedSandboxLiquidatorWithWrappedNear({
  const rawCollateral=await actor.callRaw(wrapped,'ft_transfer_call',{
   receiver_id:lending.accountId,amount:DEPOSIT.toString(),
   msg:'"OnlyIncreaseCollateral"',
- },{gas:'200000000000000',attachedDeposit:'1'});
+ },{gas:200000000000000n,attachedDeposit:1n});
  success(rawCollateral,'WNEAR_COLLATERAL_TRANSFER');
  const after=await lending.view('get_account_all_positions',{account_id:actor.accountId});
  const balance=actorCollateralInternal(after);
