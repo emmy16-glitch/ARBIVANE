@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sweepIndexedDebtWithActivePyth,checkSweepCheckpoint} from '../src/rhea/full-active-pyth-sweep.ts';
+import {NearRpcHttpError} from '../src/rhea/rpc.ts';
 
 const H='2'.repeat(43),O='3'.repeat(43),count=45;
 const f=(id)=>({accountId:'borrower'+id+'.near',classification:'DEBT_SHARES_DISCOVERED_UNVALUED',
@@ -91,7 +92,7 @@ test('Stage66 recovers a genuine first-pass RPC failure before committing cursor
   {...options,maxFindings:5,batchSize:5},undefined,undefined,
   async id=>{
    const n=(calls.get(id)??0)+1;calls.set(id,n);
-   if(id==='borrower4.near'&&n===1)throw Error('temporary RPC timeout');
+   if(id==='borrower4.near'&&n===1)throw new NearRpcHttpError(429,'0');
    return evaluation(id,id==='borrower4.near');
   },async ms=>{sleeps.push(ms);});
  assert.equal(out.processed,5);
@@ -111,14 +112,48 @@ test('Stage66 caps retry volume and never clears persistent unknown health',asyn
  const calls=new Map();
  const out=await sweepIndexedDebtWithActivePyth({},source(),
   {...options,maxFindings:6,batchSize:6},undefined,undefined,
-  async id=>{calls.set(id,(calls.get(id)??0)+1);throw Error('RPC unavailable');},
+  async id=>{calls.set(id,(calls.get(id)??0)+1);throw new NearRpcHttpError(429,'0');},
   async()=>{});
  assert.equal(out.processed,6);
  assert.equal(out.blocked,6);
  assert.equal(out.paperHealthy,0);
  assert.equal(out.paperAtRisk,0);
- assert.equal([...calls.values()].reduce((a,b)=>a+b,0),10);
+ assert.equal([...calls.values()].reduce((a,b)=>a+b,0),12);
  assert.equal(out.completeSnapshotPriced,false);
  assert.equal(out.maySign,false);
  assert.equal(out.mayBroadcast,false);
+});
+
+test('Stage67 skips retries on permanent schema failures and does not mark them healthy',async()=>{
+ const calls=new Map(),waits=[];
+ const out=await sweepIndexedDebtWithActivePyth({},source(),
+  {...options,maxFindings:5,batchSize:5},undefined,undefined,
+  async id=>{calls.set(id,(calls.get(id)??0)+1);throw Error('invalid oracle asset schema');},
+  async ms=>waits.push(ms));
+ assert.equal(out.processed,5);
+ assert.equal(out.blocked,5);
+ assert.equal(out.paperHealthy,0);
+ assert.equal(out.paperAtRisk,0);
+ assert.deepEqual([...calls.values()],[1,1,1,1,1]);
+ assert.deepEqual(waits,[]);
+ assert.ok(out.items.every(x=>x.reason==='RPC_OR_ORACLE_READ_FAILED'));
+ assert.equal(out.executionEnabled,false);
+ assert.equal(out.mayBroadcast,false);
+});
+
+test('Stage67 applies bounded cooldown on a transient error burst and keeps every unresolved row blocked',async()=>{
+ const delays=[],calls=new Map();
+ const out=await sweepIndexedDebtWithActivePyth({},source(),
+  {...options,maxFindings:12,batchSize:12},undefined,undefined,
+  async id=>{calls.set(id,(calls.get(id)??0)+1);throw new NearRpcHttpError(429,'0');},
+  async ms=>delays.push(ms));
+ assert.equal(out.processed,12);
+ assert.equal(out.blocked,12);
+ assert.equal(out.paperHealthy,0);
+ assert.equal(out.paperAtRisk,0);
+ assert.equal(delays.filter(x=>x===12000).length,1);
+ assert.equal(delays.filter(x=>x===1500).length,8);
+ assert.equal([...calls.values()].reduce((n,k)=>n+k,0),20);
+ assert.ok(out.items.every(x=>x.reason==='RPC_TRANSIENT_RATE_LIMIT_OR_TIMEOUT'));
+ checkSweepCheckpoint(source(),{...options,maxFindings:12,batchSize:12},out);
 });

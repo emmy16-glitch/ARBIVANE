@@ -1,4 +1,5 @@
 import type {NearReadOnlyRpc} from './rpc.ts';
+import {isTransientNearRpcError} from './resilient-readonly-rpc.ts';
 import {inspectActivePythValuation,type ExecutionPythValuationReport} from './execution-pyth-valuation.ts';
 import type {CompletePagedIndex} from './complete-paged-index.ts';
 
@@ -151,8 +152,13 @@ export async function refreshIndexedBorrowerCandidates(
    }catch(e){
     // Explicitly distinguish a cross-block or untrusted response from an RPC failure.
     const msg=e instanceof Error?e.message:'';
+    // Distinguish retryable provider/network failures from permanent
+    // schema, source, oracle and integrity failures. No raw error messages
+    // (which could contain secrets) are persisted in borrower artifacts.
     item.reason=msg==='CROSS_BLOCK_REPRICE'?'CROSS_BLOCK_REPRICE':
-      msg.startsWith('UNTRUSTED_STAGE29')?'UNTRUSTED_REPRICE_RESULT':'RPC_OR_ORACLE_READ_FAILED';
+      msg.startsWith('UNTRUSTED_STAGE29')?'UNTRUSTED_REPRICE_RESULT':
+      isTransientNearRpcError(e)?'RPC_TRANSIENT_RATE_LIMIT_OR_TIMEOUT':
+      'RPC_OR_ORACLE_READ_FAILED';
    }
    items[i]=item;
   }
