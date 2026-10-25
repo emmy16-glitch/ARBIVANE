@@ -1,0 +1,84 @@
+name: Stage45 pinned Rhea prefix storage to isolated NEAR Sandbox
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage45-bounded-state-import.yml'
+      - 'scripts/stage45-prefix-state.mjs'
+      - 'scripts/stage45-archival-state-rpc.mjs'
+      - 'scripts/stage45-rhea-paged-sandbox-import.mjs'
+  workflow_dispatch:
+    inputs:
+      max_prefix_queries:
+        description: 'Bounded archival view_state query budget (1..12000)'
+        required: true
+        default: '1536'
+      max_prefix_depth:
+        description: 'Maximum partition depth in bytes (1..8)'
+        required: true
+        default: '4'
+permissions:
+  contents: read
+concurrency:
+  group: arbivane-stage45-isolated-import
+  cancel-in-progress: false
+jobs:
+  paged-sandbox-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Install isolated NEAR Workspaces, not production wallet dependencies
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Collect archival key-prefix data at ONE historical block and patch local Sandbox
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_WORKSPACES_NETWORK: sandbox
+          STAGE45_ALLOW_LOCAL_MUTATION: 'true'
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE45_MAX_QUERIES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_prefix_queries || '1536' }}
+          STAGE45_MAX_PREFIX_DEPTH: ${{ github.event_name == 'workflow_dispatch' && inputs.max_prefix_depth || '4' }}
+          STAGE45_MAX_RECORDS: '180000'
+          STAGE45_MAX_STATE_BYTES: '134217728'
+          STAGE45_MAX_LEAF_RECORDS: '10000'
+          STAGE45_RPC_GAP_MS: '220'
+          STAGE45_PATCH_MAX_JSON_BYTES: '32000'
+          STAGE45_PATCH_MAX_RECORDS: '50'
+        run: |
+          set -uo pipefail
+          node --experimental-strip-types scripts/stage45-rhea-paged-sandbox-import.mjs > stage45-console.json
+          rc=$?
+          if test -s stage45-rhea-paged-state-import.json; then
+            jq '{status,reason,codeHashVerified,prefixPartitionTraversalFinished,prefixQueryCount,oversizeResponses,rateLimitResponses,dataRecordsRead,dataRecordsPatched,completePrefixCoverage,unresolvedExactBoundaryPrefixCount,stateAppliedIntoSandbox,configMatchesPinnedSource,fullContractStorageParityVerified,realRheaLiquidationAttempted,positiveNetProfitVerified,blockers}' stage45-rhea-paged-state-import.json >> "$GITHUB_STEP_SUMMARY"
+            jq -e '.mode == "ARBIVANE_STAGE45_PINNED_RHEA_PREFIX_SANDBOX_IMPORT" and
+              .chain == "NEAR_SANDBOX" and
+              .sourceNetwork == "NEAR_MAINNET_READ_ONLY" and
+              .realRheaLiquidationAttempted == false and
+              .transactionReplayVerified == false and
+              .financingVerified == false and
+              .positiveNetProfitVerified == false and
+              .executionEnabled == false and
+              .maySignMainnet == false and
+              .mayBroadcastMainnet == false and
+              .fullContractStorageParityVerified == false' stage45-rhea-paged-state-import.json || rc=2
+          else
+            echo 'No verified Stage45 import artifact; no Rhea state parity can be claimed.' >> "$GITHUB_STEP_SUMMARY"
+            rc=2
+          fi
+          echo 'Even a passing config view is NOT cryptographic trie parity, current liquidation eligibility or realized profit.' >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+      - name: Retain bounded source-coverage, patch and blocker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage45-pinned-rhea-import
+          path: |
+            stage45-rhea-paged-state-import.json
+            stage45-console.json
+          if-no-files-found: warn
+          retention-days: 14
