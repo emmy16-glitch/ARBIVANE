@@ -168,3 +168,38 @@ test('Stage83 parity artifact is valid JSON and never claims market completeness
  assert.ok(!excerpt.includes("JSON.stringify(witness,null,2)+'\\\\n'"));
  assert.ok(script.includes('fullMarketImported:false,fullTrieRootParityVerified:false'));
 });
+
+test('Stage84 targeted borrower clone retains complete large source record in one atomic Sandbox patch',async()=>{
+ const giant=Buffer.alloc(135000,0x42);
+ const largeKey=join([5,102],borsh('heavy-farm.near'));
+ const largeRecord=record(largeKey,giant);
+ rows.push(largeRecord);
+ try{
+  const a=scenario();
+  const result=await cloneStage82BorrowerLending(a.args);
+  assert.equal(result.evidence.recordsRead,rows.length);
+  assert.equal(result.evidence.recordsPatched,rows.length);
+  assert.equal(result.evidence.largeSingleRecordPatchCalls,1);
+  assert.ok(result.evidence.largestPatchRecordBytes>48000);
+  const matching=a.patches.filter(x=>x.Data.data_key===largeRecord.key);
+  assert.equal(matching.length,1);
+  assert.equal(matching[0].Data.value,largeRecord.value);
+  assert.deepEqual(Buffer.from(matching[0].Data.value,'base64'),giant);
+  assert.equal(result.evidence.fullMarketImported,false);
+  assert.equal(result.evidence.verifiedLiquidationReceipts,false);
+  assert.equal(result.evidence.mainnetMutated,false);
+ }finally{rows.pop();}
+});
+
+test('Stage84 targeted import rejects a record bigger than its explicit single-patch budget',async()=>{
+ rows.push(record(join([5,102],borsh('too-large-farm.near')),
+  Buffer.alloc(95000,0x44)));
+ try{
+  const a=scenario();
+  a.args.budgets={paceMs:0,maxSinglePatchBytes:85000};
+  await assert.rejects(()=>cloneStage82BorrowerLending(a.args),
+   /STAGE82_SOURCE_RECORD_EXCEEDS_LOCAL_PATCH_LIMIT/);
+  assert.equal(a.imports.length,1);
+  assert.equal(a.patches.filter(x=>x.Data.data_key===rows.at(-1).key).length,0);
+ }finally{rows.pop();}
+});

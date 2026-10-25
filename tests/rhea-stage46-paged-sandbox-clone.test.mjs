@@ -283,3 +283,50 @@ test('Stage81 blocks IP literal metadata endpoints, IPv6 and intranet DNS before
   'https://independent-archive.example/api?key=REDACTED'),
   'https://independent-archive.example/api?key=REDACTED');
 });
+
+test('Stage84 patches original oversized archival record in one bounded Sandbox-only call',async()=>{
+ const x=scenario();
+ const giant=Buffer.alloc(130000,0x5a);
+ x.pages[1].values[0].value=b64(giant);
+ const output=await clonePinnedContractWithState(x.args);
+ assert.equal(output.evidence.recordsRead,2);
+ assert.equal(output.evidence.recordsPatched,2);
+ assert.equal(output.evidence.largeSingleRecordPatchCalls,1);
+ assert.ok(output.evidence.largestPatchRecordBytes>48000);
+ assert.equal(x.patchCalls.length,2);
+ assert.deepEqual(x.patchCalls.map(c=>c.length),[1,1]);
+ assert.equal(x.patchCalls[1][0].Data.value,b64(giant));
+ assert.equal(Buffer.from(x.patchCalls[1][0].Data.value,'base64').length,giant.length);
+ assert.equal(output.evidence.providerPaginationExhausted,true);
+ assert.equal(output.evidence.completeTrieRootParityVerified,false);
+ assert.equal(output.evidence.mainnetMutated,false);
+ assert.equal(x.reports.at(-1).complete,true);
+});
+
+test('Stage84 rejects genuinely over-cap large record without marking clone complete',async()=>{
+ const x=scenario();
+ x.args.budgets={paceMs:0,maxPatchBytes:48000,maxSinglePatchBytes:75000};
+ x.pages[1].values[0].value=b64(Buffer.alloc(85000,0x51));
+ await assert.rejects(()=>clonePinnedContractWithState(x.args),
+  /STAGE46_INDIVIDUAL_STORAGE_KEY_EXCEEDS_PATCH_LIMIT/);
+ assert.equal(x.patchCalls.length,0);
+ assert.equal(x.reports.some(v=>v.complete===true),false);
+});
+
+test('Stage84 alternate archive must actually supply one oversized key, never empty success',async()=>{
+ const x=scenario();let calls=0;
+ x.args.fetcher=async(url,req)=>{
+  const {params}=JSON.parse(req.body),cursor=params.after_key_base64??null;
+  calls++;
+  if(cursor===null)
+   return new Response(JSON.stringify({result:x.pages[0]}),{status:200});
+  if(url===x.args.endpoint)return new Response('Response too large',{status:413});
+  return new Response(JSON.stringify({result:{
+   block_height:221433162,block_hash:blockHash,values:[],
+  }}),{status:200});
+ };
+ await assert.rejects(()=>clonePinnedContractWithState(x.args),
+  /STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY/);
+ assert.ok(calls>2);
+ assert.equal(x.reports.some(v=>v.complete===true),false);
+});
