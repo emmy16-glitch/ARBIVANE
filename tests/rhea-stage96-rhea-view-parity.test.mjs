@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {attestStage96PinnedRheaViews,stage96SafeError,stage101SameBorrowerView} from '../scripts/stage96-rhea-view-parity.mjs';
+import {attestStage96PinnedRheaViews,stage96SafeError,stage101SameBorrowerView,stage102BorrowerAssetDifferenceClasses} from '../scripts/stage96-rhea-view-parity.mjs';
 
 const id='contract.main.burrow.near',borrowerId='borrower.near';
 const source={config:{max_positions:8},borrower:{account_id:borrowerId,positions:[]},assets:[['wrap.near',{config:{can_borrow:true}}]]};
@@ -137,4 +137,39 @@ test('Stage101 still blocks authentic numeric differences with data-free section
  assert.deepEqual(check.stage101DifferentSections,['POSITIONS']);
  assert.equal(m.written.at(-1).allSourceViewsVerified,false);
  assert.ok(!JSON.stringify(m.written).includes('wrap.near'));
+});
+
+test('Stage102 distinguishes changed shares from timestamp-dependent balance and APR without leaking data',async()=>{
+ const base={account_id:borrowerId,
+  supplied:[{token_id:'wrap.near',balance:'1234',shares:'55',apr:'0.12'}],
+  positions:{regular:{collateral:[{token_id:'wrap.near',balance:'1234',shares:'55',apr:'0.12'}],borrowed:[]}}};
+ const observed={...base,
+  supplied:[{token_id:'wrap.near',balance:'1235',shares:'55',apr:'0.13'}],
+  positions:{regular:{collateral:[{token_id:'wrap.near',balance:'1235',shares:'55',apr:'0.13'}],borrowed:[]}}};
+ const classes=stage102BorrowerAssetDifferenceClasses(base,observed);
+ assert.deepEqual(classes,['ASSET_APR_DIFFERENT','ASSET_BALANCE_DIFFERENT']);
+ const m=make({borrower:observed});
+ await assert.rejects(attestStage96PinnedRheaViews({
+  lending:m.lending,borrowerAccountId:borrowerId,config:source.config,
+  borrower:base,assets:source.assets,persist:m.persist
+ }),/STAGE96_BORROWER_VIEW_MISMATCH/);
+ const witness=m.written.at(-1),serialized=JSON.stringify(witness);
+ assert.deepEqual(witness.checks.at(-1).stage102AssetDifferenceClasses,classes);
+ assert.equal(witness.allSourceViewsVerified,false);
+ assert.equal(witness.liquidationAttempted,false);
+ assert.equal(serialized.includes('wrap.near'),false);
+ assert.equal(serialized.includes('1235'),false);
+ assert.equal(serialized.includes('0.13'),false);
+});
+test('Stage102 never treats a share mismatch or different asset identity as harmless',()=>{
+ const original={supplied:[{token_id:'wrap.near',shares:'5',balance:'7',apr:'0'}],
+  positions:{regular:{collateral:[],borrowed:[]}}};
+ const modified={supplied:[{token_id:'wrap.near',shares:'6',balance:'7',apr:'0'}],
+  positions:{regular:{collateral:[],borrowed:[]}}};
+ assert.deepEqual(stage102BorrowerAssetDifferenceClasses(original,modified),
+  ['ASSET_SHARES_DIFFERENT']);
+ assert.equal(stage101SameBorrowerView(original,modified),false);
+ modified.supplied[0].token_id='linear-protocol.near';
+ assert.deepEqual(stage102BorrowerAssetDifferenceClasses(original,modified),
+  ['ASSET_MEMBERSHIP_DIFFERENT']);
 });
