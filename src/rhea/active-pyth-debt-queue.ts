@@ -14,6 +14,8 @@ export interface RepriceQueueOptions {
  lendingContract:string;pythOracle:string;
  expectedLendingCodeHash:string;expectedPythOracleCodeHash:string;
  maxConfidenceBps:number;sanityMaxUsd:string;
+ /** One fresh finalized block shared across the entire repricing batch. */
+ pinnedBlockHeight?:number;
 }
 export type RepriceDisposition='PAPER_AT_RISK_UNAPPROVED'|'PAPER_HEALTHY_UNAPPROVED'|
  'NO_DEBT_NOW'|'BLOCKED_INCOMPLETE_QUOTES'|'BLOCKED_SOURCE_POSITION_CHANGED'|'BLOCKED_RPC';
@@ -28,6 +30,8 @@ export interface RepriceQueueReport {
  status:'REPRICE_BATCH_COMPLETED_RESEARCH_ONLY'|'REPRICE_BATCH_INCOMPLETE'|'NO_MORE_FINDINGS';
  sourceBlockHeight:string;sourceCodeHash:string;sourceTotalAccounts:number;
  sourceDebtAccounts:number;fromFinding:number;nextFinding:number;remainingFindings:number;
+ /** Null is legacy per-borrower sampling; stage 32 workflow requires a shared pin. */
+ pricingBlockHeight:string|null;
  processed:number;paperAtRisk:number;paperHealthy:number;noDebtNow:number;blocked:number;
  items:RepriceQueueItem[];
  walletAuthorized:false;currentLiquidationEligibilityProven:false;
@@ -74,6 +78,7 @@ function validateOptions(source:CompletePagedIndex,o:RepriceQueueOptions){
  o.lendingContract!=='contract.main.burrow.near'||o.lendingContract===o.pythOracle||
  !HASH.test(o.expectedLendingCodeHash)||!HASH.test(o.expectedPythOracleCodeHash)||
  source.lendingCodeHash!==o.expectedLendingCodeHash||
+ (o.pinnedBlockHeight!==undefined&&(!Number.isSafeInteger(o.pinnedBlockHeight)||o.pinnedBlockHeight<1))||
  !Number.isSafeInteger(o.maxConfidenceBps)||o.maxConfidenceBps<1||o.maxConfidenceBps>300||
  !/^[1-9][0-9]{0,7}$/.test(o.sanityMaxUsd)||
  Number(o.sanityMaxUsd)>100000000)
@@ -104,7 +109,7 @@ export async function refreshIndexedBorrowerCandidates(
   pythOracle:o.pythOracle,borrowerAccountId,expectedLendingCodeHash:o.expectedLendingCodeHash,
   expectedPythOracleCodeHash:o.expectedPythOracleCodeHash,nowMs:Date.now(),
   maxConfidenceBps:o.maxConfidenceBps,sanityMaxUsd:o.sanityMaxUsd,
-  maxConcurrency:2}),
+  maxConcurrency:2,pinnedBlockHeight:o.pinnedBlockHeight}),
 ):Promise<RepriceQueueReport>{
  validateSource(source);validateOptions(source,o);
  const candidates=source.findings.slice(o.fromFinding,o.fromFinding+o.maxFindings);
@@ -120,6 +125,8 @@ export async function refreshIndexedBorrowerCandidates(
     executionEligible:false,tradeProfitVerified:false};
    try{
     const value=await evaluator(sourceAccount.accountId);
+    if(o.pinnedBlockHeight!==undefined&&value.blockHeight!==String(o.pinnedBlockHeight))
+      throw Error('CROSS_BLOCK_REPRICE');
     let status=checkObservation(value,sourceAccount.accountId);
     const sourceByPosition=new Map(sourceAccount.positions.map(p=>[p.positionId,p.debtAssetIds]));
     if(status!=='NO_DEBT_NOW'&&status!=='BLOCKED_INCOMPLETE_QUOTES'){
@@ -141,7 +148,12 @@ export async function refreshIndexedBorrowerCandidates(
        BigInt(a!)<BigInt(b!)?-1:1)[0]??null:null,
      paperAtRiskPositions:risks,paperHealthyPositions:healthy,
      reason:status.startsWith('BLOCKED')?status:null};
-   }catch{/* A failed account stays blocked; never silently treat as healthy or complete pricing. */}
+   }catch(e){
+    // Explicitly distinguish a cross-block or untrusted response from an RPC failure.
+    const msg=e instanceof Error?e.message:'';
+    item.reason=msg==='CROSS_BLOCK_REPRICE'?'CROSS_BLOCK_REPRICE':
+      msg.startsWith('UNTRUSTED_STAGE29')?'UNTRUSTED_REPRICE_RESULT':'RPC_OR_ORACLE_READ_FAILED';
+   }
    items[i]=item;
   }
  }));
@@ -156,11 +168,13 @@ export async function refreshIndexedBorrowerCandidates(
   sourceBlockHeight:source.blockHeight,sourceCodeHash:source.lendingCodeHash,
   sourceTotalAccounts:source.totalAccounts,sourceDebtAccounts:source.debtAccounts,
   fromFinding:o.fromFinding,nextFinding:next,remainingFindings:source.debtAccounts-next,
+  pricingBlockHeight:o.pinnedBlockHeight===undefined?null:String(o.pinnedBlockHeight),
   processed:items.length,paperAtRisk,paperHealthy,noDebtNow,blocked,items,
   walletAuthorized:false,currentLiquidationEligibilityProven:false,
   transactionReplayPerformed:false,profitVerified:false,
   executionEnabled:false,maySign:false,mayBroadcast:false,
-  warnings:['REPRICED_POSITIONS_USE_INDEPENDENT_RECENT_FINALIZED_BLOCKS',
+  warnings:[o.pinnedBlockHeight===undefined?'REPRICED_POSITIONS_USE_INDEPENDENT_RECENT_FINALIZED_BLOCKS':
+   'REPRICED_POSITIONS_USE_ONE_SHARED_FINALIZED_BLOCK',
    'SOURCE_DEBT_POSITION_CHANGES_REQUIRE_REINDEXING',
    'CORRECT_PYTH_PAPER_HEALTH_IS_NOT_LIQUIDATION_EXECUTION_PARITY',
    'NO_MAINNET_SIGNER_SANDBOX_REPLAY_OR_VERIFIED_PROFIT']};

@@ -112,6 +112,17 @@ concurrency, retries, atomic checkpoints, and exact-block resume. This replaces
 tens of thousands of per-account detail calls while retaining isolated-position
 debt evidence. See [Stage 30](docs/RHEA_STAGE30_BULK_POSITION_INDEX.md).
 
+## Stage 32 — one-block fresh-Pyth borrower batches
+
+The Stage 31 CLI now pins **every borrower valuation in a bounded refresh batch**
+to one current finalized NEAR lending block, rejects cross-block responses and
+records `pricingBlockHeight` in its report. A GitHub Actions artifact check
+enforces the same block for non-blocked items. This is **read-only** and does
+not establish liquidation eligibility, replay results, available financing,
+profit or permission to sign transactions.
+
+See [Stage 32 evidence and limitations](docs/RHEA_STAGE32_COHERENT_BLOCK_QUEUE.md).
+
 ## Not financial advice / not production-ready
 
 Tests use fabricated positions (including Rhea's own published numerical example) and mocked-RPC responses. A passing unit test does not prove current Rhea liquidation math, true execution profitability, compliance with hackathon rules, deployed contract security, or that an external transfer can succeed. Do not fund, connect secrets, or deploy an autonomous executor based on this stage.

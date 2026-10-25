@@ -92,5 +92,5 @@ test('untrusted reprice attempt cannot claim execution authorization',async()=>{
  }));
  assert.equal(out.blocked,2);
  assert.equal(out.paperAtRisk,0);
- assert.equal(out.items[0].reason,'RPC_OR_ORACLE_READ_FAILED');
+ assert.equal(out.items[0].reason,'UNTRUSTED_REPRICE_RESULT');
 });
