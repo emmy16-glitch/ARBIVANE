@@ -6,6 +6,7 @@ import {readFile,writeFile,rename} from 'node:fs/promises';
 import {attestStage44LocalContractExecution} from '../src/rhea/stage44-sandbox-contract-witness.ts';
 const e=process.env;
 let worker;
+let transactionDiagnostic=null;
 const output=e.STAGE44_REPORT_PATH??'stage44-local-sandbox-execution.json';
 const MESSAGE='ARBIVANE_STAGE44_SANDBOX_STATE_CHANGED';
 async function save(v){
@@ -40,6 +41,17 @@ async function main(){
   gas:100000000000000n,attachedDeposit:0n,
  });
  const after=await contract.view('get_status',{account_id:actor.accountId});
+ const result=raw?.result??raw;
+ const status=result?.status;
+ transactionDiagnostic={
+  beforeWasNull:before===null,afterMatched:after===MESSAGE,
+  finalExecutionStatus:typeof result?.final_execution_status==='string'?
+   result.final_execution_status:null,
+  statusType:typeof status,
+  statusKeys:status&&typeof status==='object'?Object.keys(status).slice(0,5):[],
+  wrapperSucceeded:raw?.succeeded===true,
+  receiptCount:Array.isArray(result?.receipts_outcome)?result.receipts_outcome.length:null,
+ };
  const report=attestStage44LocalContractExecution({
   transaction:raw,actorAccountId:actor.accountId,contractAccountId:contract.accountId,
   before,after,expectedMessage:MESSAGE,
@@ -56,6 +68,7 @@ catch(error){
   profitVerified:false,executionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
   reason:error instanceof Error&&/^STAGE44_/.test(error.message)?error.message:
    'SANDBOX_RUNTIME_OR_CONTRACT_EXECUTION_FAILED',
+  transactionDiagnostic,
  };
  await save(report).catch(()=>{});
  console.log(JSON.stringify(report,null,2));
