@@ -140,6 +140,9 @@ jobs:
           RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
           RHEA_STAGE38_MAX_FINDINGS: '1'
           RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '1'
+          # Optional high-limit archival RPC owner secret; the public archive
+          # is deprecated and only queried if one key exceeds the primary limit.
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
           RHEA_RPC_SPACING_MS: '900'
         run: |
           set -euo pipefail

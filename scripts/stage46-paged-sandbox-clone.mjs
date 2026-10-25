@@ -12,13 +12,18 @@ const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
 
 export async function clonePinnedContractWithState({
  root,rpc,endpoint,contractId,blockHeight,expectedCodeHash=null,
+ fallbackEndpoint='https://archival-rpc.mainnet.near.org',
  fetcher=fetch,onProgress=()=>{},budgets={}
 }){
  if(!root||typeof root.importContract!=='function'||!rpc||
   typeof rpc.viewAccount!=='function'||!ID.test(contractId)||
   !bounded(blockHeight,1,Number.MAX_SAFE_INTEGER)||
   typeof endpoint!=='string'||new URL(endpoint).protocol!=='https:'||
-  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash)))
+  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash))||
+ typeof fallbackEndpoint!=='string'||
+ !/^https:\/\//.test(fallbackEndpoint)||
+ new URL(fallbackEndpoint).username||new URL(fallbackEndpoint).password||
+ new URL(fallbackEndpoint).hash||fallbackEndpoint===endpoint)
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
  const o={
   maxQueries:budgets.maxQueries??1536,
@@ -49,12 +54,13 @@ export async function clonePinnedContractWithState({
  },fetcher);
  // Keep a bounded patch batch across authenticated source RPC pages.
  // Source-block parity, cursor coverage and end-to-end receipt checks remain mandatory.
- // The older NEAR.org archival RPC is severely rate-limited. Query it ONLY
- // once the primary provider has proven a single-entry oversized failure.
+ // The default NEAR.org archive is deprecated and severely rate-limited.
+ // Prefer a configured higher-limit archival provider for a single oversized
+ // record. Both endpoints must still return the exact pinned block and keys.
  // Every alternate reply is checked by Stage45 against the exact pinned
  // source block height, hash and globally ordered storage keys.
- const legacyArchival=new ArchivalStateRpc({
-  endpoint:'https://archival-rpc.mainnet.near.org',
+ const fallbackArchival=new ArchivalStateRpc({
+  endpoint:fallbackEndpoint,
   accountId:contractId,blockHeight,paceMs:4000,timeoutMs:18000,maxRetries:0,
  },fetcher);
  let alternateSingleEntryReads=0,alternateFailures=0;
@@ -75,7 +81,7 @@ export async function clonePinnedContractWithState({
     // A distinct, known archival node can sometimes serve a larger record.
     // Do NOT skip, truncate or synthesize the source storage record.
     try{
-     const page=await legacyArchival.viewPage(cursor,1);
+     const page=await fallbackArchival.viewPage(cursor,1);
      alternateSingleEntryReads++;
      return {...page,recoveredOversizedEntry:true};
     }catch{
@@ -114,7 +120,7 @@ export async function clonePinnedContractWithState({
    sourcePageCount:coverage.completedPages,
    sourceRpcAttempts:archive.getStats().transportAttempts,
    alternateSingleEntryReads,alternateFailures,
-   alternateRpcAttempts:legacyArchival.getStats().transportAttempts,
+   alternateRpcAttempts:fallbackArchival.getStats().transportAttempts,
    sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,
   }

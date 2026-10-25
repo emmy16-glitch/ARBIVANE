@@ -200,3 +200,42 @@ test('Stage77 resumes normal large pages after recovering just one oversized sto
  assert.equal(evidence.providerPaginationExhausted,true);
  assert.equal(evidence.mainnetMutated,false);
 });
+
+
+test('Stage78 explicitly configured higher-limit archival RPC recovers a pinned oversized key',async()=>{
+ const x=scenario(),url='https://large-state-provider.example/rpc',calls=[];
+ x.args.fallbackEndpoint=url;
+ x.args.fetcher=async(endpoint,req)=>{
+  const params=JSON.parse(req.body).params;
+  calls.push({endpoint,limit:params.limit,after:params.after_key_base64});
+  if(params.after_key_base64===undefined)
+   return {ok:true,status:200,headers:{get:()=>null},
+    text:async()=>JSON.stringify({result:x.pages[0]})};
+  if(endpoint!==url)
+   return {ok:false,status:413,headers:{get:()=>null},text:async()=>'Too large'};
+  return {ok:true,status:200,headers:{get:()=>null},
+   text:async()=>JSON.stringify({result:x.pages[1]})};
+ };
+ const v=(await clonePinnedContractWithState(x.args)).evidence;
+ assert.equal(v.alternateSingleEntryReads,1);
+ assert.equal(v.recordsRead,2);
+ assert.equal(v.recordsPatched,2);
+ assert.equal(v.mainnetMutated,false);
+ assert.equal(v.completeTrieRootParityVerified,false);
+ assert.equal(calls.filter(c=>c.endpoint===url).length,1);
+ assert.ok(calls.some(c=>c.endpoint===url&&c.limit===1));
+});
+
+test('Stage78 rejects insecure, credential-bearing and same-as-primary alternative endpoints',async()=>{
+ for(const fallbackEndpoint of [
+  'http://archive.example',
+  'https://user:pass@archive.example',
+  'https://archive.example/#fragment',
+  'https://archival-rpc.mainnet.fastnear.com',
+ ]){
+  const x=scenario({fallbackEndpoint});
+  await assert.rejects(()=>clonePinnedContractWithState(x.args),
+   /STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION/);
+  assert.equal(x.imports.length,0);
+ }
+});
