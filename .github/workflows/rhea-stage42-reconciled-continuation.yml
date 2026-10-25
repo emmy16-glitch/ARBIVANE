@@ -6,6 +6,8 @@ on:
       - '.github/workflows/rhea-stage42-reconciled-continuation.yml'
       - 'scripts/stage47-next-market-window.mjs'
       - 'scripts/stage47-next-market-window-cli.mjs'
+      - 'scripts/stage56-sandbox-attempt-evidence.mjs'
+      - 'scripts/stage56-sandbox-attempt-cli.mjs'
   workflow_dispatch:
     inputs:
       followups_remaining:
@@ -96,12 +98,32 @@ jobs:
           if jq -e '.sandboxPlanReady == true' stage42-qualification-summary.json >/dev/null; then
             test -s stage38-positive-stage35-evidence.json
             npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
-            EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true \
+            # A genuine Rhea Sandbox callback rejection must be preserved as
+            # evidence, not abort all four read-only borrower shards. Unknown
+            # runtime failure/missing phase receipt still fails the shard.
+            sandbox_exit=0
+            if EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true \
               STAGE37_STAGE35_EVIDENCE_PATH=stage38-positive-stage35-evidence.json \
               NEAR_RPC_URL=https://archival-rpc.mainnet.fastnear.com \
               NEAR_CLI_MAINNET_RPC_SERVER_URL=https://archival-rpc.mainnet.fastnear.com \
-              node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage42-sandbox-actual.json
-            jq -e '.chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .mayBroadcastMainnet == false' stage42-sandbox-actual.json
+              node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage42-sandbox-actual.json; then
+              sandbox_exit=0
+            else
+              sandbox_exit=$?
+            fi
+            EXECUTION_ENABLED=false NEAR_NETWORK=mainnet \
+              node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
+                stage42-sandbox-actual.json stage55-sandbox-phase-evidence.json \
+                stage37-sandbox-execution.json stage41-sandbox-balance-settlement.json \
+                > stage56-sandbox-attempt-stdout.json
+            jq -e '.mode == "ARBIVANE_STAGE56_EVIDENCED_SANDBOX_ATTEMPT" and
+              .chain == "NEAR_SANDBOX" and
+              .readOnlyMarketContinuationAllowed == true and
+              .realMainnetExecuted == false and .realProfitVerified == false and
+              .mayBroadcastMainnet == false and .maySignMainnet == false' \
+              stage56-sandbox-attempt-evidence.json
+            jq '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,actualRheaSettlementVerified}' \
+              stage56-sandbox-attempt-evidence.json >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'No fresh valid positive source plan; no transaction attempted.' >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -126,6 +148,8 @@ jobs:
             stage49-sandbox-funding.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
+            stage56-sandbox-attempt-evidence.json
+            stage56-sandbox-attempt-stdout.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
           retention-days: 14
