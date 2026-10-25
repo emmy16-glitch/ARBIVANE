@@ -32,6 +32,7 @@ const report={
  patchWriteCalls:0,largeSingleRecordPatchCalls:0,largestPatchRecordBytes:0,
  prefixQueryCount:0,oversizeResponses:0,rateLimitResponses:0,
  alternateSingleEntryReads:0,alternateFailures:0,alternateRpcAttempts:0,
+ alternateHighLimitPages:0,alternateHighLimitFailures:0,
  stateAppliedIntoSandbox:false,configMatchesPinnedSource:false,
  fullContractStorageParityVerified:false,
  realRheaLiquidationAttempted:false,transactionReplayVerified:false,
@@ -71,7 +72,7 @@ async function main(){
  report.codeHashVerified=true;
  const opts={
   blockHeight:BLOCK,
-  maxQueries:integer('STAGE45_MAX_QUERIES',1536,1,12000),
+  maxQueries:integer('STAGE45_MAX_QUERIES',6144,1,12000),
   maxRecords:integer('STAGE45_MAX_RECORDS',180000,1,5000000),
   maxBytes:integer('STAGE45_MAX_STATE_BYTES',134217728,1024,1073741824),
   pageSize:integer('STAGE45_PAGE_SIZE',128,1,2048),
@@ -91,11 +92,29 @@ async function main(){
   endpoint:fallback,accountId:LENDING,blockHeight:BLOCK,
   paceMs:4000,timeoutMs:18000,maxRetries:0
  });
+ let highLimitCursor=Symbol('not-yet-queried');
  async function sourcePage(afterKey,limit){
   try{return await stateRpc.viewPage(afterKey,limit);}
   catch(error){
-   if(!(error instanceof StateResponseTooLarge)||limit!==1||!alternateRpc)
+   if(!(error instanceof StateResponseTooLarge)||!alternateRpc)throw error;
+   if(limit>1){
+    // Use the configured higher-capacity archive once for this cursor before
+    // spending more primary RPC queries halving a too-large page.
+    if(highLimitCursor!==afterKey){
+     highLimitCursor=afterKey;
+     try{
+      const bigger=await alternateRpc.viewPage(afterKey,limit);
+      if(!Array.isArray(bigger?.values)||bigger.values.length<1||
+       bigger.values.length>limit)
+       throw Error('STAGE86_INVALID_HIGH_LIMIT_BACKUP_PAGE');
+      report.alternateHighLimitPages++;
+      return bigger;
+     }catch{
+      report.alternateHighLimitFailures++;
+     }
+    }
     throw error;
+   }
    try{
     const page=await alternateRpc.viewPage(afterKey,1);
     // Do not let a missing record masquerade as an exhausted cursor.
