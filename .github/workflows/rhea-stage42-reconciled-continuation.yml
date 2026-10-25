@@ -9,6 +9,8 @@ on:
       - 'scripts/stage56-sandbox-attempt-evidence.mjs'
       - 'scripts/stage56-sandbox-attempt-cli.mjs'
       - 'src/rhea/stage35-atomic-reference-sizing.ts'
+      - 'src/rhea/stage38-live-candidate-cli.ts'
+      - 'src/rhea/stage38-live-candidate-pipeline.ts'
   workflow_dispatch:
     inputs:
       followups_remaining:
@@ -94,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           node --experimental-strip-types src/rhea/stage38-live-candidate-cli.ts > stage42-qualification-summary.json
-          jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .netProfitVerified == false and .refreshed <= 12' stage42-qualification-summary.json
+          jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .netProfitVerified == false and .reviewed == 80 and .refreshed == .paperAtRiskFromPreviousScan and .refreshed <= 80 and .status != "BLOCKED_CANDIDATE_LIMIT"' stage42-qualification-summary.json
           jq '{startFinding,nextFinding,reviewed,paperAtRiskFromPreviousScan,refreshed,positiveSourcePlans,failedFreshReads,sandboxPlanReady}' stage42-qualification-summary.json >> "$GITHUB_STEP_SUMMARY"
           if jq -e '.sandboxPlanReady == true' stage42-qualification-summary.json >/dev/null; then
             test -s stage38-positive-stage35-evidence.json
