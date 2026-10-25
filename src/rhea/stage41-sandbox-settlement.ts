@@ -120,8 +120,15 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const ftSeizeAfter=uint(e.actorSeizeFtAfter,'FT_SEIZE_AFTER');
  const debtDecreased=preDebt>postDebt;
  const collateralDecreased=preCollateral>postCollateral;
+ const finalOrLaterPersisted=receipt.transactionFinal===true||
+  (receipt.transactionFinal===false&&
+   receipt.transactionExecutionStatus==='EXECUTED_OPTIMISTIC'&&
+   receipt.persistedAtLaterFinalizedBlock===true&&
+   typeof receipt.finalizedBlockBefore==='number'&&
+   typeof receipt.finalizedBlockAfter==='number'&&
+   receipt.finalizedBlockAfter>=receipt.finalizedBlockBefore+2);
  const validReceipt=receipt.status==='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'&&
-  receipt.transactionFinal===true&&receipt.attemptedTransaction===true&&
+  finalOrLaterPersisted&&receipt.attemptedTransaction===true&&
   receipt.failedReceiptCount===0&&receipt.receiptCount>0;
  const actorFtReceived=ftSeizeAfter>ftSeizeBefore;
  const status:SandboxSettlementEvidence['status']=!validReceipt?'BLOCKED_RECEIPT_OR_CALLBACK':
