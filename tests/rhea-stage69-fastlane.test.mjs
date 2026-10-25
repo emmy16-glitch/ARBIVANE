@@ -99,3 +99,13 @@ test('Stage74 accepts only a later-finalized persistent optimistic Sandbox recei
  assert.ok(text.includes('actualRheaSettlementVerified == true'));
  assert.ok(text.includes('maySignMainnet == false'));
 });
+
+
+test('Stage75 pins cloned state batching changes to an authentic new fast-lane run',()=>{
+ assert.ok(text.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
+ assert.ok(text.includes("cancel-in-progress: ${{ github.event_name == 'push' }}"));
+ assert.ok(text.includes('stage46-sandbox-clone-evidence.json'));
+ assert.ok(text.includes('stage55-sandbox-phase-evidence.json'));
+ assert.ok(text.includes('borrowerDebtDecreaseInternal != "0"'));
+ assert.ok(!text.includes('broadcast_tx'));
+});

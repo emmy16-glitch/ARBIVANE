@@ -24,8 +24,8 @@ export async function clonePinnedContractWithState({
   maxRecords:budgets.maxRecords??180000,
   maxBytes:budgets.maxBytes??134217728,
   pageSize:budgets.pageSize??128,
-  maxPatchBytes:budgets.maxPatchBytes??32000,
-  maxPatchRecords:budgets.maxPatchRecords??50,
+  maxPatchBytes:budgets.maxPatchBytes??48000,
+  maxPatchRecords:budgets.maxPatchRecords??128,
  };
  if(!bounded(o.maxPatchBytes,1024,64000)||!bounded(o.maxPatchRecords,1,250))
   throw Error('STAGE46_INVALID_SANDBOX_PATCH_BUDGET');
@@ -46,13 +46,15 @@ export async function clonePinnedContractWithState({
   endpoint,accountId:contractId,blockHeight,
   paceMs:budgets.paceMs??220,timeoutMs:18000,maxRetries:2
  },fetcher);
- let patched=0,batch=[],batchBytes=0;
+ // Keep a bounded patch batch across authenticated source RPC pages.
+ // Source-block parity, cursor coverage and end-to-end receipt checks remain mandatory.
+ let patched=0,patchWrites=0,batch=[],batchBytes=0;
  async function flush(){
   if(!batch.length)return;
   await clone.patchStateRecords({records:batch});
-  patched+=batch.length;
+  patched+=batch.length;patchWrites++;
   batch=[];batchBytes=0;
-  onProgress({contractId,patched,complete:false});
+  onProgress({contractId,patched,patchWrites,complete:false});
  }
  const coverage=await coverPinnedPagedState(
   (cursor,limit)=>archive.viewPage(cursor,limit),
@@ -67,19 +69,25 @@ export async function clonePinnedContractWithState({
      await flush();
     batch.push(entry);batchBytes+=bytes;
    }
-   await flush();
   }
  );
- if(coverage.completePaginationCoverage!==true||patched!==coverage.records)
+ // Finish a bounded trailing batch only once the source cursor is exhausted.
+ if(coverage.completePaginationCoverage!==true)
   throw Error('STAGE46_INCOMPLETE_PINNED_SANDBOX_CLONE');
- onProgress({contractId,patched,complete:true});
+ await flush();
+ if(patched!==coverage.records)
+  throw Error('STAGE46_INCOMPLETE_PINNED_SANDBOX_CLONE');
+ onProgress({contractId,patched,patchWrites,complete:true});
  return {
   contract:clone,
   evidence:{
    contractId,blockHeight:String(blockHeight),sourceCodeHash:remote.codeHash,
    sourceBlockHash:coverage.blockHash,
    providerPaginationExhausted:true,recordsRead:coverage.records,
-   recordsPatched:patched,sourceStorageDigest:coverage.recordStreamSha256,
+   recordsPatched:patched,patchWriteCalls:patchWrites,
+   sourcePageCount:coverage.completedPages,
+   sourceRpcAttempts:archive.getStats().transportAttempts,
+   sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,
   }
  };
