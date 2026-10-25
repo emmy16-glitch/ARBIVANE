@@ -10,12 +10,16 @@ import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhe
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
+import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
+import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
+let sandboxFundingAttempted=false;
 async function main(){
  if(e.NEAR_WORKSPACES_NETWORK!=='sandbox'||e.EXECUTION_ENABLED!=='false'||
   e.STAGE37_ALLOW_SANDBOX_MUTATION!=='true'||
+  e.STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING!=='true'||
   !e.STAGE37_STAGE35_EVIDENCE_PATH||!e.NEAR_RPC_URL||
   e.NEAR_PRIVATE_KEY||e.NEAR_ACCOUNT_ID||e.MAINNET_PRIVATE_KEY)
   throw Error('LOCAL_SANDBOX_ONLY_EXPLICIT_REPLAY_GATE_REQUIRED');
@@ -46,7 +50,7 @@ async function main(){
  const contracts=new Map();
  const cloneEvidence=[];
  const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
-  plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
+  'wrap.near',plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
  for(const id of ids){
   const {contract,evidence}=await clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
@@ -65,19 +69,46 @@ async function main(){
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
- const [sandboxConfig,sandboxBorrower]=await Promise.all([
+ const [sandboxConfig,sandboxBorrower,sourceAssets,sandboxAssets]=await Promise.all([
   lending.view('get_config',{}),
   lending.view('get_account_all_positions',{account_id:plan.borrowerAccountId}),
+  rpc.view(plan.lendingContract,'get_assets_paged',{},block),
+  lending.view('get_assets_paged',{}),
  ]);
  const pinnedConfigMatches=JSON.stringify(sandboxConfig)===JSON.stringify(config.value);
  const pinnedBorrowerMatches=JSON.stringify(sandboxBorrower)===JSON.stringify(borrower.value);
- if(!pinnedConfigMatches||!pinnedBorrowerMatches)
+ const pinnedAssetsMatch=sourceAssets.blockHeight===plan.mainnetSourceBlockHeight&&
+  JSON.stringify(sourceAssets.value)===JSON.stringify(sandboxAssets);
+ if(!pinnedConfigMatches||!pinnedBorrowerMatches||!pinnedAssetsMatch)
   throw Error('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
- const actor=await root.createSubAccount('arbivane-replay');
+ const actor=await root.createSubAccount('arbivane-replay',{
+  initialBalance:8n*10n**24n,
+ });
  if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
   throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
+ // Local NEAR wrapped through the actual pinned wrap.near token contract,
+ // deposited into the actual pinned lending contract as actor collateral.
+ // No mainnet funds, token mint shortcut, storage-key fabrication or secret.
+ sandboxFundingAttempted=true;
+ const seed=await seedSandboxLiquidatorWithWrappedNear({
+  actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
+ });
+ const actorPosition=await lending.view('get_account_all_positions',{
+  account_id:actor.accountId,
+ });
+ const capacity=inspectStage49SandboxBorrow({
+  plan,assets:sandboxAssets,actorAccountId:actor.accountId,
+  actorPositions:actorPosition,
+ });
+ await writeFile('stage49-sandbox-funding.json',JSON.stringify({
+  mode:'ARBIVANE_STAGE49_LOCAL_FINANCING_AND_BORROW_PREFLIGHT',
+  chain:'NEAR_SANDBOX',seed,capacity,maySignMainnet:false,
+  mayBroadcastMainnet:false,positiveNetProfitVerified:false,
+ },null,2)+'\n');
+ if(!capacity.sandboxAttemptAllowed)
+  throw Error('STAGE49_'+capacity.status);
  // Observe actual lending positions and NEP-141 balances BEFORE the Sandbox call.
  // No zero-balance fallback: missing storage/views must block settlement claims.
  const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
@@ -154,6 +185,7 @@ async function main(){
 main().catch(err=>{
  console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
   status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:sandboxTransactionSubmitted,
+  sandboxFundingAttempted,
   reason:err instanceof Error?err.message:'UNKNOWN',
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
