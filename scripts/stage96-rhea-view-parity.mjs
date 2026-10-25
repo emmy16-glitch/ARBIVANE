@@ -19,6 +19,40 @@ const stable=(v)=>{
  return s;
 };
 const sha=s=>createHash('sha256').update(s).digest('hex');
+// Rust HashMap/HashSet iteration is not a deterministic JSON ordering contract.
+// Only the borrower view's documented unordered collections are treated as
+// multisets. Every element and every scalar must still match source exactly.
+const STAGE101_UNORDERED_BORROWER_ARRAYS=new Set([
+ 'supplied','collateral','borrowed','farms','rewards'
+]);
+function stage101CanonicalBorrower(value,field=''){
+ if(Array.isArray(value)){
+  const entries=value.map(x=>stage101CanonicalBorrower(x,''));
+  if(STAGE101_UNORDERED_BORROWER_ARRAYS.has(field))
+   entries.sort((a,b)=>{
+    const left=JSON.stringify(a),right=JSON.stringify(b);
+    return left<right?-1:left>right?1:0;
+   });
+  return entries;
+ }
+ if(value!==null&&typeof value==='object'){
+  return Object.fromEntries(Object.keys(value).sort().map(key=>[
+   key,stage101CanonicalBorrower(value[key],key)
+  ]));
+ }
+ return value;
+}
+export function stage101SameBorrowerView(source,sandbox){
+ return stable(stage101CanonicalBorrower(source))===
+  stable(stage101CanonicalBorrower(sandbox));
+}
+function stage101BorrowerDifferenceSections(source,sandbox){
+ const keys=['account_id','supplied','positions','farms',
+  'has_non_farmed_assets','booster_staking','booster_stakings','is_locked'];
+ return keys.filter(key=>!stage101SameBorrowerView(source?.[key],sandbox?.[key]))
+  .map(key=>key.toUpperCase());
+}
+
 // Stage98: expose only a bounded, non-sensitive failure category. Never persist
 // an SDK error message, panic text, RPC URL, account data or stack trace.
 export function stage98ClassifyViewFailure(error){
@@ -94,10 +128,17 @@ export async function attestStage96PinnedRheaViews({
    witness.status='BLOCKED_SANDBOX_VIEW_INVALID';await store();
    throw Error(witness.failureCode);
   }
-  const match=target===actual;
-  witness.checks.push({view:id,
+  const match=id==='BORROWER'?
+   stage101SameBorrowerView(expected[i],observed):target===actual;
+  const check={view:id,
    status:match?'SOURCE_SANDBOX_MATCH':'SOURCE_SANDBOX_MISMATCH',
-   expectedSha256:sha(target),actualSha256:sha(actual)});
+   expectedSha256:sha(id==='BORROWER'?
+    stable(stage101CanonicalBorrower(expected[i])):target),
+   actualSha256:sha(id==='BORROWER'?
+    stable(stage101CanonicalBorrower(observed)):actual)};
+  if(id==='BORROWER'&&!match)
+   check.stage101DifferentSections=stage101BorrowerDifferenceSections(expected[i],observed);
+  witness.checks.push(check);
   if(!match){
    witness.failedView=id;witness.failureCode='STAGE96_'+id+'_VIEW_MISMATCH';
    witness.status='BLOCKED_PINNED_PARITY_MISMATCH';await store();
