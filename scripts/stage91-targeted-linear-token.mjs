@@ -154,12 +154,35 @@ export async function cloneStage91LinearToken({
  }
  if(views[4].value==='0'||views[5].value===null)
   throw Error('STAGE91_RHEA_LINEAR_VAULT_UNREGISTERED_OR_EMPTY');
- let contract;
- try{contract=await root.importContract({
-  mainnetContract:contractId,blockId:blockHeight,withData:false
- });}catch{
-  throw Error('STAGE95_LOCAL_LINEAR_WASM_IMPORT_FAILED');
+ // Stage105: near-workspaces resolves its mainnet import RPC from this
+ // process variable. Retry the EXACT pinned code-only import against the
+ // independently configured archival provider when the primary fails.
+ // Never change source height/account, expose RPC credentials or relax Wasm hash.
+ const originalImportRpc=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ const importEndpoints=[originalImportRpc||endpoint,fallbackEndpoint].filter(
+  (url,i,all)=>all.indexOf(url)===i);
+ let contract,wasmImportFallbackUsed=false,wasmImportAttempts=0;
+ try{
+  for(let i=0;i<importEndpoints.length;i++){
+   process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=importEndpoints[i];
+   wasmImportAttempts++;
+   try{
+    contract=await root.importContract({
+     mainnetContract:contractId,blockId:blockHeight,withData:false
+    });
+    wasmImportFallbackUsed=i>0;
+    break;
+   }catch{
+    // No fabricated Wasm or unpinned latest-block imports on failure.
+   }
+  }
+ }finally{
+  if(originalImportRpc===undefined)
+   delete process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+  else process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=originalImportRpc;
  }
+ if(!contract)
+  throw Error('STAGE105_PINNED_LINEAR_WASM_IMPORT_PROVIDERS_EXHAUSTED');
  if(contract?.accountId!==contractId||
   typeof contract.patchStateRecords!=='function'||
   typeof contract.accountView!=='function'||
@@ -193,6 +216,7 @@ export async function cloneStage91LinearToken({
   patchWriteCalls:records.size,alternateSingleEntryReads:alternate,
   sourceStorageDigest:stream.digest('hex'),
   accountCountObserved:count,sourceViewFallbackUsed,
+  wasmImportFallbackUsed,wasmImportAttempts,
   exactHistoricalIndexKeyValueVerified:true,
   criticalFtViewsAgreeWithSource:true,
   originalDeployedWasmVerified:true,
