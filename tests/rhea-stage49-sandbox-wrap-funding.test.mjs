@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {seedSandboxLiquidatorWithWrappedNear} from '../scripts/stage49-sandbox-wrap-funding.mjs';
+import {seedSandboxLiquidatorWithWrappedNear,wrappedNearCollateralShares} from '../scripts/stage49-sandbox-wrap-funding.mjs';
 const NEAR='1000000000000000000000000';
 const receipt=()=>({result:{
  final_execution_status:'EXECUTED_OPTIMISTIC',status:{SuccessValue:''},
@@ -8,7 +8,7 @@ const receipt=()=>({result:{
 }});
 function fixture({fail=null,canCollateral=true,zeroAfter=false,
  wrongCollateral=false,vaultNotCredited=false,partialTransfer=false,
- preexistingFt=false}={}){
+ preexistingFt=false,zeroShares=false,vaultMintDrift=false}={}){
  const calls=[],storage={lending:false,wnear:false};
  let wrapped=preexistingFt?1n:0n,vault=50n*BigInt(NEAR),tokenSent=false;
  const accountId='arbivane-replay.test.near';
@@ -16,7 +16,10 @@ function fixture({fail=null,canCollateral=true,zeroAfter=false,
   calls.push({contract:contract.accountId,method,args,settings});
   if(fail===method)throw Error('sandbox rejection');
   if(method==='storage_deposit')storage[contract.accountId==='wrap.near'?'wnear':'lending']=true;
-  if(method==='near_deposit')wrapped+=BigInt(settings.attachedDeposit);
+  if(method==='near_deposit'){
+   wrapped+=BigInt(settings.attachedDeposit);
+   if(vaultMintDrift)vault+=1n;
+  }
   if(method==='ft_transfer_call'){
    const outgoing=partialTransfer?BigInt(args.amount)/2n:BigInt(args.amount);
    wrapped-=outgoing;
@@ -30,7 +33,8 @@ function fixture({fail=null,canCollateral=true,zeroAfter=false,
   if(method==='storage_balance_of')return storage.lending?{total:NEAR}:null;
   if(method==='get_account_all_positions')
    return {positions:{REGULAR:{collateral:tokenSent&&!zeroAfter?
-    [{token_id:wrongCollateral?'unrelated.near':'wrap.near',balance:NEAR,shares:NEAR}]:[],borrowed:[]}}};
+    [{token_id:wrongCollateral?'unrelated.near':'wrap.near',
+      balance:NEAR,shares:zeroShares?'0':NEAR}]:[],borrowed:[]}}};
   throw Error('unknown lending view');
  }};
  const wnear={accountId:'wrap.near',view:async(method,args)=>{
@@ -54,6 +58,8 @@ test('Stage49 uses genuine Sandbox wrapper deposit and NEP141 collateral-transfe
  assert.equal(r.observedSenderWrappedTokenDecreaseAtomic,NEAR);
  assert.equal(r.observedRheaWrappedTokenVaultIncreaseAtomic,NEAR);
  assert.equal(r.wrappedTokenConservationVerified,true);
+ assert.equal(r.observedWrappedNearCollateralShares,NEAR);
+ assert.equal(r.vaultBalanceUnchangedDuringNativeWrapVerified,true);
  assert.equal(r.mainnetFundingVerified,false);
  assert.equal(r.mayBroadcastMainnet,false);
  assert.deepEqual(x.calls.map(y=>y.method),
@@ -92,4 +98,30 @@ test('Stage53 refuses dust collateral, non-wrapped collateral, missing Rhea toke
   const x=fixture(patch);
   await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),code);
  }
+});
+
+test('Stage54 rejects a nominal wrapped NEAR collateral balance without actual lending shares',async()=>{
+ const x=fixture({zeroShares:true});
+ await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),
+  /STAGE53_WRAPPED_COLLATERAL_CREDIT_NOT_RECONCILED/);
+});
+test('Stage54 prevents unrelated vault mutation during the local native-to-wNEAR wrap',async()=>{
+ const x=fixture({vaultMintDrift:true});
+ await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),
+  /STAGE54_RHEA_VAULT_CHANGED_DURING_ACTOR_WRAP/);
+});
+test('Stage54 token-specific collateral-share parser rejects malformed, duplicate and overflowed rows',()=>{
+ assert.equal(wrappedNearCollateralShares({
+  positions:{REGULAR:{collateral:[{token_id:'wrap.near',shares:NEAR,balance:NEAR}]}},
+ }),BigInt(NEAR));
+ assert.equal(wrappedNearCollateralShares({
+  positions:{REGULAR:{collateral:[{token_id:'unrelated.near',shares:NEAR,balance:NEAR}]}},
+ }),0n);
+ for(const positions of [
+  [],
+  {REGULAR:{collateral:[{token_id:'wrap.near',shares:'-1',balance:NEAR}]}},
+  {REGULAR:{collateral:[{token_id:'wrap.near',shares:NEAR,balance:NEAR},
+   {token_id:'wrap.near',shares:NEAR,balance:NEAR}]}},
+  {REGULAR:{collateral:[{token_id:'wrap.near',shares:(1n<<128n).toString(),balance:NEAR}]}},
+ ])assert.throws(()=>wrappedNearCollateralShares({positions}),/STAGE54_/);
 });
