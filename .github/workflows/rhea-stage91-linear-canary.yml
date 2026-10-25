@@ -1,0 +1,93 @@
+name: Rhea Stage91 historical LiNEAR indexed-account Sandbox canary
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage91-linear-canary.yml'
+      - 'scripts/stage91-linear-source-canary.mjs'
+      - 'scripts/stage91-targeted-linear-token.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage91-linear-index-canary
+  cancel-in-progress: false
+jobs:
+  linear-source-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Fetch authentic previously qualified borrower 2579 source
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40199603942'
+          name: stage87-authentic-borrower-2579
+          path: source
+          github-token: ${{ github.token }}
+      - name: Admit only authentic same-token LiNEAR borrower and disabled mainnet signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and
+            .chain == "NEAR_MAINNET" and .referenceRulesPass == true and
+            .executionEnabled == false and .maySign == false and .mayBroadcast == false and
+            .repay.tokenId == "linear-protocol.near" and
+            .seize.tokenId == "linear-protocol.near" and
+            (.blockHeight | tonumber > 0)' source/stage38-positive-stage35-evidence.json
+      - name: Install keyless NEAR Sandbox
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Check real deployed LiNEAR indexed keys and Sandbox token views
+        shell: bash
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_WORKSPACES_NETWORK: sandbox
+          STAGE91_ALLOW_LOCAL_PATCH: 'true'
+          STAGE91_PINNED_CANDIDATE_PATH: source/stage38-positive-stage35-evidence.json
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL }}
+        run: |
+          set -uo pipefail
+          node --experimental-strip-types scripts/stage91-linear-source-canary.mjs > stage91-linear-console.json
+          rc=$?
+          if test -s stage91-linear-canary-evidence.json; then
+            jq '{status,failureCode,sourceBlockHeight,tokenId,
+              pinnedBorrower,importerEvidence:
+              (.importerEvidence | if . == null then null else
+                {sourceQueryCount,recordsRead,recordsPatched,sourceStorageDigest,
+                 accountCountObserved,exactHistoricalIndexKeyValueVerified,
+                 criticalFtViewsAgreeWithSource,originalDeployedWasmVerified} end),
+              localLiquidationAttempted,actualRheaSettlementVerified,
+              maySignMainnet,mayBroadcastMainnet}' stage91-linear-canary-evidence.json >> "$GITHUB_STEP_SUMMARY"
+            jq -e '.status == "HISTORICAL_LINEAR_INDEX_AND_FT_VIEWS_VERIFIED_NOT_LIQUIDATION" and
+              .importerEvidence.exactHistoricalIndexKeyValueVerified == true and
+              .importerEvidence.criticalFtViewsAgreeWithSource == true and
+              .importerEvidence.originalDeployedWasmVerified == true and
+              .importerEvidence.recordsRead == .importerEvidence.recordsPatched and
+              .importerEvidence.completeTrieRootParityVerified == false and
+              .importerEvidence.realLiquidationVerified == false and
+              .realMainnetExecuted == false and
+              .localLiquidationAttempted == false and
+              .actualRheaSettlementVerified == false and
+              .positiveNetProfitVerified == false and
+              .maySignMainnet == false and .mayBroadcastMainnet == false' stage91-linear-canary-evidence.json || rc=2
+          else
+            echo 'No historical LiNEAR source-to-Sandbox parity proof.' >> "$GITHUB_STEP_SUMMARY"
+            rc=2
+          fi
+          exit "$rc"
+      - name: Preserve LiNEAR closure validation or reason for rejection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage91-authentic-linear-parity
+          retention-days: 14
+          path: |
+            stage91-linear-canary-evidence.json
+            stage91-linear-console.json
+          if-no-files-found: warn
