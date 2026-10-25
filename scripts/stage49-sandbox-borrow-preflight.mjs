@@ -14,7 +14,9 @@ const amount=(v,why)=>{
   throw Error('STAGE49_INVALID_'+why);
  return BigInt(v);
 };
-export function actorCollateralInternal(positions){
+export function actorCollateralInternal(positions,tokenId=null){
+ if(tokenId!==null&&(typeof tokenId!=='string'||!ID.test(tokenId)))
+  throw Error('STAGE53_INVALID_COLLATERAL_TOKEN_FILTER');
  const all=obj(obj(positions,'ACTOR_ACCOUNT').positions,'POSITIONS');
  if(Object.keys(all).length>64)throw Error('STAGE49_TOO_MANY_POSITIONS');
  let sum=0n;
@@ -28,8 +30,9 @@ export function actorCollateralInternal(positions){
    if(typeof row.token_id!=='string'||!ID.test(row.token_id)||
     unique.has(row.token_id))throw Error('STAGE49_DUPLICATE_OR_BAD_ASSET');
    unique.add(row.token_id);
-   sum+=amount(row.balance,'COLLATERAL_BALANCE');
+   const credited=amount(row.balance,'COLLATERAL_BALANCE');
    amount(row.shares,'COLLATERAL_SHARES');
+   if(tokenId===null||row.token_id===tokenId)sum+=credited;
   }
  }
  return sum;
