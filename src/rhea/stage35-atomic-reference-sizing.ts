@@ -154,6 +154,7 @@ export function sizeStage35SourceLiquidation(
   newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
  let considered=0;
  let permittedPairs=0,liquidPairs=0,validRuleScenarios=0,positiveGrossScenarios=0;
+ let sameTokenPairsSkipped=0;
  for(const p of evidence.positions){
   if(p.status!=='PAPER_AT_RISK_UNAPPROVED')continue;
   if(!/^[A-Za-z0-9._:-]{1,100}$/.test(p.positionId)||p.reason!==null||
@@ -178,7 +179,7 @@ export function sizeStage35SourceLiquidation(
     // Stage70: the imported Sandbox Borrow -> Liquidate -> Withdraw route
     // requires DISTINCT NEP-141 repay/seize contracts. The deployed
     // preflight rejects identical IDs; skip that pair and search others.
-    if(debt.token===collateral.token)continue;
+    if(debt.token===collateral.token){sameTokenPairsSkipped++;continue;}
     const debtPool=vol.get(debt.token),collateralPool=vol.get(collateral.token);
     if(!debtPool?.canBorrow||!collateralPool?.canWithdraw)continue;
     const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
@@ -244,7 +245,8 @@ export function sizeStage35SourceLiquidation(
   }
  }
  if(!best)return failure(evidence,null,considered,[
-  permittedPairs===0?'NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR':
+  sameTokenPairsSkipped===considered?'SANDBOX_SAME_TOKEN_ROUTE_NOT_IMPLEMENTED':
+ permittedPairs===0?'NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR':
   liquidPairs===0?'NO_SOURCE_POOL_BORROW_HEADROOM':
   validRuleScenarios===0?'FOUR_SOURCE_RULES_REJECTED_ALL_BOUNDED_REPAY_SIZES':
   positiveGrossScenarios===0?'FOUR_SOURCE_RULES_PASS_BUT_NO_POSITIVE_GROSS':
