@@ -54,7 +54,7 @@ jobs:
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
-          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkJfwo6BCpFa
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
           RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
           RHEA_STAGE32_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
           RHEA_STAGE32_MAX_FINDINGS: '80'
@@ -75,7 +75,7 @@ jobs:
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
           RHEA_ORACLE_CONTRACT: aggregate-oracle.near
-          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkJfwo6BCpFa
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
           RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
           RHEA_STAGE38_SOURCE_RUN: '40128285853'
           RHEA_STAGE38_SOURCE_FILE: source/rhea-full-paged-index.json
