@@ -46,3 +46,10 @@ test('Stage93 isolates mainnet reads from disposable NEAR Sandbox mutation',()=>
  assert.ok(!s.includes('MAINNET_PRIVATE_KEY:'));
  assert.ok(!s.includes('broadcast_tx'));
 });
+
+test('Stage106 reruns authentic Stage93 settlement on temporal parity diagnostic changes',()=>{
+ assert.ok(s.includes("'scripts/stage104-temporal-accrual-parity.mjs'"));
+ assert.ok(s.includes("'scripts/stage96-rhea-view-parity.mjs'"));
+ assert.ok(s.includes('stage93-verified-rhea-sandbox-liquidation'));
+ assert.ok(s.includes("EXECUTION_ENABLED: 'false'"));
+});
