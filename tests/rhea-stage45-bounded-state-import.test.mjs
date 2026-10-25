@@ -73,6 +73,14 @@ test('Stage45 archival transport uses only pinned read-only NEAR view_state',asy
  assert.equal(query.params.prefix_base64,'YQ==');
  assert.equal(query.params.block_id,HEIGHT);assert.equal(x.blockHeight,String(HEIGHT));
 });
+test('Stage45 interprets verified archival TOO_LARGE_CONTRACT_STATE taxonomy as a splittable response',async()=>{
+ const rpc=new ArchivalStateRpc(rpcOptions,async()=>response({error:{
+  code:-32000,message:'Server error',name:'HANDLER_ERROR',
+  cause:{name:'TOO_LARGE_CONTRACT_STATE',info:{}},
+ }}),async()=>{});
+ await assert.rejects(()=>rpc.viewState(Buffer.alloc(0)),StateResponseTooLarge);
+ assert.equal(rpc.getStats().oversizeResponses,1);
+});
 test('Stage45 recognizes oversized HTTP/RPC response and retries 429 without claiming completeness',async()=>{
  const oversized=new ArchivalStateRpc(rpcOptions,async()=>
   response({error:{message:'Response size exceeds limit of 50 KiB'}},400),async()=>{});
