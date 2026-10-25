@@ -59,3 +59,43 @@ test('Stage73 fresh main code preempts stale fast-lane runs but manual runs rema
  assert.ok(text.includes('actualRheaSettlementVerified'));
  assert.ok(!text.includes('MAINNET_PRIVATE_KEY'));
 });
+
+test('Stage74 accepts only a later-finalized persistent optimistic Sandbox receipt or original FINAL receipt',async()=>{
+ const {spawnSync}=await import('node:child_process');
+ const match=text.match(/jq -e '([^']*persistedAtLaterFinalizedBlock[^']*)' "\\$receipt"/);
+ assert.ok(match,'Stage69 verifier must enforce later finalized state persistence');
+ const filter=match[1];
+ const available=spawnSync('jq',['--version'],{encoding:'utf8'});
+ assert.equal(available.status,0,'GitHub Linux CI must provide jq for executable workflow gate tests');
+ const base={status:'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF',
+  attemptedTransaction:true,persistedAtLaterFinalizedBlock:true,
+  failedReceiptCount:0,callbackReceiptCount:1,failedCallbackReceiptCount:0,
+  transactionFinal:false,transactionExecutionStatus:'EXECUTED_OPTIMISTIC',
+  finalizedBlockBefore:8,finalizedBlockAfter:10008};
+ const admits=(receipt)=>{
+  const result=spawnSync('jq',['-e',filter],{input:JSON.stringify(receipt),encoding:'utf8'});
+  assert.equal(result.error,undefined);
+  return result.status===0;
+ };
+ assert.equal(admits(base),true,'Stage48 later-finalized persistence is an authentic local proof');
+ assert.equal(admits({...base,transactionFinal:true,transactionExecutionStatus:'FINAL'}),true);
+ for(const bad of [
+  {...base,persistedAtLaterFinalizedBlock:false},
+  {...base,persistedAtLaterFinalizedBlock:null},
+  {...base,finalizedBlockAfter:9},
+  {...base,finalizedBlockBefore:null},
+  {...base,finalizedBlockAfter:null},
+  {...base,transactionExecutionStatus:'FINAL'},
+  {...base,transactionFinal:true},
+  {...base,attemptedTransaction:false},
+  {...base,failedReceiptCount:1},
+  {...base,callbackReceiptCount:0},
+  {...base,failedCallbackReceiptCount:1},
+  {...base,status:'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE'},
+ ])assert.equal(admits(bad),false,'untrusted or unpersisted evidence must fail closed');
+ assert.ok(text.includes('borrowerDebtDecreaseInternal != "0"'));
+ assert.ok(text.includes('borrowerCollateralDecreaseInternal != "0"'));
+ assert.ok(text.includes('actorSeizeFtIncreaseAtomic != "0"'));
+ assert.ok(text.includes('actualRheaSettlementVerified == true'));
+ assert.ok(text.includes('maySignMainnet == false'));
+});
