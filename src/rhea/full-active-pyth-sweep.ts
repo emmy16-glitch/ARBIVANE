@@ -118,17 +118,18 @@ export async function sweepIndexedDebtWithActivePyth(
    batch.currentLiquidationEligibilityProven!==false||batch.transactionReplayPerformed!==false||
    batch.profitVerified!==false)
    throw Error('STAGE32_UNTRUSTED_BATCH_OUTPUT');
-  // Stage66: a transient RPC/oracle failure must never silently become a
-  // completed risk assessment as the registry cursor advances. Retry at most
-  // four source-identified failures per 20-row batch, on fresh reads. Keep
-  // all persistent failures as BLOCKED, never promote them to healthy.
+  // Stage67: persistent contract/schema failures cannot be cured by RPC
+  // retries. Only authentic transient transport failures receive extra
+  // attempts. A provider-wide failure burst triggers ONE bounded cooldown,
+  // then at most eight fresh, source-identity checked borrower re-reads.
   const verifiedItems=[...batch.items];
-  let retries=0;
-  for(let i=0;i<verifiedItems.length&&retries<4;i++){
+  const retryIndices=verifiedItems.flatMap((row,i)=>
+   row?.classification==='BLOCKED_RPC'&&
+   row.reason==='RPC_TRANSIENT_RATE_LIMIT_OR_TIMEOUT'?[i]:[]);
+  if(retryIndices.length>=Math.ceil(batch.processed/2)&&retryIndices.length>=4)
+   await delay(12000);
+  for(const i of retryIndices.slice(0,8)){
    const original=verifiedItems[i]!;
-   if(original.classification!=='BLOCKED_RPC'&&
-    original.classification!=='BLOCKED_INCOMPLETE_QUOTES')continue;
-   retries++;
    await delay(1500);
    const retry=await refreshIndexedBorrowerCandidates(rpc,source,{
     ...o,fromFinding:before+i,maxFindings:1,concurrency:1,
@@ -136,10 +137,13 @@ export async function sweepIndexedDebtWithActivePyth(
    const candidate=retry.items[0];
    if(retry.processed!==1||retry.fromFinding!==before+i||
     retry.nextFinding!==before+i+1||retry.items.length!==1||
+    retry.sourceBlockHeight!==source.blockHeight||
     retry.sourceCodeHash!==source.lendingCodeHash||
+    retry.executionEnabled!==false||retry.maySign!==false||
+    retry.mayBroadcast!==false||
     !candidate||candidate.borrowerAccountId!==original.borrowerAccountId||
     candidate.executionEligible!==false||candidate.tradeProfitVerified!==false)
-    throw Error('STAGE66_REJECTED_UNTRUSTED_FRESH_RETRY');
+    throw Error('STAGE67_REJECTED_UNTRUSTED_FRESH_RETRY');
    verifiedItems[i]=candidate;
   }
   const totals={
