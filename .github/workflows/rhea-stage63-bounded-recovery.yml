@@ -42,7 +42,20 @@ jobs:
           else
             # Then continue disjointly from the last reconciled cursor 2252.
             base=$((2252+(attempts-1)*320))
-            matrix=$(jq -cn --argjson b "$base" '{include:[range(0;4) as $s | {shard:$s,start:($b+$s*80),count:80}]}')
+            # Stage65: independently reprice four AUTHENTIC source-registry
+            # positions whose prior fresh sizing failed under the old fixed
+            # 75-bps haircut. Shards 4..7 are deliberately rechecks, not
+            # additional disjoint coverage. A fresh paper-risk classification
+            # and ALL source rules are still mandatory before Sandbox.
+            # Bound rechecks to four follow-up attempts; no infinite churn.
+            matrix=$(jq -cn --argjson b "$base" --argjson a "$attempts" '
+              {include:(
+                [range(0;4) as $s | {shard:$s,start:($b+$s*80),count:80}] +
+                (if ($a >= 4 and $a <= 7) then
+                  [2579,2594,3116,3147] | to_entries |
+                  map({shard:(.key+4),start:.value,count:1})
+                 else [] end)
+              )}')
           fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Authentic recovery attempt $((attempts+1))/18; matrix: $matrix" >> "$GITHUB_STEP_SUMMARY"

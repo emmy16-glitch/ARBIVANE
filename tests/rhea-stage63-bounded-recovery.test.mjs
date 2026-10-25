@@ -36,3 +36,18 @@ test('terminal success requires callback receipts and independently reconciled b
  ])assert.ok(text.includes(required),required);
  assert.match(text,/gh workflow run rhea-stage63-bounded-recovery\.yml/);
 });
+
+test('Stage65 rechecks authenticated prior risk windows without replacing disjoint discovery',async()=>{
+ const text=await readFile(workflow,'utf8');
+ for(const i of [2579,2594,3116,3147])assert.ok(text.includes(String(i)));
+ assert.match(text,/shard:\(\.key\+4\)/);
+ assert.match(text,/start:\.value,count:1/);
+ assert.match(text,/\$a >= 4 and \$a <= 7/);
+ assert.match(text,/base=\$\(\(2252\+\(attempts-1\)\*320\)\)/);
+ // Rechecks are source-attested and must be paper-at-risk again at a
+ // fresh finalized block before entering any optional isolated sandbox.
+ assert.match(text,/rhea-full-paged-verified-market/);
+ assert.match(text,/STAGE37_ALLOW_SANDBOX_MUTATION=true/);
+ assert.match(text,/sandboxPlanReady == true/);
+ assert.doesNotMatch(text,/MAINNET_PRIVATE_KEY|broadcast_tx/);
+});
