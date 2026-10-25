@@ -1,6 +1,9 @@
 /** Stage47 — bounded, verifiable Stage42 borrower-window continuation.
  * All input is a completed read-only reconciliation report. A continuation
  * dispatch runs the same existing read-only mainnet + local Sandbox-only flow.
+ * Stage59 expands the finite dispatch budget to traverse thousands of verified
+ * debt findings; it still stops on a source-positive result, budget exhaustion,
+ * unverified aggregate or less than one complete remaining shard window.
  */
 const integer=(n,min,max)=>typeof n==='number'&&Number.isSafeInteger(n)&&n>=min&&n<=max;
 export function planStage47Continuation(report,{expectedBaseCursor,followupsRemaining}){
@@ -19,7 +22,7 @@ export function planStage47Continuation(report,{expectedBaseCursor,followupsRema
   report.endCursor>report.historicalSourceDebtAccounts||
   !integer(expectedBaseCursor,0,10000000)||
   report.baseCursor!==expectedBaseCursor||
-  !integer(followupsRemaining,0,3)||
+  !integer(followupsRemaining,0,24)||
   !integer(report.paperAtRisk,0,320)||!integer(report.paperHealthy,0,320)||
   !integer(report.noDebtNow,0,320)||!integer(report.blockedInitialReads,0,320)||
   report.paperAtRisk+report.paperHealthy+report.noDebtNow+report.blockedInitialReads!==320||
