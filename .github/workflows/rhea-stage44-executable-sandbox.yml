@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rhea-stage44-executable-sandbox.yml'
+      - 'scripts/stage44-executable-local-sandbox.mjs'
+      - 'src/rhea/stage44-sandbox-contract-witness.ts'
   workflow_dispatch:
 permissions:
   contents: read
