@@ -10,6 +10,7 @@ on:
       - 'scripts/stage46-paged-sandbox-clone.mjs'
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage50-pinned-ft-reserve.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
 permissions:
   contents: read
@@ -137,6 +138,9 @@ jobs:
           RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
           RHEA_STAGE38_MAX_FINDINGS: '1'
           RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '1'
+          # Can override with a trusted higher-limit archival endpoint. Public
+          # near.org archival is only a last-resort single-entry fallback.
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
           RHEA_RPC_SPACING_MS: '900'
         run: |
           set -euo pipefail
