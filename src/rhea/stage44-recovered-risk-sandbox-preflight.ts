@@ -98,7 +98,7 @@ export function selectStage44RecoveredRisk(
     if(!UINT.test(obs.healthBps??'')||BigInt(obs.healthBps!)>=10000n)
      fail('PAPER_RISK_HEALTH_NOT_BELOW_ONE');
     selected.push({borrowerAccountId:obs.borrowerAccountId,
-     historicalFindingIndex:obs.findingIndex,stage43FreshBlockHeight:obs.freshBlockHeight});
+     historicalFindingIndex:obs.findingIndex,stage43FreshBlockHeight:obs.freshBlockHeight!});
    }else if(obs.status==='PAPER_HEALTHY_UNAPPROVED'){
     healthy++;
     if(!UINT.test(obs.healthBps??'')||BigInt(obs.healthBps!)<10000n)
