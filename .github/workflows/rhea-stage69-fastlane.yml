@@ -8,6 +8,8 @@ on:
       - 'scripts/stage49-sandbox-route-readiness.mjs'
       - 'scripts/stage51-active-pyth-sandbox-parity.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
+      - 'scripts/stage45-archival-state-rpc.mjs'
+      - 'scripts/stage45-cursor-pages.mjs'
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
