@@ -9,13 +9,15 @@ import {createInterface} from 'node:readline';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
+import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
+import {validateStage79ArchivalFallback} from './stage46-paged-sandbox-clone.mjs';
 
 const env=process.env,BLOCK=221433162;
 const LENDING='contract.main.burrow.near';
 const CODE_HASH='6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa';
 const reportPath='stage45-rhea-paged-state-import.json';
 const spoolPath='stage45-rhea-state-spool.ndjson';
-let worker,stateRpc=null;
+let worker,stateRpc=null,secondaryRpc=null;
 const report={
  mode:'ARBIVANE_STAGE45_PINNED_RHEA_PREFIX_SANDBOX_IMPORT',
  chain:'NEAR_SANDBOX',sourceNetwork:'NEAR_MAINNET_READ_ONLY',
@@ -27,6 +29,7 @@ const report={
  completePrefixCoverage:false,unresolvedExactBoundaryPrefixCount:null,
  dataRecordsRead:0,dataRecordsPatched:0,sourceBytesObserved:0,
  prefixQueryCount:0,oversizeResponses:0,rateLimitResponses:0,
+ alternateSingleEntryReads:0,alternateRpcAttempts:0,
  stateAppliedIntoSandbox:false,configMatchesPinnedSource:false,
  fullContractStorageParityVerified:false,
  realRheaLiquidationAttempted:false,transactionReplayVerified:false,
@@ -76,11 +79,29 @@ async function main(){
   paceMs:integer('STAGE45_RPC_GAP_MS',220,0,5000),
   timeoutMs:18000,maxRetries:2,
  });
+ const fallback=validateStage79ArchivalFallback(env.NEAR_RPC_URL,
+  env.STAGE45_ARCHIVAL_FALLBACK_URL?.trim()||'https://archival-rpc.mainnet.near.org');
+ secondaryRpc=new ArchivalStateRpc({
+  endpoint:fallback,accountId:LENDING,blockHeight:BLOCK,
+  paceMs:4000,timeoutMs:18000,maxRetries:0,
+ });
  const spool=await open(spoolPath,'w',0o600);
  let coverage;
  try{
   coverage=await coverPinnedPagedState(
-   (afterKey,limit)=>stateRpc.viewPage(afterKey,limit),opts,
+   async(afterKey,limit)=>{
+    try{return await stateRpc.viewPage(afterKey,limit);}
+    catch(error){
+     if(!(error instanceof StateResponseTooLarge)||limit!==1)throw error;
+     try{
+      const result=await secondaryRpc.viewPage(afterKey,1);
+      report.alternateSingleEntryReads++;
+      return {...result,recoveredOversizedEntry:true};
+     }catch{
+      throw Error('STAGE45_ALL_ARCHIVES_EXCEEDED_SINGLE_ENTRY_LIMIT');
+     }
+    }
+   },opts,
    async rows=>{
     if(rows.length){
      await spool.writeFile(rows.map(row=>JSON.stringify(row)+'\n').join(''));
@@ -93,6 +114,7 @@ async function main(){
   report.prefixQueryCount=stats.rpcCalls;
   report.oversizeResponses=stats.oversizeResponses;
   report.rateLimitResponses=stats.rateLimitResponses;
+  report.alternateRpcAttempts=secondaryRpc?.getStats().transportAttempts??0;
  }
  report.paginationCursorExhausted=coverage.completePaginationCoverage;
  report.completePaginationCoverage=coverage.completePaginationCoverage;
