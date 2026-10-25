@@ -1,0 +1,86 @@
+name: Rhea Stage96 authentic borrower post-clone view parity canary
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage96-rhea-canary.yml'
+      - 'scripts/stage96-rhea-source-canary.mjs'
+      - 'scripts/stage96-rhea-view-parity.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage96-rhea-post-clone-canary
+  cancel-in-progress: false
+jobs:
+  pinned-rhea-view-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Load real fresh qualified borrower 2579 source proof
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40209422774'
+          name: stage93-authentic-borrower-2579
+          path: source
+          github-token: ${{ github.token }}
+      - name: Validate historical borrower source before any Sandbox patch
+        run: |
+          set -euo pipefail
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and
+            .chain == "NEAR_MAINNET" and .referenceRulesPass == true and
+            .executionEnabled == false and .maySign == false and .mayBroadcast == false and
+            (.borrowerAccountId | type == "string" and length > 0) and
+            (.blockHeight | tonumber > 0)' source/stage38-positive-stage35-evidence.json >/dev/null
+      - name: Install local Workspaces Sandbox
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Clone authentic Rhea borrower and verify each original mainnet view
+        shell: bash
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_WORKSPACES_NETWORK: sandbox
+          STAGE96_ALLOW_SANDBOX_PATCH: 'true'
+          STAGE96_SOURCE_FILE: source/stage38-positive-stage35-evidence.json
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL }}
+        run: |
+          set -uo pipefail
+          node --experimental-strip-types scripts/stage96-rhea-source-canary.mjs > stage96-console.json
+          rc=$?
+          if test -s stage96-borrower-canary-evidence.json; then
+            jq '{status,failureCode,sourceBlockHeight,sourceCodeHashVerified,
+              cloneEvidence:(.cloneEvidence|if .==null then null else
+                {recordsRead,recordsPatched,sourceStorageDigest,sourceBlockHash} end),
+              parityEvidence:(.parityEvidence|if .==null then null else
+                {status,failedView,failureCode,checks,allSourceViewsVerified} end),
+              actualRheaLiquidationAttempted,mayBroadcastMainnet}' stage96-borrower-canary-evidence.json >> "$GITHUB_STEP_SUMMARY"
+            jq -e '.status == "SOURCE_PINNED_BORROWER_SANDBOX_VIEWS_MATCH_NOT_LIQUIDATION" and
+              .sourceCodeHashVerified == true and
+              .cloneEvidence.recordsRead == .cloneEvidence.recordsPatched and
+              .parityEvidence.allSourceViewsVerified == true and
+              (.parityEvidence.checks | length == 3 and all(.status == "SOURCE_SANDBOX_MATCH")) and
+              .actualRheaLiquidationAttempted == false and .actualRheaSettlementVerified == false and
+              .positiveNetProfitVerified == false and .realMainnetExecuted == false and
+              .maySignMainnet == false and .mayBroadcastMainnet == false' stage96-borrower-canary-evidence.json || rc=2
+          else
+            echo "No authentic Rhea borrower view parity evidence." >> "$GITHUB_STEP_SUMMARY"
+            rc=2
+          fi
+          exit "$rc"
+      - name: Preserve actual source-vs-Sandbox view results on failure too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage96-authentic-rhea-view-diagnostic
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            stage96-borrower-canary-evidence.json
+            stage96-rhea-view-parity.json
+            stage96-console.json
