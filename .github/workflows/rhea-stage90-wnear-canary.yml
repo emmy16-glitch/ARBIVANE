@@ -1,0 +1,91 @@
+name: Rhea Stage90 historical wNEAR isolated Sandbox canary
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage90-wnear-canary.yml'
+      - 'scripts/stage90-wnear-source-canary.mjs'
+      - 'scripts/stage89-targeted-wnear-clone.mjs'
+      - 'scripts/stage45-archival-state-rpc.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage90-wnear-canary
+  cancel-in-progress: false
+jobs:
+  source-wnear-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Recover genuine pinned borrower 2579 from actual Stage87 execution artifact
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40199603942'
+          name: stage87-authentic-borrower-2579
+          path: source
+          github-token: ${{ github.token }}
+      - name: Validate original source qualification, no mainnet signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and
+            .chain == "NEAR_MAINNET" and .referenceRulesPass == true and
+            .executionEnabled == false and .maySign == false and .mayBroadcast == false and
+            (.borrowerAccountId | type == "string" and length > 0) and
+            (.blockHeight | tonumber > 0)' source/stage38-positive-stage35-evidence.json
+      - name: Install disposable local Sandbox only
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Import only original deployed wNEAR state and compare pinned FT views
+        shell: bash
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_WORKSPACES_NETWORK: sandbox
+          STAGE90_ALLOW_LOCAL_STATE_PATCH: 'true'
+          STAGE90_PINNED_CANDIDATE_PATH: source/stage38-positive-stage35-evidence.json
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL }}
+        run: |
+          set -uo pipefail
+          node --experimental-strip-types scripts/stage90-wnear-source-canary.mjs > stage90-wnear-console.json
+          rc=$?
+          if test -s stage90-wnear-canary-evidence.json; then
+            jq '{status,reason,sourceBlockHeight,historicalRheaCodeHashVerified,
+              wnearSourceViewsReconciled,wnearImportEvidence:
+              (.wnearImportEvidence | if . == null then null else
+                {contractId,recordsRead,recordsPatched,sourceQueryCount,sourceStorageDigest,
+                 originalFtSupplyVerified,originalDeployedWasmVerified} end),
+              actualRheaLiquidationAttempted,actualRheaSettlementVerified,
+              mayBroadcastMainnet}' stage90-wnear-canary-evidence.json >> "$GITHUB_STEP_SUMMARY"
+            jq -e '.status == "PINNED_WNEAR_STATE_AND_SOURCE_VIEWS_MATCH_NOT_LIQUIDATION" and
+              .historicalRheaCodeHashVerified == true and
+              .wnearSourceViewsReconciled == true and
+              .wnearImportEvidence.originalDeployedWasmVerified == true and
+              .wnearImportEvidence.relevantAccountViewParityVerified == true and
+              .wnearImportEvidence.recordsRead == .wnearImportEvidence.recordsPatched and
+              .actualRheaLiquidationAttempted == false and
+              .actualRheaSettlementVerified == false and
+              .positiveNetProfitVerified == false and
+              .realMainnetExecuted == false and
+              .maySignMainnet == false and .mayBroadcastMainnet == false' stage90-wnear-canary-evidence.json || rc=2
+          else
+            echo 'No pinned Sandbox wNEAR source-parity evidence.' >> "$GITHUB_STEP_SUMMARY"
+            rc=2
+          fi
+          exit "$rc"
+      - name: Preserve real wNEAR parity proof and diagnostic blocker even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage90-authentic-wnear-parity
+          retention-days: 14
+          path: |
+            stage90-wnear-canary-evidence.json
+            stage90-wnear-console.json
+          if-no-files-found: warn
