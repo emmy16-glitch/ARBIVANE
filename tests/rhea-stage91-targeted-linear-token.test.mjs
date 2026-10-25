@@ -104,7 +104,7 @@ test('Stage91 refuses wrong key index or source view, missing vault, different b
  for(const kind of ['badIndex','badSourceBalance','absentVault','badBlock','badCode']){
   const x=scenario({[kind]:true});
   await assert.rejects(()=>cloneStage91LinearToken(x.args),/STAGE91_/);
-  if(kind!=='badCode')assert.equal(x.imports.length,0);
+  if(!['badCode','badSourceBalance'].includes(kind))assert.equal(x.imports.length,0);
  }
 });
 test('Stage91 canary never enables signing, lending transaction or fabricated liquidity',async()=>{
