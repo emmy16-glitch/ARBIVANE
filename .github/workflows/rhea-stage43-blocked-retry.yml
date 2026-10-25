@@ -12,20 +12,20 @@ on:
       base_cursor:
         description: 'Exact historic debt cursor of the Stage42 run'
         required: true
-        default: '972'
+        default: '1292'
       from_target:
         description: 'Retry target cursor (not original debt finding index)'
         required: true
         default: '0'
 permissions:
   contents: read
-  actions: read
+  actions: write
 concurrency:
   group: arbivane-stage43-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
   cancel-in-progress: false
 jobs:
   retry-failed-observations:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.repository.full_name == github.repository) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -55,6 +55,17 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: false
           path: shards
+      - name: Derive and attest the exact borrower window from this Stage42 run
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          STAGE47_MANUAL_EXPECTED_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '' }}
+        run: |
+          set -euo pipefail
+          base=$(node scripts/stage47-stage43-cursor-cli.mjs aggregate/stage42-reconciled-window.json)
+          [[ "$base" =~ ^[0-9]+$ ]] || exit 2
+          echo "RHEA_STAGE43_BASE_CURSOR=$base" >> "$GITHUB_ENV"
+          echo "Verified parent Stage42 borrower cursor: $base" >> "$GITHUB_STEP_SUMMARY"
       - name: Retry at most 12 authentic unresolved observations on one current finalized block
         env:
           EXECUTION_ENABLED: 'false'
@@ -68,7 +79,6 @@ jobs:
           RHEA_STAGE43_SOURCE_PATH: source/rhea-full-paged-index.json
           RHEA_STAGE43_SHARDS_DIR: shards
           RHEA_STAGE43_RECONCILED_PATH: aggregate/stage42-reconciled-window.json
-          RHEA_STAGE43_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
           RHEA_STAGE43_FROM_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.from_target || '0' }}
           RHEA_STAGE43_MAX_TARGETS: '12'
           RHEA_RPC_SPACING_MS: '900'
@@ -95,6 +105,30 @@ jobs:
             "; next retry cursor: "+(.nextTarget|tostring)+
             "; remaining targets: "+(.remainingTargets|tostring)' stage43-summary.json >> "$GITHUB_STEP_SUMMARY"
           echo 'NO MAINNET TRADING. Paper health and reference spreads are not deployed liquidation eligibility or net profit.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Dispatch the remaining authentic blocked targets in bounded 12-item batches
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARENT_STAGE42_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
+        run: |
+          set -euo pipefail
+          jq -e '. as $r | .processed <= 12 and .fromTarget >= 0 and
+            .remainingTargets >= 0 and .targetCount <= 320 and
+            .nextTarget == (.fromTarget + .processed) and
+            .targetCount == (.nextTarget + .remainingTargets) and
+            .executionEnabled == false and .mayBroadcastMainnet == false and
+            .positiveNetProfitVerified == false' stage43-blocked-retry.json
+          if jq -e '.remainingTargets > 0' stage43-blocked-retry.json >/dev/null; then
+            next=$(jq -r '.nextTarget' stage43-blocked-retry.json)
+            [[ "$next" =~ ^[0-9]+$ ]] && (( next > 0 && next <= 320 )) || exit 2
+            [[ "$PARENT_STAGE42_RUN_ID" =~ ^[0-9]{7,}$ ]] || exit 2
+            [[ "$RHEA_STAGE43_BASE_CURSOR" =~ ^[0-9]+$ ]] || exit 2
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/rhea-stage43-blocked-retry.yml/dispatches" \
+              -f ref=main -f "inputs[stage42_run_id]=$PARENT_STAGE42_RUN_ID" \
+              -f "inputs[base_cursor]=$RHEA_STAGE43_BASE_CURSOR" \
+              -f "inputs[from_target]=$next"
+            echo "Queued next verified blocked-target retry batch at target index $next" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Preserve durable retry evidence including failures
         if: always()
         uses: actions/upload-artifact@v4
