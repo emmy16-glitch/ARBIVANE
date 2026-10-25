@@ -203,3 +203,74 @@ test('Stage84 targeted import rejects a record bigger than its explicit single-p
   assert.equal(a.patches.filter(x=>x.Data.data_key===rows.at(-1).key).length,0);
  }finally{rows.pop();}
 });
+
+
+test('Stage97 copies byte-exact borrower legacy nested supplied and farm namespaces, not other users',async()=>{
+ const ownAsset=join([1],borsh(BORROWER));
+ const ownFarms=join([2],borsh(BORROWER));
+ const unrelated=join([1],borsh('unrelated.near'),[105]);
+ const nested=[
+  record(join(ownAsset,[105],borsh(ASSET)),u64(3)),
+  record(join(ownAsset,[107],u64(3)),borsh(ASSET)),
+  record(join(ownAsset,[118],u64(3)),[0,11,22,33]),
+  record(join(ownFarms,[105],borsh('farm.near')),u64(1)),
+  record(join(ownFarms,[107],u64(1)),borsh('farm.near')),
+  record(join(ownFarms,[118],u64(1)),[0,44,55]),
+  record(unrelated,u64(9)),
+ ];
+ rows.push(...nested);
+ try{
+  const a=scenario(),x=await cloneStage82BorrowerLending(a.args);
+  assert.equal(x.evidence.recordsRead,rows.length-1);
+  assert.equal(x.evidence.recordsPatched,rows.length-1);
+  assert.equal(x.evidence.borrowerAccountVersion,2);
+  assert.equal(x.evidence.borrowerNestedPrefixesScanned,true);
+  assert.equal(x.evidence.borrowerSuppliedNestedRecords,3);
+  assert.equal(x.evidence.borrowerFarmNestedRecords,3);
+  assert.ok(a.calls.some(c=>c.prefix.equals(ownAsset)));
+  assert.ok(a.calls.some(c=>c.prefix.equals(ownFarms)));
+  assert.ok(!a.calls.some(c=>c.prefix.equals(join([1],borsh('unrelated.near')))));
+  const patched=new Map(a.patches.map(v=>[v.Data.data_key,v.Data.value]));
+  for(const expected of nested.slice(0,6))
+   assert.equal(patched.get(expected.key),expected.value);
+  assert.equal(patched.has(nested[6].key),false);
+  assert.equal(x.evidence.fullMarketImported,false);
+  assert.equal(x.evidence.verifiedLiquidationReceipts,false);
+  assert.equal(x.evidence.mainnetMutated,false);
+ }finally{rows.splice(rows.length-nested.length,nested.length);}
+});
+
+test('Stage97 rejects cross-block borrower-supplied nested data before importing local state',async()=>{
+ const ownPrefix=join([1],borsh(BORROWER));
+ const extra=record(join(ownPrefix,[105],borsh(ASSET)),u64(1));
+ rows.push(extra);
+ try{
+  const a=scenario(),orig=a.args.fetcher;
+  a.args.fetcher=async(url,req)=>{
+   const p=JSON.parse(req.body).params;
+   if(p.prefix_base64===b64(ownPrefix)){
+    const response=await orig(url,req),body=await response.json();
+    body.result.block_hash='8'.repeat(43);
+    return new Response(JSON.stringify(body),{status:200});
+   }
+   return orig(url,req);
+  };
+  await assert.rejects(()=>cloneStage82BorrowerLending(a.args),
+   /STAGE82_PINNED_BLOCK_OR_RPC_PAGE_MISMATCH/);
+  assert.equal(a.imports.length,0);
+  assert.equal(a.patches.length,0);
+ }finally{rows.pop();}
+});
+
+test('Stage97 rejects unknown VAccount layout instead of assuming nested account storage encoding',async()=>{
+ const target=rows.find(v=>v.key===b64(join([0,118],u64(17))));
+ const old=target.value;
+ target.value=b64([10,7,8]);
+ try{
+  const a=scenario();
+  await assert.rejects(()=>cloneStage82BorrowerLending(a.args),
+   /STAGE97_UNKNOWN_VERSIONED_BORROWER_ACCOUNT_LAYOUT/);
+  assert.equal(a.imports.length,0);
+  assert.equal(a.patches.length,0);
+ }finally{target.value=old;}
+});
