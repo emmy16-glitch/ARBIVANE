@@ -47,10 +47,13 @@ export async function cloneStage82BorrowerLending({
  const o={maxQueries:budgets.maxQueries??750,
   maxRecords:budgets.maxRecords??10000,maxBytes:budgets.maxBytes??16777216,
   maxPatchBytes:budgets.maxPatchBytes??48000,
-  maxPatchRecords:budgets.maxPatchRecords??128};
+  maxPatchRecords:budgets.maxPatchRecords??128,
+  maxSinglePatchBytes:budgets.maxSinglePatchBytes??2097152};
  if(Object.values(o).some(x=>!Number.isSafeInteger(x)||x<1)||
   o.maxQueries>2000||o.maxRecords>50000||o.maxBytes>67108864||
-  o.maxPatchBytes>64000||o.maxPatchRecords>250)
+  o.maxPatchBytes>64000||o.maxPatchRecords>250||
+  o.maxSinglePatchBytes<o.maxPatchBytes||
+  o.maxSinglePatchBytes>2097152)
   throw Error('STAGE82_INVALID_IMPORT_BUDGET');
  const account=await rpc.viewAccount(contractId,blockHeight);
  if(account?.blockHeight!==String(blockHeight)||account.codeHash!==expectedCodeHash)
@@ -158,6 +161,7 @@ export async function cloneStage82BorrowerLending({
   Buffer.from(a.key,'base64'),Buffer.from(b.key,'base64')));
  const digest=createHash('sha256');
  let batch=[],batchBytes=0,patched=0,patchWrites=0;
+ let largeSingleRecordPatchCalls=0,largestPatchRecordBytes=0;
  async function flush(){
   if(!batch.length)return;
   await contract.patchStateRecords({records:batch});
@@ -167,11 +171,20 @@ export async function cloneStage82BorrowerLending({
   const item={Data:{account_id:contractId,
    data_key:record.key,value:record.value}};
   const size=Buffer.byteLength(JSON.stringify(item));
-  if(size>o.maxPatchBytes)
+  if(size>o.maxSinglePatchBytes)
    throw Error('STAGE82_SOURCE_RECORD_EXCEEDS_LOCAL_PATCH_LIMIT');
-  if(batch.length>=o.maxPatchRecords||batchBytes+size>o.maxPatchBytes)
+  largestPatchRecordBytes=Math.max(largestPatchRecordBytes,size);
+  if(size>o.maxPatchBytes){
+   // The true Borsh record is indivisible. Send it alone through Workspaces
+   // patchStateRecords, never omit bytes or manufacture a smaller record.
    await flush();
-  batch.push(item);batchBytes+=size;
+   await contract.patchStateRecords({records:[item]});
+   patched++;patchWrites++;largeSingleRecordPatchCalls++;
+  }else{
+   if(batch.length>=o.maxPatchRecords||batchBytes+size>o.maxPatchBytes)
+    await flush();
+   batch.push(item);batchBytes+=size;
+  }
   const k=Buffer.from(record.key,'base64'),v=Buffer.from(record.value,'base64');
   const l=Buffer.alloc(8);l.writeUInt32BE(k.length,0);l.writeUInt32BE(v.length,4);
   digest.update(l);digest.update(k);digest.update(v);
@@ -185,6 +198,7 @@ export async function cloneStage82BorrowerLending({
   borrowerIndex:index.toString(),sourceQueryCount:queries,
   sourceBytes:bytes,recordsRead:stored.size,recordsPatched:patched,
   patchWriteCalls:patchWrites,alternateSingleRecordReads:alternateReads,
+  largeSingleRecordPatchCalls,largestPatchRecordBytes,
   sourceStorageDigest:digest.digest('hex'),
   partialSourceClosure:true,fullMarketImported:false,
   providerPaginationExhausted:false,completeTrieRootParityVerified:false,
