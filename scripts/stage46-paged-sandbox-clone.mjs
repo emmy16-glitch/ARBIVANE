@@ -10,6 +10,27 @@ const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
 
+/** A separate archive must be a genuinely distinct, public HTTPS provider.
+ * Never print owner-supplied query credentials or use a local/internal RPC.
+ */
+export function validateStage80ArchivalFallback(endpoint,fallbackEndpoint){
+ let main,other;
+ try{main=new URL(endpoint);other=new URL(fallbackEndpoint);}catch{
+  throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ }
+ const host=other.hostname.toLowerCase();
+ if(typeof fallbackEndpoint!=='string'||fallbackEndpoint.length>2048||
+  main.protocol!=='https:'||other.protocol!=='https:'||
+  other.username||other.password||other.hash||other.port||
+  other.origin===main.origin||
+  !host||host==='localhost'||host.endsWith('.localhost')||
+  host.endsWith('.local')||host.endsWith('.internal')||
+  host.startsWith('[')||
+  /^(?:127\\.|10\\.|0\\.|192\\.168\\.|172\\.(?:1[6-9]|2[0-9]|3[01])\\.)/.test(host))
+  throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ return fallbackEndpoint;
+}
+
 export async function clonePinnedContractWithState({
  root,rpc,endpoint,contractId,blockHeight,expectedCodeHash=null,
  fallbackEndpoint='https://archival-rpc.mainnet.near.org',
@@ -18,13 +39,10 @@ export async function clonePinnedContractWithState({
  if(!root||typeof root.importContract!=='function'||!rpc||
   typeof rpc.viewAccount!=='function'||!ID.test(contractId)||
   !bounded(blockHeight,1,Number.MAX_SAFE_INTEGER)||
-  typeof endpoint!=='string'||new URL(endpoint).protocol!=='https:'||
-  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash))||
- typeof fallbackEndpoint!=='string'||
- !/^https:\/\//.test(fallbackEndpoint)||
- new URL(fallbackEndpoint).username||new URL(fallbackEndpoint).password||
- new URL(fallbackEndpoint).hash||fallbackEndpoint===endpoint)
+  typeof endpoint!=='string'||
+  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash)))
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ validateStage80ArchivalFallback(endpoint,fallbackEndpoint);
  const o={
   maxQueries:budgets.maxQueries??1536,
   maxRecords:budgets.maxRecords??180000,
