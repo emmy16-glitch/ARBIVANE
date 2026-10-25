@@ -71,6 +71,8 @@ export interface SandboxResult {
  persistedAtLaterFinalizedBlock?:boolean;
  finalizedBlockBefore?:number;finalizedBlockAfter?:number;
  receiptCount:number;failedReceiptCount:number;gasBurntGasUnits:string|null;
+ callbackReceiptCount?:number;failedCallbackReceiptCount?:number;
+ topLevelFailureObserved?:boolean;
  realMainnetExecuted:false;realProfitVerified:false;walletApproved:false;
  executionEnabled:false;mayBroadcastMainnet:false;blockers:string[];
 }
@@ -94,13 +96,27 @@ export function summarizeStage37SandboxOutcome(
  const result=(v.result&&typeof v.result==='object'?v.result:v) as Record<string,unknown>;
  const receipts=result.receipts_outcome;
  if(!Array.isArray(receipts)||!receipts.length)throw Error('SANDBOX_HAS_NO_FINAL_RECEIPTS');
- const failed=receipts.filter(x=>x&&typeof x==='object'&&
-  (x as Record<string,unknown>).outcome&&typeof (x as Record<string,unknown>).outcome==='object'&&
-  Object.prototype.hasOwnProperty.call(((x as Record<string,unknown>).outcome as Record<string,unknown>).status??{},'Failure')).length;
- const allValid=receipts.every(x=>x&&typeof x==='object'&&
-  (x as Record<string,unknown>).outcome&&typeof (x as Record<string,unknown>).outcome==='object'&&
-  typeof ((x as Record<string,unknown>).outcome as Record<string,unknown>).status==='object');
- if(!allValid)throw Error('SANDBOX_MALFORMED_RECEIPTS');
+ // A NEAR promise chain can contain a failed child/callback outcome even
+ // when the initiating call's top-level transaction reports SuccessValue.
+ // This MUST become a documented failed attempt, not a dropped exception or
+ // (worse) a success. Only canonical NEAR outcome status variants are accepted.
+ const statuses=new Map<string,Record<string,unknown>>();
+ for(const x of receipts){
+  if(!x||typeof x!=='object')throw Error('SANDBOX_MALFORMED_RECEIPTS');
+  const row=x as Record<string,unknown>;
+  if(typeof row.id!=='string'||!row.id||statuses.has(row.id)||
+   !row.outcome||typeof row.outcome!=='object')
+   throw Error('SANDBOX_MALFORMED_RECEIPTS');
+  const st=(row.outcome as Record<string,unknown>).status;
+  if(!st||typeof st!=='object'||Array.isArray(st))
+   throw Error('SANDBOX_MALFORMED_RECEIPTS');
+  const state=st as Record<string,unknown>;
+  const variants=['Failure','SuccessValue','SuccessReceiptId'].filter(v=>
+   Object.prototype.hasOwnProperty.call(state,v));
+  if(variants.length!==1)throw Error('SANDBOX_MALFORMED_RECEIPTS');
+  statuses.set(row.id,state);
+ }
+ const failed=[...statuses.values()].filter(st=>Object.prototype.hasOwnProperty.call(st,'Failure')).length;
  const receiptDefs=result.receipts;
  if(!Array.isArray(receiptDefs)||receiptDefs.length===0)
   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
@@ -118,16 +134,24 @@ export function summarizeStage37SandboxOutcome(
    ((a as Record<string,unknown>).FunctionCall as Record<string,unknown>).method_name==='callback_execute_with_pyth'))
    callbacks.add(row.receipt_id);
  }
- const outcomeIds=new Set(receipts.map(x=>(x as Record<string,unknown>).id));
- if(callbacks.size===0||[...callbacks].some(id=>!outcomeIds.has(id)))
+ if(callbacks.size===0||[...callbacks].some(id=>!statuses.has(id)))
   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_ATTESTED');
+ const failedCallbacks=[...callbacks].filter(id=>
+  Object.prototype.hasOwnProperty.call(statuses.get(id)!,'Failure')).length;
  const status=result.status;
  const final=result.final_execution_status==='FINAL';
  const optimistic=result.final_execution_status==='EXECUTED_OPTIMISTIC';
  if(!final&&!optimistic)throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
- const overallFail=!!status&&typeof status==='object'&&Object.prototype.hasOwnProperty.call(status,'Failure');
- if((overallFail&&failed===0)||(!overallFail&&failed>0)||result.status===undefined)
+ if(!status||typeof status!=='object'||Array.isArray(status))
   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
+ const variants=['Failure','SuccessValue','SuccessReceiptId'].filter(v=>
+  Object.prototype.hasOwnProperty.call(status,v));
+ if(variants.length!==1)throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
+ const overallFail=variants[0]==='Failure';
+ // A top-level failure, failed child, or failed callback is an actual rejected
+ // asynchronous Sandbox transaction, regardless of the other outcome shapes.
+ // Do not leak user/provider exception contents into the evidence.
+
  const gas=receipts.reduce((n,x)=>{
   const y=(x as {outcome:{gas_burnt:unknown}}).outcome.gas_burnt;
   if((typeof y!=='string'&&typeof y!=='number')||!/^\d+$/.test(String(y)))throw Error('INVALID_SANDBOX_GAS');
@@ -139,10 +163,17 @@ export function summarizeStage37SandboxOutcome(
   attemptedTransaction:true,transactionFinal:final,
   transactionExecutionStatus:final?'FINAL':'EXECUTED_OPTIMISTIC',
   persistedAtLaterFinalizedBlock:false,receiptCount:receipts.length,
-  failedReceiptCount:failed,gasBurntGasUnits:gas,
+  failedReceiptCount:failed,callbackReceiptCount:callbacks.size,
+  failedCallbackReceiptCount:failedCallbacks,
+  topLevelFailureObserved:overallFail,gasBurntGasUnits:gas,
   blockers:[
    ...(!inspection.allStoredKeysAttested?['FULL_IMPORTED_CONTRACT_STORAGE_KEYSET_NOT_ATTESTED']:[]),
-   ...(optimistic?['OPTIMISTIC_TRANSACTION_REQUIRES_LATER_FINALIZED_SANDBOX_STATE_PROOF']:[]),
+   ...(!success?[
+    ...(overallFail?['SANDBOX_TOP_LEVEL_TRANSACTION_FAILED']:[]),
+    ...(failedCallbacks>0?['SANDBOX_RHEA_ASYNC_CALLBACK_FAILED']:[]),
+    ...(failed>failedCallbacks?['SANDBOX_ASYNC_DEPENDENCY_RECEIPT_FAILED']:[]),
+   ]:[]),
+   ...(optimistic&&success?['OPTIMISTIC_TRANSACTION_REQUIRES_LATER_FINALIZED_SANDBOX_STATE_PROOF']:[]),
    'SANDBOX_CALL_ALONE_DOES_NOT_PROVE_FINANCING_SWAP_OR_NET_PROFIT',
    'REAL_MAINNET_WALLET_CAPITAL_RISK_LIMITS_AND_SIGNER_NOT_AUTHORIZED',
   ]};
