@@ -198,3 +198,66 @@ test('Stage101 never routes deterministic contract errors through a fallback pro
  assert.equal(fallbackCalls,0);
  assert.equal(x.imports.length,0);
 });
+
+test('Stage105 recovers a pinned historical LiNEAR code import through an independent archival RPC',async()=>{
+ const x=scenario(),original=x.args.root.importContract;
+ const prior=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let attempts=0;
+ x.args.root.importContract=async opts=>{
+  attempts++;
+  if(attempts===1)throw Error('HTTPError 429 rate limit');
+  assert.equal(opts.mainnetContract,'linear-protocol.near');
+  assert.equal(opts.blockId,H);
+  assert.equal(opts.withData,false);
+  assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,
+   'https://archival-rpc.mainnet.near.org');
+  return original(opts);
+ };
+ try{
+  process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=x.args.endpoint;
+  const result=await cloneStage91LinearToken(x.args);
+  assert.equal(attempts,2);
+  assert.equal(result.evidence.codeImportFallbackUsed,true);
+  assert.equal(result.evidence.criticalFtViewsAgreeWithSource,true);
+  assert.equal(result.evidence.mainnetMutated,false);
+  assert.equal(result.evidence.realLiquidationVerified,false);
+  assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,x.args.endpoint);
+ }finally{
+  if(prior===undefined)delete process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+  else process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=prior;
+ }
+});
+test('Stage105 never retries deterministic contract or Sandbox patch failures',async()=>{
+ const x=scenario(),orig=x.args.root.importContract;
+ let attempts=0;
+ x.args.root.importContract=async()=>{
+  attempts++;throw Error('Sandbox local state mismatch, invalid historical code hash');
+ };
+ await assert.rejects(()=>cloneStage91LinearToken(x.args),
+  /STAGE95_LOCAL_LINEAR_WASM_IMPORT_FAILED/);
+ assert.equal(attempts,1);
+ assert.equal(x.imports.length,0);
+ const y=scenario();let patches=0;
+ y.args.root.importContract=async opts=>{
+  const contract=await orig(opts);
+  return {...contract,patchStateRecords:async()=>{patches++;throw Error('patch failure');}};
+ };
+ await assert.rejects(()=>cloneStage91LinearToken(y.args),
+  /STAGE95_LOCAL_LINEAR_INDEX_PATCH_FAILED/);
+ assert.equal(patches,1);
+});
+test('Stage105 rejects an independent archival WASM failure without claiming settlement',async()=>{
+ const x=scenario(),original=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let requests=0;
+ x.args.root.importContract=async()=>{requests++;throw Error('HTTP 503 upstream unavailable');};
+ try{
+  await assert.rejects(()=>cloneStage91LinearToken(x.args),
+   /STAGE105_PINNED_LINEAR_WASM_FALLBACK_FAILED/);
+  assert.equal(requests,2);
+  assert.equal(x.patches.length,0);
+  assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,original);
+ }finally{
+  if(original===undefined)delete process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+  else process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=original;
+ }
+});
