@@ -184,9 +184,17 @@ export function sizeStage35SourceLiquidation(
     if(amount===0n)continue;
     const repaidUsd=asValue(amount,debt);
     if(repaidUsd===0n)continue;
-    // 0.75% below theoretical maximum discounted collateral, before share
-    // rounding. Always checked by source's full 4-rule inequality afterward.
-    const target=(repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount))*9925n/MAX_BPS;
+    // The liquidation bonus is proportional to the borrower's SHORTFALL.
+    // A fixed 75-bps haircut destroyed ALL positive spread for shallow
+    // undercollateralization (e.g. genuine paper health 99.91%). Instead
+    // reserve at most 25% of the calculated discount, capped at 75 bps.
+    // This is only a source-reference *candidate*, never execution proof.
+    // The full source four-rule postcondition is still checked below.
+    const maxHaircut=SOURCE_SCALE*75n/MAX_BPS;
+    const proportionalHaircut=discount/4n;
+    const haircut=proportionalHaircut<maxHaircut?proportionalHaircut:maxHaircut;
+    const maxSeizeUsd=repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount);
+    const target=maxSeizeUsd*(SOURCE_SCALE-haircut)/SOURCE_SCALE;
     let seizedQty=maxInternalAmount(collateral,target);
     if(seizedQty===0n)continue;
     for(let attempts=0;attempts<14&&seizedQty>0n;attempts++){
