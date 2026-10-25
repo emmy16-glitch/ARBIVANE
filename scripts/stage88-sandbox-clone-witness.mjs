@@ -21,7 +21,7 @@ export function createStage88CloneWitness({
  if(!Array.isArray(contractIds)||contractIds.length<2||contractIds.length>6||
   new Set(contractIds).size!==contractIds.length||
   contractIds.some(id=>typeof id!=='string'||!ID.test(id))||
-  !number(sourceBlockHeight)||sourceBlockHeight===0||
+  !Number.isSafeInteger(sourceBlockHeight)||sourceBlockHeight<1||
   typeof outputPath!=='string'||!/^stage88-[a-z0-9-]+\.json$/.test(outputPath)||
   typeof persist!=='function')
   throw Error('STAGE88_INVALID_LOCAL_CLONE_WITNESS_CONFIGURATION');
