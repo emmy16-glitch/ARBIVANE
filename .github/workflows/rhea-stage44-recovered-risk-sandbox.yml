@@ -80,7 +80,7 @@ jobs:
           if jq -e '.sandboxPlanReady == true' stage44-summary.json >/dev/null; then
             test -s stage44-positive-stage35-evidence.json
             npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
-            EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true \
+            EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true \
               STAGE37_STAGE35_EVIDENCE_PATH=stage44-positive-stage35-evidence.json \
               NEAR_RPC_URL=https://archival-rpc.mainnet.fastnear.com \
               NEAR_CLI_MAINNET_RPC_SERVER_URL=https://archival-rpc.mainnet.fastnear.com \
@@ -105,5 +105,6 @@ jobs:
             stage49-sandbox-registration.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
+            stage52-sandbox-collateral-and-borrow-preflight.json
           retention-days: 14
           if-no-files-found: warn
