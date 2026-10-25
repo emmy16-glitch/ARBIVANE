@@ -34,13 +34,30 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   !Number.isSafeInteger(blockHeight)||blockHeight<1||
   plan.mainnetSourceBlockHeight!==String(blockHeight))
   throw Error('STAGE49_UNTRUSTED_OR_CROSS_BLOCK_PLAN');
- const repay=plan.actions?.[0]?.Borrow?.token_id;
- const seize=plan.actions?.[2]?.Withdraw?.token_id;
+ const borrow=plan.actions?.[0]?.Borrow;
+ const liquidate=plan.actions?.[1]?.Liquidate;
+ const withdraw=plan.actions?.[2]?.Withdraw;
+ const repay=borrow?.token_id;
+ const seize=withdraw?.token_id;
  if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||
   !ID.test(seize)||repay===seize||
-  plan.actions?.[1]?.Liquidate?.in_assets?.[0]?.token_id!==repay||
-  plan.actions?.[1]?.Liquidate?.out_assets?.[0]?.token_id!==seize)
+  !Array.isArray(plan.actions)||plan.actions.length!==3||
+  typeof plan.borrowerAccountId!=='string'||!ID.test(plan.borrowerAccountId)||
+  liquidate?.account_id!==plan.borrowerAccountId||
+  !Array.isArray(liquidate?.in_assets)||liquidate.in_assets.length!==1||
+  !Array.isArray(liquidate?.out_assets)||liquidate.out_assets.length!==1||
+  liquidate.in_assets[0]?.token_id!==repay||
+  liquidate.out_assets[0]?.token_id!==seize)
   throw Error('STAGE49_INVALID_LIQUIDATION_ASSET_ROUTE');
+ // The three actions MUST be one self-consistent route in Rhea's INTERNAL
+ // lending units. This still does not prove raw FT-token units or solvency.
+ const borrowedUnits=u128(borrow.amount,'INVALID_BORROW_UNITS');
+ const repaidUnits=u128(liquidate.in_assets[0].amount,'INVALID_REPAY_UNITS');
+ const seizedUnits=u128(liquidate.out_assets[0].amount,'INVALID_SEIZE_UNITS');
+ const withdrawnUnits=u128(withdraw.amount,'INVALID_WITHDRAW_UNITS');
+ if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||
+  borrowedUnits!==repaidUnits||seizedUnits!==withdrawnUnits)
+  throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
  const market=assetMap(assets);
  const debt=market.get(repay),collateral=market.get(seize);
  if(!debt||!collateral)throw Error('STAGE49_MISSING_PINNED_REPAY_OR_SEIZE_POOL');
