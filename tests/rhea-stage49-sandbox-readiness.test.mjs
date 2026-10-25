@@ -150,3 +150,23 @@ test('Stage50 real Rhea Workspaces call uses bigint gas/deposit, not JSON string
  assert.ok(script.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!script.includes('broadcast_tx'));
 });
+
+test('Stage71 same-asset Borrow and Withdraw register one shared FT exactly once without mainnet funds',async()=>{
+ const same=plan();
+ same.actions[1].Liquidate.out_assets[0].token_id=repay;
+ same.actions[2].Withdraw.token_id=repay;
+ const checked=inspectStage49RheaAssets(same,assets(),221433162);
+ assert.equal(checked.status,'PINNED_PERMISSIONS_PASS_LIQUIDITY_UNVERIFIED');
+ assert.equal(checked.repayAndSeizeShareToken,true);
+ const x=scenario({plan:same});
+ const reg=await registerStage49SandboxActor(x.args);
+ assert.equal(reg.registrations.length,2);
+ assert.equal(reg.repayAndSeizeShareToken,true);
+ assert.equal(reg.storagePaidYocto,'20000000000000000000000');
+ assert.deepEqual(x.transactions.map(a=>a.contract),[lending,repay]);
+ assert.equal(reg.mainnetExecutionEnabled,undefined);
+ assert.equal(reg.mayBroadcastMainnet,false);
+ const disabled=assets({config:{can_borrow:true,can_withdraw:false}});
+ assert.throws(()=>inspectStage49RheaAssets(same,disabled,221433162),
+  /STAGE49_SEIZED_ASSET_WITHDRAWAL_DISABLED/);
+});
