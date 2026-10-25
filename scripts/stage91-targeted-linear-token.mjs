@@ -19,6 +19,13 @@ const borshId=id=>{const b=Buffer.from(id,'utf8'),n=Buffer.alloc(4);n.writeUInt3
 const at=(p,k)=>Buffer.concat([Buffer.from(p),k]);
 const b64=b=>Buffer.from(b).toString('base64');
 const eq=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Stage105: near-workspaces importContract reads historical WASM through its
+// mainnet JSON-RPC. Retry a separate archival endpoint ONLY for recoverable
+// transport/oversize errors; never retry deterministic contract-state errors.
+function stage105RetryableCodeImport(error){
+ if(!(error instanceof Error))return false;
+ return /(?:HTTP(?:Error)?[^\\n]{0,40}\\b(?:413|429|500|502|503|504)\\b|\\b(?:429|rate.limit|too.many.requests|response.too.large|payload.too.large|timeout|timed.out|ECONNRESET|ETIMEDOUT|fetch.failed|network.error|socket.hang.up|UNKNOWN_BLOCK|NOT_SYNCED)\\b)/i.test(error.message);
+}
 function bytes(str){
  if(typeof str!=='string'||str.length>3_000_000||
   Buffer.from(str,'base64').toString('base64')!==str)
@@ -154,11 +161,26 @@ export async function cloneStage91LinearToken({
  }
  if(views[4].value==='0'||views[5].value===null)
   throw Error('STAGE91_RHEA_LINEAR_VAULT_UNREGISTERED_OR_EMPTY');
- let contract;
- try{contract=await root.importContract({
-  mainnetContract:contractId,blockId:blockHeight,withData:false
- });}catch{
-  throw Error('STAGE95_LOCAL_LINEAR_WASM_IMPORT_FAILED');
+ let contract,codeImportFallbackUsed=false;
+ const importOptions={mainnetContract:contractId,blockId:blockHeight,withData:false};
+ try{contract=await root.importContract(importOptions);}
+ catch(error){
+  if(!stage105RetryableCodeImport(error))
+   throw Error('STAGE95_LOCAL_LINEAR_WASM_IMPORT_FAILED');
+  // The Workspaces SDK resolves this variable on every import. Do not leave
+  // it changed for subsequent Workspaces imports or leak the endpoint in logs.
+  // This function is run on the isolated, serial single-borrower import lane.
+  const previous=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+  try{
+   process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=fallbackEndpoint;
+   contract=await root.importContract(importOptions);
+   codeImportFallbackUsed=true;
+  }catch{
+   throw Error('STAGE105_PINNED_LINEAR_WASM_FALLBACK_FAILED');
+  }finally{
+   if(previous===undefined)delete process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+   else process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=previous;
+  }
  }
  if(contract?.accountId!==contractId||
   typeof contract.patchStateRecords!=='function'||
@@ -192,7 +214,7 @@ export async function cloneStage91LinearToken({
   recordsRead:records.size,recordsPatched:records.size,
   patchWriteCalls:records.size,alternateSingleEntryReads:alternate,
   sourceStorageDigest:stream.digest('hex'),
-  accountCountObserved:count,sourceViewFallbackUsed,
+  accountCountObserved:count,sourceViewFallbackUsed,codeImportFallbackUsed,
   exactHistoricalIndexKeyValueVerified:true,
   criticalFtViewsAgreeWithSource:true,
   originalDeployedWasmVerified:true,
