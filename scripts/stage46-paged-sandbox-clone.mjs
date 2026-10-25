@@ -5,6 +5,7 @@
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
+import {isIP} from 'node:net';
 
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
@@ -25,7 +26,7 @@ export function validateStage80ArchivalFallback(endpoint,fallbackEndpoint){
   other.origin===main.origin||
   !host||host==='localhost'||host.endsWith('.localhost')||
   host.endsWith('.local')||host.endsWith('.internal')||
-  host.startsWith('[')||
+  host.startsWith('[')||isIP(host)!==0||
   /^(?:127\\.|10\\.|0\\.|192\\.168\\.|172\\.(?:1[6-9]|2[0-9]|3[01])\\.)/.test(host))
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
  return fallbackEndpoint;
