@@ -153,6 +153,7 @@ export function sizeStage35SourceLiquidation(
   qtyIn:bigint;qtyOut:bigint;repaidUsd:bigint;seizedUsd:bigint;
   newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
  let considered=0;
+ let permittedPairs=0,liquidPairs=0,ruleValidPairs=0,positiveGrossPairs=0;
  for(const p of evidence.positions){
   if(p.status!=='PAPER_AT_RISK_UNAPPROVED')continue;
   if(!/^[A-Za-z0-9._:-]{1,100}$/.test(p.positionId)||p.reason!==null||
@@ -179,38 +180,62 @@ export function sizeStage35SourceLiquidation(
     const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
     // Bound the proposed repayment by actual pinned supply minus outstanding
     // borrow pool balances; actual transferable FT reserve remains unverified.
-    const amount=budget<debtPool.borrowCapacityInternal?
+    permittedPairs++;
+    const maxAmount=budget<debtPool.borrowCapacityInternal?
      budget:debtPool.borrowCapacityInternal;
-    if(amount===0n)continue;
-    const repaidUsd=asValue(amount,debt);
-    if(repaidUsd===0n)continue;
-    // 0.75% below theoretical maximum discounted collateral, before share
-    // rounding. Always checked by source's full 4-rule inequality afterward.
-    const target=(repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount))*9925n/MAX_BPS;
-    let seizedQty=maxInternalAmount(collateral,target);
-    if(seizedQty===0n)continue;
-    for(let attempts=0;attempts<14&&seizedQty>0n;attempts++){
-     const seizedUsd=asValue(seizedQty,collateral);
-     const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
-     const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
-     if(repayAdjusted>=d||seizeAdjusted>=c||repaidUsd===0n){seizedQty/=2n;continue;}
-     const newC=c-seizeAdjusted,newD=d-repayAdjusted;
-     const source=sourceCheckLiquidationRules({
-      beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
-      repaidE27:repaidUsd,seizedE27:seizedUsd});
-     const gross=seizedUsd-repaidUsd;
-     if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
-      (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
-       qtyIn:amount,qtyOut:seizedQty,repaidUsd,seizedUsd,newC,newD,discount,gross};
-     // Lower collateral seizure can improve source health even if the
-     // theoretical maximum failed, without increasing expected gross spread.
-     if(source.validBySourceRules)break;
-     seizedQty/=2n;
+    if(maxAmount===0n)continue;
+    liquidPairs++;
+    // Stage64: a single fixed 99.25%-of-maximum seize forfeits every
+    // small but positive spread below 0.75%, even when the source's four
+    // rules permit a valid liquidation. Probe near the *conservative* cap
+    // and progressively smaller sizes; never raise the source cap.
+    // Fractional repay sizes also protect against share rounding, liquidity
+    // headroom and post-liquidation health changing nonlinearly.
+    let pairRules=false,pairGross=false;
+    for(const repayBps of [10000n,7500n,5000n,2500n,1000n,250n]){
+     const amount=maxAmount*repayBps/MAX_BPS;
+     if(amount===0n)continue;
+     const repaidUsd=asValue(amount,debt);
+     if(repaidUsd===0n)continue;
+     for(const seizeBps of [9999n,9995n,9990n,9975n,9950n,9925n,9900n,9800n]){
+      const target=(repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount))*seizeBps/MAX_BPS;
+      let seizedQty=maxInternalAmount(collateral,target);
+      if(seizedQty===0n)continue;
+      for(let attempt=0;attempt<14&&seizedQty>0n;attempt++){
+       const seizedUsd=asValue(seizedQty,collateral);
+       const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
+       const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
+       if(repayAdjusted>=d||seizeAdjusted>=c){seizedQty/=2n;continue;}
+       const newC=c-seizeAdjusted,newD=d-repayAdjusted;
+       const source=sourceCheckLiquidationRules({
+        beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
+        repaidE27:repaidUsd,seizedE27:seizedUsd});
+       const gross=seizedUsd-repaidUsd;
+       if(source.validBySourceRules){
+        pairRules=true;
+        if(gross>0n)pairGross=true;
+        if(gross>=minGross&&gross>0n&&(!best||gross>best.gross))
+         best={p,repay:debt,seize:collateral,qtyIn:amount,qtyOut:seizedQty,
+          repaidUsd,seizedUsd,newC,newD,discount,gross};
+        // Less collateral seizure cannot improve gross once rules pass.
+        break;
+       }
+       // Fail closed on each invalid post-state, never loosen the four rules.
+       seizedQty/=2n;
+      }
+     }
     }
+    if(pairRules)ruleValidPairs++;
+    if(pairGross)positiveGrossPairs++;
    }
   }
  }
  if(!best)return failure(evidence,null,considered,[
+  permittedPairs===0?'NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR':
+  liquidPairs===0?'NO_SOURCE_POOL_BORROW_HEADROOM':
+  ruleValidPairs===0?'FOUR_RULES_REJECTED_ALL_SIZED_PAIRS':
+  positiveGrossPairs===0?'FOUR_RULES_PASS_BUT_NO_POSITIVE_GROSS':
+  'POSITIVE_GROSS_BELOW_CONFIGURED_MINIMUM',
   'NO_UNVERIFIED_4_RULE_SCENARIO_WITH_POSITIVE_PAPER_SPREAD',
   'DEPLOYED_RULES_SOURCE_WASM_REPLAY_FINANCING_AND_CAPITAL_UNVERIFIED']);
  return {mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',chain:'NEAR_MAINNET',
