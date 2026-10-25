@@ -35,10 +35,10 @@ const json=async<T>(p:string)=>JSON.parse(await readFile(p,'utf8')) as T;
    maxConfidenceBps:150,sanityMaxUsd:'10000000',
    minimumPaperGrossUsdE27:'1000000000000000000000000',
   });
- await writeFile('stage61-recovered-source-evidence.json',JSON.stringify(output,null,2)+'\n',{mode:0o600});
+ await writeFile('stage61-recovered-source-evidence.json',JSON.stringify(output,null,2)+'\n',{encoding:'utf8',mode:0o600});
  if(output.bestProposal)
   await writeFile('stage61-positive-stage35-evidence.json',
-   JSON.stringify(output.bestProposal,null,2)+'\n',{mode:0o600});
+   JSON.stringify(output.bestProposal,null,2)+'\n',{encoding:'utf8',mode:0o600});
  const {rows,bestProposal,...summary}=output;
  console.log(JSON.stringify(summary,null,2));
 })().catch(err=>{
