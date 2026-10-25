@@ -10,6 +10,7 @@ import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
+import {validateStage80ArchivalFallback} from './stage46-paged-sandbox-clone.mjs';
 
 const env=process.env,BLOCK=221433162;
 const LENDING='contract.main.burrow.near';
@@ -81,13 +82,15 @@ async function main(){
  // Match the authenticated Stage77 fallback used by the real execution
  // pipeline: only a single key rejected at page-size 1 may be recovered,
  // always at this exact historical block and against another public archive.
- const primary=new URL(env.NEAR_RPC_URL).href.replace(/\/$/,'');
- if(primary==='https://archival-rpc.mainnet.fastnear.com')
-  alternateRpc=new ArchivalStateRpc({
-   endpoint:'https://archival-rpc.mainnet.near.org',
-   accountId:LENDING,blockHeight:BLOCK,paceMs:4000,
-   timeoutMs:18000,maxRetries:0
-  });
+ // The default retired near.org archive may still reject a single large
+ // historical record. Operators can supply a genuine high-state-limit archive
+ // via GitHub secret, without exposing its API token in reports or job logs.
+ const fallback=validateStage80ArchivalFallback(env.NEAR_RPC_URL,
+  env.STAGE45_ARCHIVAL_FALLBACK_URL?.trim()||'https://archival-rpc.mainnet.near.org');
+ alternateRpc=new ArchivalStateRpc({
+  endpoint:fallback,accountId:LENDING,blockHeight:BLOCK,
+  paceMs:4000,timeoutMs:18000,maxRetries:0,
+ });
  async function sourcePage(afterKey,limit){
   try{return await stateRpc.viewPage(afterKey,limit);}
   catch(error){
