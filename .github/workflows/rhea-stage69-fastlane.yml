@@ -8,15 +8,18 @@ on:
       - 'scripts/stage49-sandbox-route-readiness.mjs'
       - 'scripts/stage51-active-pyth-sandbox-parity.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
+      - 'scripts/stage76-bounded-clone-queue.mjs'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
 permissions:
   contents: read
   actions: read
 concurrency:
   group: arbivane-stage69-fastlane
-  # Supersede obsolete execution code on main pushes while keeping manually
-  # dispatched investigations serial and preserving all uploaded evidence.
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # Source-pinned archival clones are expensive. Do not discard a live, fully
+  # authenticated execution attempt when a newer merge arrives.
+  # Keep the current run; the pending slot picks the most recent main commit.
+  cancel-in-progress: false
 
 jobs:
   select:
