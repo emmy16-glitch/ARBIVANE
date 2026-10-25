@@ -233,3 +233,34 @@ test('Stage65 returns concrete denial reason without fabricating a liquidation',
  assert.equal(noReserve.executionEnabled,false);
  assert.equal(noReserve.mayBroadcast,false);
 });
+
+test('Stage70 never proposes a same-token repay/seize route rejected by the real Sandbox preflight',()=>{
+ const candidate=report();
+ candidate.positions[0].legs=[
+  debt(),source('collateral','usd-debt.near','800000000',10000),
+ ];
+ const r=sizeStage35SourceLiquidation(candidate,assets(),options);
+ assert.equal(r.status,'NO_SAFE_SOURCE_SCENARIO');
+ assert.equal(r.referenceRulesPass,false);
+ assert.equal(r.repay,null);
+ assert.equal(r.seize,null);
+ assert.equal(r.mayBroadcast,false);
+});
+
+test('Stage70 selects a distinct permitted collateral route instead of the same-token pair',()=>{
+ const candidate=report();
+ candidate.positions[0].legs=[
+  debt(),source('collateral','usd-debt.near','100000000',10000),
+  source('collateral','collateral.near','875000000',8000),
+ ];
+ const r=sizeStage35SourceLiquidation(candidate,assets(),options);
+ assert.equal(r.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(r.referenceRulesPass,true);
+ assert.equal(r.repay.tokenId,'usd-debt.near');
+ assert.equal(r.seize.tokenId,'collateral.near');
+ assert.notEqual(r.repay.tokenId,r.seize.tokenId);
+ assert.equal(r.consideredPairs,2);
+ assert.ok(BigInt(r.paperGrossUsdE27)>0n);
+ assert.equal(r.mainnetWalletApproved,false);
+ assert.equal(r.maySign,false);
+});
