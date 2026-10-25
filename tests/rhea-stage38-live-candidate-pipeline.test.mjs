@@ -257,11 +257,13 @@ test('Stage94 permanently stale or low-confidence Pyth is never promoted to Sand
 });
 
 test('Stage94 stops retrying if a formerly stale quote changes to unrelated invalid source evidence',async()=>{
- let calls=0;const delays=[];
+ let calls=0;const attempts=new Map(),delays=[];
  const result=await qualifyStage38Candidates({},source(),stage32(),options,
-  async()=>{calls++;throw Error(calls%2===1?
-   'STALE_OR_FUTURE_PYTH_PRICE':'MISSING_EXECUTION_PRICE_SOURCE');},
-  async ms=>delays.push(ms));
+  async borrower=>{
+   calls++;const n=(attempts.get(borrower)??0)+1;attempts.set(borrower,n);
+   throw Error(n===1?
+    'STALE_OR_FUTURE_PYTH_PRICE':'MISSING_EXECUTION_PRICE_SOURCE');
+  },async ms=>delays.push(ms));
  assert.equal(calls,4);
  assert.deepEqual(delays,[4000,4000]);
  assert.equal(result.recoveredPriceFreshnessFindings,0);
