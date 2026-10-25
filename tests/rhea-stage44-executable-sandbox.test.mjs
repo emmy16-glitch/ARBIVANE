@@ -83,7 +83,7 @@ test('workflow starts actual near-workspaces and refuses unpinned or unaudited c
  assert.ok(runner.includes("Worker.init({network:'sandbox'})"));
  assert.ok(runner.includes("actor.callRaw(contract,'set_status'"));
  assert.ok(runner.includes("contract.view('get_status'"));
- assert.ok(runner.includes('provider.fastForward(8)'));
+ assert.ok(runner.includes('provider.fastForward(10000)'));
  assert.ok(wf.includes('persistedAtLaterFinalizedBlock'));
  assert.ok(wf.includes('transactionExecutionStatus'));
  assert.ok(wf.includes('transactionFinal == (.transactionExecutionStatus == "FINAL")'));
