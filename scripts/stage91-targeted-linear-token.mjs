@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
 import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 import {validateStage80IndependentArchive} from './stage46-paged-sandbox-clone.mjs';
+import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {PacedNearReadOnlyRpc} from '../src/rhea/paced-readonly-rpc.ts';
 import {ResilientNearReadOnlyRpc,isTransientNearRpcError} from '../src/rhea/resilient-readonly-rpc.ts';
 const ID=/^[a-z0-9._-]{2,64}$/;
@@ -26,7 +27,8 @@ function bytes(str){
 }
 export async function cloneStage91LinearToken({
  root,rpc,endpoint,blockHeight,lendingAccountId,borrowerAccountId,
- fallbackEndpoint='https://archival-rpc.mainnet.near.org',fetcher=fetch,paceMs=220
+ fallbackEndpoint='https://archival-rpc.mainnet.near.org',fetcher=fetch,paceMs=220,
+ fallbackRpc=null
 }){
  const contractId='linear-protocol.near';
  if(!root||typeof root.importContract!=='function'||
@@ -47,23 +49,36 @@ export async function cloneStage91LinearToken({
    ['storage_balance_of',{account_id}],
   ]),
  ];
- // Stage95: concurrent pinned NEP-141 views can exhaust the shared archival
- // RPC burst quota before authentic Sandbox replay begins. Serialize source
- // reads and retry ONLY network/429/5xx failures, preserving exact block.
- const paced=paceMs>=100?new PacedNearReadOnlyRpc(rpc,paceMs):rpc;
- const reads=new ResilientNearReadOnlyRpc(paced,{
-  maxRetries:2,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:32,
- });
- let remote,views;
- try{
-  remote=await reads.viewAccount(contractId,blockHeight);
-  views=[];
+ // Stage101: never mix primary and fallback source values. A transient failure
+ // restarts the entire pinned view group on an independent archival RPC.
+ // Reject non-transient contract errors and block drift without provider hops.
+ async function pinnedViews(sourceRpc){
+  const paced=paceMs>=100?new PacedNearReadOnlyRpc(sourceRpc,paceMs):sourceRpc;
+  const reads=new ResilientNearReadOnlyRpc(paced,{
+   maxRetries:2,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:32,
+  });
+  const sourceAccount=await reads.viewAccount(contractId,blockHeight);
+  const sourceViews=[];
   for(const [method,args] of methods)
-   views.push(await reads.view(contractId,method,args,blockHeight));
+   sourceViews.push(await reads.view(contractId,method,args,blockHeight));
+  return {remote:sourceAccount,views:sourceViews};
+ }
+ let remote,views,sourceViewFallbackUsed=false;
+ try{
+  ({remote,views}=await pinnedViews(rpc));
  }catch(error){
-  throw Error(isTransientNearRpcError(error)?
-   'STAGE95_PINNED_LINEAR_RPC_RETRIES_EXHAUSTED':
-   'STAGE95_PINNED_LINEAR_SOURCE_VIEW_UNAVAILABLE');
+  if(!isTransientNearRpcError(error))
+   throw Error('STAGE95_PINNED_LINEAR_SOURCE_VIEW_UNAVAILABLE');
+  // Secondary provider is read-only and must serve the SAME historical block.
+  const independent=fallbackRpc??new NearReadOnlyRpc(fallbackEndpoint);
+  try{
+   ({remote,views}=await pinnedViews(independent));
+   sourceViewFallbackUsed=true;
+  }catch(recoveryError){
+   throw Error(isTransientNearRpcError(recoveryError)?
+    'STAGE101_PINNED_LINEAR_FALLBACK_RETRIES_EXHAUSTED':
+    'STAGE101_PINNED_LINEAR_FALLBACK_SOURCE_INVALID');
+  }
  }
  if(remote?.blockHeight!==height||!HASH.test(remote.codeHash)||
   views.some(x=>x?.blockHeight!==height)||
@@ -177,7 +192,7 @@ export async function cloneStage91LinearToken({
   recordsRead:records.size,recordsPatched:records.size,
   patchWriteCalls:records.size,alternateSingleEntryReads:alternate,
   sourceStorageDigest:stream.digest('hex'),
-  accountCountObserved:count,
+  accountCountObserved:count,sourceViewFallbackUsed,
   exactHistoricalIndexKeyValueVerified:true,
   criticalFtViewsAgreeWithSource:true,
   originalDeployedWasmVerified:true,
