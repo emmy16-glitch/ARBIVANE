@@ -56,7 +56,7 @@ export function collectStage43BlockedTargets(
  const targets:Stage43Target[]=[];
  for(let shard=0;shard<4;shard++){
   const pair=shards.find(s=>s.shard===shard);
-  if(!pair)fail('MISSING_SHARD');
+  if(!pair)throw Error('STAGE43_MISSING_SHARD');
   for(let i=0;i<pair.checkpoint.items.length;i++){
    const item=pair.checkpoint.items[i]!;
    if(item.classification.startsWith('BLOCKED')){
@@ -107,6 +107,7 @@ export async function retryStage43BlockedObservations(
    ...o,fromFinding:target.findingIndex,maxFindings:1,
   },evaluator);
   const item=res.items[0];
+  if(!item)throw Error('STAGE43_MISSING_REPRICE_ITEM');
   if(res.processed!==1||res.nextFinding!==target.findingIndex+1||
    res.pricingBlockHeight!==String(o.pinnedBlockHeight)||!item||
    item.borrowerAccountId!==target.borrowerAccountId||
