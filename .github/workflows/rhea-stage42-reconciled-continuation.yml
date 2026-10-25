@@ -1,16 +1,5 @@
 name: Stage42 verified Rhea borrower continuation (read only)
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/rhea-stage42-reconciled-continuation.yml'
-      - 'scripts/stage47-next-market-window.mjs'
-      - 'scripts/stage47-next-market-window-cli.mjs'
-      - 'scripts/stage56-sandbox-attempt-evidence.mjs'
-      - 'scripts/stage56-sandbox-attempt-cli.mjs'
-      - 'src/rhea/stage35-atomic-reference-sizing.ts'
-      - 'src/rhea/stage38-live-candidate-cli.ts'
-      - 'src/rhea/stage38-live-candidate-pipeline.ts'
   workflow_dispatch:
     inputs:
       followups_remaining:
@@ -26,9 +15,6 @@ permissions:
   actions: write
 concurrency:
   group: arbivane-stage42-${{ github.ref }}
-  # GitHub's default single-pending queue replaces older Stage47 dispatches
-  # when further main pushes arrive. Retain the finite authenticated chain.
-  queue: max
   cancel-in-progress: false
 jobs:
   discover:
@@ -208,7 +194,7 @@ jobs:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
           STAGE47_EXPECTED_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '1292' }}
-          STAGE47_FOLLOWUPS_REMAINING: ${{ github.event_name == 'push' && '19' || inputs.followups_remaining }}
+          STAGE47_FOLLOWUPS_REMAINING: ${{ inputs.followups_remaining }}
         run: |
           set -euo pipefail
           node scripts/stage47-next-market-window-cli.mjs stage42-reconciled-window.json

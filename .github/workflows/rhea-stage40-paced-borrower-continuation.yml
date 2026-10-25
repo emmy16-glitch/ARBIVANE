@@ -1,9 +1,5 @@
 name: Stage40 paced live borrower continuation (read only)
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/rhea-stage40-paced-borrower-continuation.yml'
   workflow_dispatch:
     inputs:
       base_cursor:
