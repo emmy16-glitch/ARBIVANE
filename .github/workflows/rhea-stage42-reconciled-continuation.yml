@@ -120,6 +120,7 @@ jobs:
             stage42-sandbox-actual.json
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
+            stage49-sandbox-asset-storage-preflight.json
             stage46-sandbox-clone-evidence.json
           retention-days: 14
           if-no-files-found: warn
