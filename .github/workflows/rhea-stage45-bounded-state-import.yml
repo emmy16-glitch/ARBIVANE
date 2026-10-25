@@ -8,6 +8,7 @@ on:
       - 'scripts/stage45-cursor-pages.mjs'
       - 'scripts/stage45-archival-state-rpc.mjs'
       - 'scripts/stage45-rhea-paged-sandbox-import.mjs'
+      - 'scripts/stage46-paged-sandbox-clone.mjs'
   workflow_dispatch:
     inputs:
       max_prefix_queries:
