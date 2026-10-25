@@ -49,3 +49,13 @@ test('Stage69 genuine Workspaces execution remains keyless and never fabricates 
  assert.ok(!text.includes('broadcast_tx'));
  assert.ok(!text.includes('send_tx'));
 });
+
+
+test('Stage73 fresh main code preempts stale fast-lane runs but manual runs remain serial',()=>{
+ assert.ok(text.includes("cancel-in-progress: ${{ github.event_name == 'push' }}"));
+ assert.ok(text.includes("group: arbivane-stage69-fastlane"));
+ assert.ok(text.includes("- '.github/workflows/rhea-stage69-fastlane.yml'"));
+ assert.ok(text.includes("EXECUTION_ENABLED: 'false'"));
+ assert.ok(text.includes('actualRheaSettlementVerified'));
+ assert.ok(!text.includes('MAINNET_PRIVATE_KEY'));
+});
