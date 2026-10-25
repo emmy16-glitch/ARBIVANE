@@ -151,22 +151,44 @@ test('Stage50 real Rhea Workspaces call uses bigint gas/deposit, not JSON string
  assert.ok(!script.includes('broadcast_tx'));
 });
 
-test('Stage71 same-asset Borrow and Withdraw register one shared FT exactly once without mainnet funds',async()=>{
- const same=plan();
- same.actions[1].Liquidate.out_assets[0].token_id=repay;
- same.actions[2].Withdraw.token_id=repay;
- const checked=inspectStage49RheaAssets(same,assets(),221433162);
- assert.equal(checked.status,'PINNED_PERMISSIONS_PASS_LIQUIDITY_UNVERIFIED');
- assert.equal(checked.repayAndSeizeShareToken,true);
- const x=scenario({plan:same});
- const reg=await registerStage49SandboxActor(x.args);
- assert.equal(reg.registrations.length,2);
- assert.equal(reg.repayAndSeizeShareToken,true);
- assert.equal(reg.storagePaidYocto,'20000000000000000000000');
- assert.deepEqual(x.transactions.map(a=>a.contract),[lending,repay]);
- assert.equal(reg.mainnetExecutionEnabled,undefined);
- assert.equal(reg.mayBroadcastMainnet,false);
- const disabled=assets({config:{can_borrow:true,can_withdraw:false}});
- assert.throws(()=>inspectStage49RheaAssets(same,disabled,221433162),
-  /STAGE49_SEIZED_ASSET_WITHDRAWAL_DISABLED/);
+
+const sameAssetPlan=()=>plan({actions:[
+ {Borrow:{token_id:repay,amount:'100'}},
+ {Liquidate:{account_id:'debtor.near',
+  in_assets:[{token_id:repay,amount:'100'}],
+  out_assets:[{token_id:repay,amount:'110'}]}},
+ {Repay:{token_id:repay,amount:'100'}},
+ {Withdraw:{token_id:repay,amount:'10'}}
+]});
+test('Stage71 keeps four-action same-token route source-pinned and borrow repaid before surplus withdrawal',()=>{
+ const r=inspectStage49RheaAssets(sameAssetPlan(),assets(),221433162);
+ assert.equal(r.repayTokenId,repay);
+ assert.equal(r.seizeTokenId,repay);
+ assert.equal(r.repayCanBorrow,true);
+ assert.equal(r.seizedCanWithdraw,true);
+ assert.equal(r.mayBroadcastMainnet,false);
+});
+test('Stage71 rejects forged or missing self-repay and anything withdrawing borrowed funds',()=>{
+ const bad=[
+  p=>p.actions[2].Repay.amount='99',
+  p=>p.actions[2].Repay.token_id=seize,
+  p=>p.actions[3].Withdraw.amount='110',
+  p=>p.actions[3].Withdraw.amount='0',
+  p=>p.actions[1].Liquidate.out_assets[0].amount='100',
+  p=>p.actions.splice(2,1),
+ ];
+ for(const change of bad){
+  const p=structuredClone(sameAssetPlan());change(p);
+  assert.throws(()=>inspectStage49RheaAssets(p,assets(),221433162),/STAGE49_/);
+ }
+});
+test('Stage71 registers only the lending contract and one unique NEP-141 token',async()=>{
+ const x=scenario({plan:sameAssetPlan()});
+ const s=await registerStage49SandboxActor(x.args);
+ assert.equal(s.status,'LOCAL_STORAGE_REGISTRATION_CONFIRMED');
+ assert.equal(s.registrations.length,2);
+ assert.deepEqual(x.transactions.map(q=>q.contract),[lending,repay]);
+ assert.equal(s.storagePaidYocto,(2n*BigInt(MIN)).toString());
+ assert.equal(s.mainnetExecutionEnabled,undefined);
+ assert.equal(s.maySignMainnet,false);
 });

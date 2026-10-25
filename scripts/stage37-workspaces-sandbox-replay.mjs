@@ -80,7 +80,7 @@ async function main(){
  const contracts=new Map();
  const cloneEvidence=[];
  const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
-  'wrap.near',plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
+  'wrap.near',plan.actions[0].Borrow.token_id,plan.actions.at(-1).Withdraw.token_id]);
  for(const id of ids){
   const {contract,evidence}=await clonePinnedContractWithState({
    root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
@@ -133,7 +133,7 @@ async function main(){
  // Observe actual lending positions and NEP-141 balances BEFORE the Sandbox call.
  // No zero-balance fallback: missing storage/views must block settlement claims.
  const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
- const seizeToken=contracts.get(plan.actions[2].Withdraw.token_id);
+ const seizeToken=contracts.get(plan.actions.at(-1).Withdraw.token_id);
  if(!repayToken||!seizeToken)throw Error('SANDBOX_FT_CONTRACT_NOT_IMPORTED');
  // A cursor-exhausted clone is not verified merely because the archive
  // returned all pages; require actual Sandbox vault balance to match the

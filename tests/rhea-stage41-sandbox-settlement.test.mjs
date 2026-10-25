@@ -119,32 +119,43 @@ test('Stage41 accepts a later-finalized optimistic callback but never an unconfi
  }
 });
 
-test('Stage71 same-token path requires one identical observed FT balance and a positive NET token increase',()=>{
- const same=plan();
- same.actions[1].Liquidate.out_assets[0].token_id='usdt.near';
- same.actions[2].Withdraw.token_id='usdt.near';
- const before={positions:{REGULAR:{
-  borrowed:[leg('usdt.near',100)],collateral:[leg('usdt.near',200)]}}};
- const after={positions:{REGULAR:{
-  borrowed:[leg('usdt.near',80)],collateral:[leg('usdt.near',170)]}}};
- const e={...input(),plan:same,borrowerBefore:before,borrowerAfter:after,
-  actorRepayFtBefore:'100',actorRepayFtAfter:'112',
-  actorSeizeFtBefore:'100',actorSeizeFtAfter:'112'};
- const w=attestStage41SandboxSettlement(e);
- assert.equal(w.status,'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD');
- assert.equal(w.repayAndSeizeShareToken,true);
- assert.equal(w.actorSeizeFtIncreaseAtomic,'12');
- assert.equal(w.borrowerDebtDecreaseInternal,'20');
- assert.equal(w.borrowerCollateralDecreaseInternal,'30');
- assert.equal(w.assetTransferObserved,true);
- assert.equal(w.positiveNetProfitVerified,false);
- assert.equal(w.mayBroadcastMainnet,false);
- assert.ok(w.blockers.includes('SHARED_TOKEN_ACTOR_FT_INCREASE_IS_NET_BALANCE_NOT_GROSS_SEIZURE'));
- assert.throws(()=>attestStage41SandboxSettlement({...e,actorSeizeFtAfter:'130'}),
+
+test('Stage71 validates real borrower debt and collateral deltas with same-token self-loan fully repaid',()=>{
+ const x=input(),route={...plan(),actions:[
+  {Borrow:{token_id:'usdt.near',amount:'20'}},
+  {Liquidate:{account_id:'account.near',
+   in_assets:[{token_id:'usdt.near',amount:'20'}],
+   out_assets:[{token_id:'usdt.near',amount:'30'}]}},
+  {Repay:{token_id:'usdt.near',amount:'20'}},
+  {Withdraw:{token_id:'usdt.near',amount:'10'}}
+ ]};
+ const b=(d,c)=>({positions:{REGULAR:{
+  borrowed:[leg('usdt.near',d)],collateral:[leg('usdt.near',c)]
+ }}});
+ const e={...x,plan:route,borrowerBefore:b(100,200),borrowerAfter:b(80,170),
+  actorBefore:actor(),actorAfter:actor(),
+  actorRepayFtBefore:'0',actorRepayFtAfter:'10',
+  actorSeizeFtBefore:'0',actorSeizeFtAfter:'10'};
+ const ok=attestStage41SandboxSettlement(e);
+ assert.equal(ok.status,'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD');
+ assert.equal(ok.borrowerDebtDecreaseInternal,'20');
+ assert.equal(ok.borrowerCollateralDecreaseInternal,'30');
+ assert.equal(ok.actorSeizeFtIncreaseAtomic,'10');
+ assert.equal(ok.positiveNetProfitVerified,false);
+ assert.equal(ok.mayBroadcastMainnet,false);
+ assert.equal(ok.repayAndSeizeShareToken,true);
+ assert.ok(ok.blockers.includes('SHARED_TOKEN_ACTOR_FT_INCREASE_IS_NET_BALANCE_NOT_GROSS_SEIZURE'));
+ assert.throws(()=>attestStage41SandboxSettlement({...e,actorSeizeFtAfter:'11'}),
   /STAGE41_SAME_TOKEN_MUST_HAVE_IDENTICAL_FT_BALANCE_EVIDENCE/);
- const nothing=attestStage41SandboxSettlement({...e,actorRepayFtAfter:'100',actorSeizeFtAfter:'100'});
- assert.equal(nothing.status,'BLOCKED_NO_FT_SEIZURE');
- assert.equal(nothing.assetTransferObserved,false);
- const liability=attestStage41SandboxSettlement({...e,actorAfter:actor(1)});
- assert.equal(liability.status,'BLOCKED_ACTOR_HAS_LIABILITY');
+ const unpaid=attestStage41SandboxSettlement({...e,actorAfter:actor(20)});
+ assert.equal(unpaid.status,'BLOCKED_ACTOR_HAS_LIABILITY');
+ for(const mutation of [
+  v=>v.actions[2].Repay.amount='19',
+  v=>v.actions[3].Withdraw.amount='30',
+  v=>v.actions[1].Liquidate.out_assets[0].amount='20',
+  v=>v.actions.splice(2,1),
+ ]){
+  const bad=structuredClone(route);mutation(bad);
+  assert.throws(()=>attestStage41SandboxSettlement({...e,plan:bad}),/STAGE41_/);
+ }
 });

@@ -34,14 +34,16 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   !Number.isSafeInteger(blockHeight)||blockHeight<1||
   plan.mainnetSourceBlockHeight!==String(blockHeight))
   throw Error('STAGE49_UNTRUSTED_OR_CROSS_BLOCK_PLAN');
- const borrow=plan.actions?.[0]?.Borrow;
- const liquidate=plan.actions?.[1]?.Liquidate;
- const withdraw=plan.actions?.[2]?.Withdraw;
+ const actions=plan.actions;
+ const borrow=actions?.[0]?.Borrow;
+ const liquidate=actions?.[1]?.Liquidate;
+ const withdraw=actions?.at(-1)?.Withdraw;
  const repay=borrow?.token_id;
  const seize=withdraw?.token_id;
+ const same=repay===seize;
  if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||
-  !ID.test(seize)||
-  !Array.isArray(plan.actions)||plan.actions.length!==3||
+  !ID.test(seize)||!Array.isArray(actions)||
+  (same?actions.length!==4:actions.length!==3)||
   typeof plan.borrowerAccountId!=='string'||!ID.test(plan.borrowerAccountId)||
   liquidate?.account_id!==plan.borrowerAccountId||
   !Array.isArray(liquidate?.in_assets)||liquidate.in_assets.length!==1||
@@ -55,8 +57,14 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
  const repaidUnits=u128(liquidate.in_assets[0].amount,'INVALID_REPAY_UNITS');
  const seizedUnits=u128(liquidate.out_assets[0].amount,'INVALID_SEIZE_UNITS');
  const withdrawnUnits=u128(withdraw.amount,'INVALID_WITHDRAW_UNITS');
- if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||
-  borrowedUnits!==repaidUnits||seizedUnits!==withdrawnUnits)
+ const selfRepay=same?actions[2]?.Repay:null;
+ if(same&&(!selfRepay||selfRepay.token_id!==repay))
+  throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
+ const selfRepayUnits=same?u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
+ if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
+  borrowedUnits!==repaidUnits||
+  (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=borrowedUnits||
+    withdrawnUnits!==seizedUnits-borrowedUnits):seizedUnits!==withdrawnUnits))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
  const market=assetMap(assets);
  const debt=market.get(repay),collateral=market.get(seize);
@@ -136,15 +144,17 @@ export async function registerStage49SandboxActor({actor,contracts,plan}){
   !contracts||typeof contracts.get!=='function')
   throw Error('STAGE49_LOCAL_SANDBOX_ONLY');
  const repay=plan.actions?.[0]?.Borrow?.token_id;
- const seize=plan.actions?.[2]?.Withdraw?.token_id;
- if(typeof repay!=='string'||typeof seize!=='string'||!ID.test(repay)||!ID.test(seize))
+ const seize=plan.actions?.at(-1)?.Withdraw?.token_id;
+ const same=repay===seize;
+ if(typeof repay!=='string'||!ID.test(repay)||
+  typeof seize!=='string'||!ID.test(seize)||
+  !Array.isArray(plan.actions)||
+  (same?(plan.actions.length!==4||
+    plan.actions[2]?.Repay?.token_id!==repay):plan.actions.length!==3))
   throw Error('STAGE49_INVALID_REGISTERED_ASSET_SET');
- // Reuse ONE NEP-141 registration when repay and seize are the same token.
- // Never allow the lender itself to masquerade as the fungible token.
- if(repay===plan.lendingContract||seize===plan.lendingContract)
+ const ids=[plan.lendingContract,...new Set([repay,seize])];
+ if(new Set(ids).size!==ids.length)
   throw Error('STAGE49_CONFLICTING_CONTRACT_ROLES');
- const ids=[...new Set([plan.lendingContract,repay,seize])];
- if(ids.length<2||ids.length>3)throw Error('STAGE49_CONFLICTING_CONTRACT_ROLES');
  // Check every storage minimum BEFORE ANY local Sandbox mutation, so an
  // excessive fee in the third dependency cannot partially register the actor.
  const registered=[];

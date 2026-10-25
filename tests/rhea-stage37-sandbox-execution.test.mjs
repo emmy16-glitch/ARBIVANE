@@ -153,3 +153,26 @@ test('Stage57 tracks Rhea async callback receipt without leaking provider failur
  assert.equal(r.failedCallbackReceiptCount,1);
  assert.equal(JSON.stringify(r).includes(secret),false);
 });
+
+
+test('Stage71 authentic same-token liquidation repays actor in one isolated call before withdrawing surplus',()=>{
+ const q=proposal();q.seize.tokenId=q.repay.tokenId;
+ const p=buildStage37SandboxPlan(q);
+ assert.deepEqual(p.actions.map(a=>Object.keys(a)[0]),
+  ['Borrow','Liquidate','Repay','Withdraw']);
+ assert.equal(p.actions[2].Repay.token_id,'wrap.near');
+ assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+ assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
+ assert.equal(p.actions[3].Withdraw.amount,'10000000000000000000');
+ assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
+  String(BigInt(p.actions[3].Withdraw.amount)+BigInt(p.actions[2].Repay.amount)));
+ assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
+});
+
+test('Stage71 cannot withdraw same-token balance with no surplus or borrow not fully repaid',()=>{
+ const q=proposal();q.seize.tokenId=q.repay.tokenId;
+ for(const v of ['100000000000000000000','99000000000000000000']){
+  assert.throws(()=>buildStage37SandboxPlan({...q,seize:{...q.seize,
+   amountLendingInternalAtomic:v}}),/STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER/);
+ }
+});
