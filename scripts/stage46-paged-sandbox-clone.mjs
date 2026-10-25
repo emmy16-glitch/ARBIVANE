@@ -9,6 +9,23 @@ import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 const bounded=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
+/** No mainnet private key, no writes and never trust a second RPC origin by
+ * textual URL equality: https://host and https://host/ are identical.
+ * Deployment-owned RPC URLs may include a query token, never log that URL.
+ */
+export function validateStage79ArchivalFallback(endpoint,fallbackEndpoint){
+ let primary,other;
+ try{primary=new URL(endpoint);other=new URL(fallbackEndpoint);}
+ catch{throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');}
+ const host=other.hostname.toLowerCase();
+ if(other.protocol!=='https:'||other.username||other.password||other.hash||
+  !host||host==='localhost'||host==='[::1]'||host.endsWith('.local')||
+  /^(?:127\.|10\.|0\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)/.test(host)||
+  other.port||other.origin===primary.origin||
+  typeof fallbackEndpoint!=='string'||fallbackEndpoint.length>2048)
+  throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ return fallbackEndpoint;
+}
 
 export async function clonePinnedContractWithState({
  root,rpc,endpoint,contractId,blockHeight,expectedCodeHash=null,
@@ -19,12 +36,9 @@ export async function clonePinnedContractWithState({
   typeof rpc.viewAccount!=='function'||!ID.test(contractId)||
   !bounded(blockHeight,1,Number.MAX_SAFE_INTEGER)||
   typeof endpoint!=='string'||new URL(endpoint).protocol!=='https:'||
-  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash))||
- typeof fallbackEndpoint!=='string'||
- !/^https:\/\//.test(fallbackEndpoint)||
- new URL(fallbackEndpoint).username||new URL(fallbackEndpoint).password||
- new URL(fallbackEndpoint).hash||fallbackEndpoint===endpoint)
+  (expectedCodeHash!==null&&!HASH.test(expectedCodeHash)))
   throw Error('STAGE46_INVALID_LOCAL_CLONE_CONFIGURATION');
+ validateStage79ArchivalFallback(endpoint,fallbackEndpoint);
  const o={
   maxQueries:budgets.maxQueries??1536,
   maxRecords:budgets.maxRecords??180000,
