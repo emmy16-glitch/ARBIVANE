@@ -1,0 +1,163 @@
+name: Stage42 verified Rhea borrower continuation (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage42-reconciled-continuation.yml'
+  workflow_dispatch:
+    inputs:
+      base_cursor:
+        description: 'Historical Stage30 debt index cursor; 4 x 80 nonoverlapping borrower findings'
+        required: true
+        default: '972'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage42-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  discover:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download complete historic Stage30 registry (never invent borrowers)
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Validate cursor and disjoint shard boundaries
+        env:
+          BASE: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE" =~ ^(0|[1-9][0-9]*)$ ]] || exit 2
+          (( BASE >= 12 && BASE <= 7480 )) || exit 2
+          echo "RHEA_STAGE38_START_FINDING=$((BASE+SHARD*80))" >> "$GITHUB_ENV"
+          echo "RHEA_STAGE32_START_FINDING=$((BASE+SHARD*80))" >> "$GITHUB_ENV"
+      - name: Refresh 80 borrower positions using paced read-only Pyth and final-block observations
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE32_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
+          RHEA_STAGE32_MAX_FINDINGS: '80'
+          RHEA_STAGE32_BATCH_SIZE: '20'
+          RHEA_STAGE32_CONCURRENCY: '2'
+          RHEA_RPC_SPACING_MS: '700'
+          RHEA_STAGE32_RESUME: 'false'
+          RHEA_STAGE32_CHECKPOINT_PATH: stage32-reprice-checkpoint.json
+          RHEA_STAGE32_REPORT_PATH: stage32-reprice-report.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/full-active-pyth-sweep-cli.ts > stage42-sweep-summary.json
+          jq -e '.executionEnabled == false and .processed == 80 and .processed == (.paperAtRisk+.paperHealthy+.noDebtNow+.blocked)' stage42-sweep-summary.json
+      - name: Size only actual risk findings and attempt a local Sandbox replay only after strict gating
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE38_SOURCE_RUN: '40128285853'
+          RHEA_STAGE38_SOURCE_FILE: source/rhea-full-paged-index.json
+          RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
+          RHEA_STAGE38_MAX_FINDINGS: '80'
+          RHEA_RPC_SPACING_MS: '700'
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage38-live-candidate-cli.ts > stage42-qualification-summary.json
+          jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false and .mayBroadcastMainnet == false and .netProfitVerified == false and .refreshed <= 12' stage42-qualification-summary.json
+          jq '{startFinding,nextFinding,reviewed,paperAtRiskFromPreviousScan,refreshed,positiveSourcePlans,failedFreshReads,sandboxPlanReady}' stage42-qualification-summary.json >> "$GITHUB_STEP_SUMMARY"
+          if jq -e '.sandboxPlanReady == true' stage42-qualification-summary.json >/dev/null; then
+            test -s stage38-positive-stage35-evidence.json
+            npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+            EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true \
+              STAGE37_STAGE35_EVIDENCE_PATH=stage38-positive-stage35-evidence.json \
+              NEAR_RPC_URL=https://archival-rpc.mainnet.fastnear.com \
+              NEAR_CLI_MAINNET_RPC_SERVER_URL=https://archival-rpc.mainnet.fastnear.com \
+              node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage42-sandbox-actual.json
+            jq -e '.chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .mayBroadcastMainnet == false' stage42-sandbox-actual.json
+          else
+            echo 'No fresh valid positive source plan; no transaction attempted.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve position evidence, blocked failures and Sandbox receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage42-opportunity-shard-${{ matrix.shard }}
+          path: |
+            stage32-reprice-checkpoint.json
+            stage32-reprice-report.json
+            stage38-qualification.json
+            stage42-sweep-summary.json
+            stage42-qualification-summary.json
+            stage38-positive-stage35-evidence.json
+            stage42-sandbox-actual.json
+            stage37-sandbox-execution.json
+            stage41-sandbox-balance-settlement.json
+          retention-days: 14
+          if-no-files-found: warn
+  reconcile:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download same full-market historical provenance
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Download all shard artifacts into independently named directories
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rhea-stage42-opportunity-shard-*
+          path: shards
+          merge-multiple: false
+      - name: Reconcile 320 borrower IDs, positions, statuses and risk refreshes
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          RHEA_STAGE42_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
+          RHEA_STAGE42_SOURCE_PATH: source/rhea-full-paged-index.json
+          RHEA_STAGE42_SHARDS_DIR: shards
+          RHEA_STAGE42_OUTPUT_PATH: stage42-reconciled-window.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage42-window-reconciliation-cli.ts > stage42-reconciliation-stdout.json
+          jq -e '.everyHistoricalFindingVisited == true and .accountsVisited == 320 and .shardsReconciled == 4 and .maySignMainnet == false and .positiveNetProfitVerified == false' stage42-reconciled-window.json
+          jq '{status,baseCursor,endCursor,accountsVisited,paperAtRisk,blockedInitialReads,failedRiskRefreshes,sourceReferencePlansForSandboxOnly,allCurrentHealthVerified,positiveNetProfitVerified}' stage42-reconciled-window.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve final reconciled window artifact (or failure evidence)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage42-reconciled-window
+          path: |
+            stage42-reconciled-window.json
+            stage42-reconciliation-stdout.json
+          if-no-files-found: warn
+          retention-days: 14
