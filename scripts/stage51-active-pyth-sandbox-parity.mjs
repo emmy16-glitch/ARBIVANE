@@ -2,6 +2,8 @@
  * NEAR mainnet public views and real imported local Sandbox dependencies.
  * This does NOT prove current quotes, successful liquidation, or net PNL.
  */
+import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
+import {ResilientNearReadOnlyRpc,isTransientNearRpcError} from '../src/rhea/resilient-readonly-rpc.ts';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const FEED=/^[a-f0-9]{64}$/;
 const UINT=/^(0|[1-9][0-9]{0,38})$/;
@@ -12,10 +14,17 @@ const obj=(v,code)=>{
  return v;
 };
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-async function pinned(rpc,id,method,args,block){
+async function pinned(rpc,id,method,args,block,fallback){
  let v;
  try{v=await rpc.view(id,method,args,block);}
- catch{throw Error('STAGE51_SOURCE_VIEW_UNAVAILABLE');}
+ catch(error){
+  if(!isTransientNearRpcError(error)||!fallback)
+   throw Error('STAGE51_SOURCE_VIEW_UNAVAILABLE');
+  // A second archival RPC may serve this exact historic block. Never use
+  // latest/final or fabricated Pyth data, and never hide contract-view errors.
+  try{v=await fallback.view(id,method,args,block);}
+  catch{throw Error('STAGE108_PINNED_PYTH_FALLBACK_UNAVAILABLE');}
+ }
  if(v?.blockHeight!==String(block))throw Error('STAGE51_SOURCE_BLOCK_DRIFT');
  return v.value;
 }
@@ -46,7 +55,9 @@ export function selectPinnedActivePythSandboxDependencies(config,plan){
   'wrap.near',repay,seize])];
 }
 
-export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
+export async function attestStage51PythParity({
+ rpc,contracts,plan,blockHeight,fallbackEndpoint=null,fallbackRpc=null
+}){
  const lender=plan?.lendingContract;
  if(!rpc||typeof rpc.view!=='function'||!contracts||
   typeof contracts.get!=='function'||!plan||
@@ -70,7 +81,14 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
   lenderClone.accountId!==lender||oracleClone.accountId!=='aggregate-oracle.near'||
   typeof lenderClone.view!=='function'||typeof oracleClone.view!=='function')
   throw Error('STAGE51_PINNED_ORACLE_OR_LENDING_CLONE_MISSING');
- const remoteConfig=obj(await pinned(rpc,lender,'get_config',{},blockHeight),'BAD_LENDING_CONFIG');
+ const primary=new ResilientNearReadOnlyRpc(rpc,{
+  maxRetries:2,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:24,
+ });
+ const alternate=fallbackRpc??(fallbackEndpoint?
+  new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(fallbackEndpoint),{
+   maxRetries:1,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:24,
+  }):null);
+ const remoteConfig=obj(await pinned(primary,lender,'get_config',{},blockHeight,alternate),'BAD_LENDING_CONFIG');
  if(remoteConfig.enable_pyth_oracle!==true||
   remoteConfig.enable_price_oracle!==false||
   remoteConfig.pyth_oracle_account_id!=='aggregate-oracle.near'||
@@ -82,7 +100,7 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
  const cloneConfig=await local(lenderClone,'get_config',{});
  if(!equal(remoteConfig,cloneConfig))
   throw Error('STAGE51_LENDING_PYTH_CONFIG_DIFFERENT_IN_SANDBOX');
- const remoteInfo=obj(await pinned(rpc,lender,'get_all_token_pyth_infos',{},blockHeight),
+ const remoteInfo=obj(await pinned(primary,lender,'get_all_token_pyth_infos',{},blockHeight,alternate),
   'BAD_TOKEN_PYTH_INFO');
  const cloneInfo=obj(await local(lenderClone,'get_all_token_pyth_infos',{}),
   'BAD_SANDBOX_PYTH_INFO');
@@ -120,8 +138,8 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
  const age=Number(remoteConfig.pyth_price_valid_duration_sec);
  for(const feed of [...feeds].sort()){
   const args={price_id:feed,age};
-  const source=await pinned(rpc,'aggregate-oracle.near','get_price_no_older_than',
-   args,blockHeight);
+  const source=await pinned(primary,'aggregate-oracle.near','get_price_no_older_than',
+   args,blockHeight,alternate);
   const mirrored=await local(oracleClone,'get_price_no_older_than',args);
   const quote=obj(source,'INVALID_ACTIVE_PYTH_QUOTE');
   if(!/^[1-9][0-9]*$/.test(String(quote.price))||
@@ -137,7 +155,7 @@ export async function attestStage51PythParity({rpc,contracts,plan,blockHeight}){
   const imported=contracts.get(token);
   if(!imported||imported.accountId!==token||typeof imported.view!=='function')
    throw Error('STAGE51_DERIVED_PRICE_TOKEN_NOT_IMPORTED');
-  const source=await pinned(rpc,token,method,{},blockHeight);
+  const source=await pinned(primary,token,method,{},blockHeight,alternate);
   const mirrored=await local(imported,method,{});
   if(!UINT.test(String(source))||BigInt(source)===0n||
    !equal(source,mirrored))
