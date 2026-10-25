@@ -30,8 +30,18 @@ const n=(key:string,def:string)=>{
  if(results.bestProposal)
   await writeFile('stage38-positive-stage35-evidence.json',
    JSON.stringify(results.bestProposal,null,2)+'\n',{encoding:'utf8',mode:0o600});
+ const blockedReasonCounts=Object.fromEntries([...new Set(results.rows
+  .filter(x=>x.status==='BLOCKED_FRESH_READ').map(x=>x.reasonCode??'UNCLASSIFIED_READ_ERROR'))]
+  .sort().map(reason=>[reason,results.rows.filter(x=>x.status==='BLOCKED_FRESH_READ'&&
+   (x.reasonCode??'UNCLASSIFIED_READ_ERROR')===reason).length]));
+ const sizingStatusCounts=Object.fromEntries([...new Set(results.rows
+  .filter(x=>x.status!=='BLOCKED_FRESH_READ').map(x=>x.sizingStatus??'MISSING_SIZING_STATUS'))]
+  .sort().map(status=>[status,results.rows.filter(x=>x.status!=='BLOCKED_FRESH_READ'&&
+   (x.sizingStatus??'MISSING_SIZING_STATUS')===status).length]));
+ const sizingBlockerCounts=Object.fromEntries([...new Set(results.rows.flatMap(x=>x.sizingBlockers))]
+  .sort().map(blocker=>[blocker,results.rows.filter(x=>x.sizingBlockers.includes(blocker)).length]));
  const {rows,bestProposal,...summary}=results;
- console.log(JSON.stringify(summary,null,2));
+ console.log(JSON.stringify({...summary,blockedReasonCounts,sizingStatusCounts,sizingBlockerCounts},null,2));
 })().catch(()=>{
  console.log(JSON.stringify({mode:'RHEA_STAGE38_LIVE_CANDIDATE_TO_SANDBOX',status:'BLOCKED',
   chain:'NEAR_MAINNET',sandboxPlanReady:false,noEligibleMainnetTrades:true,
