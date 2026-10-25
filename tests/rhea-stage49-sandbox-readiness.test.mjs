@@ -10,6 +10,7 @@ const repay='usdt.tether-token.near',seize='wrap.near';
 function plan(overrides={}){
  return {mode:'ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN',
   chain:'NEAR_SANDBOX',executionEnabled:false,maySignMainnet:false,
+  borrowerAccountId:'debtor.near',
   mayBroadcastMainnet:false,mainnetSourceBlockHeight:'221433162',
   lendingContract:lending,
   actions:[
@@ -120,4 +121,32 @@ test('Stage49 registration is strictly before actor pre-balance and actual Rhea 
  assert.match(s,/initialBalance:3n\*10n\*\*24n/);
  assert.ok(s.includes('stage49-sandbox-registration.json'));
  assert.doesNotMatch(s,/broadcast_tx|signAndSend/);
+});
+
+test('Stage50 rejects counterfeit or contradictory Rhea three-action amounts and borrower',()=>{
+ const correct=plan();
+ const rewrite=(fn)=>{
+  const p=structuredClone(correct);
+  fn(p.actions);
+  return p;
+ };
+ const adversarial=[
+  {...correct,borrowerAccountId:'another.near'},
+  rewrite(a=>a[1].Liquidate.in_assets[0].amount='99'),
+  rewrite(a=>a[1].Liquidate.out_assets[0].amount='111'),
+  rewrite(a=>a[0].Borrow.amount='0'),
+  rewrite(a=>a[2].Withdraw.amount='0'),
+  rewrite(a=>a[1].Liquidate.in_assets.push({token_id:repay,amount:'2'})),
+  rewrite(a=>a[1].Liquidate.out_assets=[]),
+  {...correct,actions:[...correct.actions,{Withdraw:{token_id:seize,amount:'1'}}]},
+ ];
+ for(const p of adversarial)
+  assert.throws(()=>inspectStage49RheaAssets(p,assets(),221433162),/STAGE49_/);
+});
+test('Stage50 real Rhea Workspaces call uses bigint gas/deposit, not JSON strings',async()=>{
+ const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(script.includes('gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto)'));
+ assert.ok(!script.includes('gas:plan.gasUnits,attachedDeposit:plan.depositYocto'));
+ assert.ok(script.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
+ assert.ok(!script.includes('broadcast_tx'));
 });
