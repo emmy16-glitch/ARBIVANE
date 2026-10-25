@@ -4,6 +4,7 @@
  */
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
+import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 
 const ID=/^[a-z0-9._-]{2,64}$/;
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
@@ -46,6 +47,28 @@ export async function clonePinnedContractWithState({
   endpoint,accountId:contractId,blockHeight,
   paceMs:budgets.paceMs??220,timeoutMs:18000,maxRetries:2
  },fetcher);
+ // Open-source nearcore and official NEAR RPC documents support paginated
+ // view_state. If this archival gateway refuses ONE storage record, retry that
+ // precise cursor at the same pinned height against the independent NEAR
+ // public archival endpoint. Never skip a storage key or use latest state.
+ const fallbackEndpoint='https://archival-rpc.mainnet.near.org';
+ const allowFallback=endpoint==='https://archival-rpc.mainnet.fastnear.com'||
+  endpoint==='https://archival-rpc.mainnet.fastnear.com/';
+ const backup=allowFallback?new ArchivalStateRpc({
+  endpoint:fallbackEndpoint,accountId:contractId,blockHeight,
+  paceMs:1600,timeoutMs:18000,maxRetries:2
+ },fetcher):null;
+ let singleEntryFallbacks=0;
+ async function sourcePage(cursor,limit){
+  try{return await archive.viewPage(cursor,limit);}
+  catch(error){
+   if(!(error instanceof StateResponseTooLarge)||limit!==1||!backup)
+    throw error;
+   singleEntryFallbacks++;
+   try{return await backup.viewPage(cursor,1);}
+   catch{throw Error('STAGE77_BOTH_ARCHIVAL_PROVIDERS_REFUSED_REQUIRED_STORAGE_RECORD');}
+  }
+ }
  // Keep a bounded patch batch across authenticated source RPC pages.
  // Source-block parity, cursor coverage and end-to-end receipt checks remain mandatory.
  let patched=0,patchWrites=0,batch=[],batchBytes=0;
@@ -57,7 +80,7 @@ export async function clonePinnedContractWithState({
   onProgress({contractId,patched,patchWrites,complete:false});
  }
  const coverage=await coverPinnedPagedState(
-  (cursor,limit)=>archive.viewPage(cursor,limit),
+  sourcePage,
   {blockHeight,maxQueries:o.maxQueries,maxRecords:o.maxRecords,
    maxBytes:o.maxBytes,pageSize:o.pageSize},
   async rows=>{
@@ -86,7 +109,10 @@ export async function clonePinnedContractWithState({
    providerPaginationExhausted:true,recordsRead:coverage.records,
    recordsPatched:patched,patchWriteCalls:patchWrites,
    sourcePageCount:coverage.completedPages,
-   sourceRpcAttempts:archive.getStats().transportAttempts,
+   sourceRpcAttempts:archive.getStats().transportAttempts+
+    (backup?.getStats().transportAttempts??0),
+   singleEntryFallbacks,backupArchivalSourceUsed:singleEntryFallbacks>0,
+   backupRateLimitResponses:backup?.getStats().rateLimitResponses??0,
    sourceStorageDigest:coverage.recordStreamSha256,
    completeTrieRootParityVerified:false,mainnetMutated:false,
   }
