@@ -1,0 +1,107 @@
+name: Stage43 retry blocked reconciled Rhea observations (read only)
+on:
+  workflow_run:
+    workflows:
+      - Stage42 verified Rhea borrower continuation (read only)
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      stage42_run_id:
+        description: 'Successful Stage42 run containing all four shards and reconciled window'
+        required: true
+      base_cursor:
+        description: 'Exact historic debt cursor of the Stage42 run'
+        required: true
+        default: '972'
+      from_target:
+        description: 'Retry target cursor (not original debt finding index)'
+        required: true
+        default: '0'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage43-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
+  cancel-in-progress: false
+jobs:
+  retry-failed-observations:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download verified historical Rhea debt index, pinned to original full scan
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Download exactly reconciled Stage42 aggregate from selected workflow run
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-stage42-reconciled-window
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
+          github-token: ${{ github.token }}
+          path: aggregate
+      - name: Download original four Stage42 borrower shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rhea-stage42-opportunity-shard-*
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: false
+          path: shards
+      - name: Retry at most 12 authentic unresolved observations on one current finalized block
+        env:
+          EXECUTION_ENABLED: 'false'
+          NEAR_NETWORK: mainnet
+          NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+          RHEA_LENDING_CONTRACT: contract.main.burrow.near
+          RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+          RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+          RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+          RHEA_STAGE43_PARENT_RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.stage42_run_id }}
+          RHEA_STAGE43_SOURCE_PATH: source/rhea-full-paged-index.json
+          RHEA_STAGE43_SHARDS_DIR: shards
+          RHEA_STAGE43_RECONCILED_PATH: aggregate/stage42-reconciled-window.json
+          RHEA_STAGE43_BASE_CURSOR: ${{ github.event_name == 'workflow_dispatch' && inputs.base_cursor || '972' }}
+          RHEA_STAGE43_FROM_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.from_target || '0' }}
+          RHEA_STAGE43_MAX_TARGETS: '12'
+          RHEA_RPC_SPACING_MS: '900'
+          RHEA_STAGE43_REPORT_PATH: stage43-blocked-retry.json
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types src/rhea/stage43-blocked-observation-retry-cli.ts > stage43-summary.json
+          jq -e '.mode == "RHEA_STAGE43_RECONCILED_BLOCKED_OBSERVATION_RETRY" and
+            .chain == "NEAR_MAINNET" and
+            .executionEnabled == false and .maySignMainnet == false and
+            .mayBroadcastMainnet == false and .positiveNetProfitVerified == false and
+            .deployedLiquidationParityVerified == false and
+            .transactionReplayVerified == false and
+            .processed <= 12 and .targetCount == (.nextTarget + .remainingTargets) and
+            .processed == (.nextTarget - .fromTarget) and
+            .processed == (.paperHealthy+.paperAtRiskNeedsSizing+.noDebtNow+.stillBlocked)' stage43-summary.json
+          jq -e '. as $r | all(.observations[]; .executionEligible == false and
+            .netProfitVerified == false and
+            ((.status == "STILL_BLOCKED") or .freshBlockHeight == $r.currentPricingBlockHeight))' stage43-blocked-retry.json
+          jq -r '"Original blocked targets: "+(.targetCount|tostring)+
+            "; retried this batch: "+(.processed|tostring)+
+            "; still blocked: "+(.stillBlocked|tostring)+
+            "; paper risk requiring fresh source sizing: "+(.paperAtRiskNeedsSizing|tostring)+
+            "; next retry cursor: "+(.nextTarget|tostring)+
+            "; remaining targets: "+(.remainingTargets|tostring)' stage43-summary.json >> "$GITHUB_STEP_SUMMARY"
+          echo 'NO MAINNET TRADING. Paper health and reference spreads are not deployed liquidation eligibility or net profit.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve durable retry evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rhea-stage43-targeted-blocked-retry
+          path: |
+            stage43-blocked-retry.json
+            stage43-summary.json
+          retention-days: 14
+          if-no-files-found: warn
