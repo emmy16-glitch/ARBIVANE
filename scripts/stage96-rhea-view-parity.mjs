@@ -4,6 +4,7 @@
  */
 import {createHash} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
+import {stage104AttestTemporalAccrual} from './stage104-temporal-accrual-parity.mjs';
 const VIEWS=Object.freeze([
  {id:'CONFIG',method:'get_config',args:()=>({})},
  {id:'BORROWER',method:'get_account_all_positions',
@@ -186,7 +187,7 @@ export function stage98ClassifyViewFailure(error){
 }
 
 export async function attestStage96PinnedRheaViews({
- lending,borrowerAccountId,config,borrower,assets,
+ lending,borrowerAccountId,config,borrower,assets,allowSandboxTemporalAccrual=false,
  persist=async witness=>writeFile('stage96-rhea-view-parity.json',
   JSON.stringify(witness,null,2)+'\n',{mode:0o600}),
 }){
@@ -199,6 +200,7 @@ export async function attestStage96PinnedRheaViews({
   chain:'NEAR_SANDBOX',status:'IN_PROGRESS',
   lendingContractId:lending.accountId,
   checks:[],failedView:null,failureCode:null,
+  stage104TemporalAccrual:null,temporalAccrualVerified:false,
   allSourceViewsVerified:false,partialStateImport:true,
   liquidationAttempted:false,actualRheaSettlementVerified:false,
   realMainnetExecuted:false,positiveNetProfitVerified:false,
@@ -209,7 +211,7 @@ export async function attestStage96PinnedRheaViews({
   catch{throw Error('STAGE96_PARITY_EVIDENCE_PERSISTENCE_FAILED');}
  };
  await store();
- let firstMismatch=null;
+ let firstMismatch=null,localBorrower=null,localAssets=null;
  for(let i=0;i<VIEWS.length;i++){
   const {id,method,args}=VIEWS[i];
   let target;
@@ -238,6 +240,8 @@ export async function attestStage96PinnedRheaViews({
    witness.status='BLOCKED_SANDBOX_VIEW_INVALID';await store();
    throw Error(witness.failureCode);
   }
+  if(id==='BORROWER')localBorrower=observed;
+  if(id==='ASSETS')localAssets=observed;
   const match=id==='BORROWER'?
    stage101SameBorrowerView(expected[i],observed):target===actual;
   const check={view:id,
@@ -263,6 +267,23 @@ export async function attestStage96PinnedRheaViews({
    // view before blocking. Config failure remains an immediate hard stop.
    if(id!=='BORROWER')throw Error(firstMismatch.code);
    continue;
+  }
+  await store();
+ }
+ if(firstMismatch&&allowSandboxTemporalAccrual===true&&
+    firstMismatch.id==='BORROWER'&&
+    witness.checks[0]?.status==='SOURCE_SANDBOX_MATCH'&&
+    witness.checks[2]?.view==='ASSETS'){
+  const proof=stage104AttestTemporalAccrual({
+   sourceBorrower:borrower,sandboxBorrower:localBorrower,
+   sourceAssets:assets,sandboxAssets:localAssets,
+  });
+  witness.stage104TemporalAccrual=proof;
+  if(proof.verified===true){
+   witness.status='BOUNDED_SOURCE_STORAGE_AND_TEMPORAL_ACCRUAL_NOT_EXACT_PARITY';
+   witness.temporalAccrualVerified=true;
+   witness.failedView=null;witness.failureCode=null;
+   await store();return witness;
   }
   await store();
  }
