@@ -16,6 +16,7 @@ on:
       - 'scripts/stage88-sandbox-clone-witness.mjs'
       - 'scripts/stage82-targeted-lending-clone.mjs'
       - 'scripts/stage89-targeted-wnear-clone.mjs'
+      - 'scripts/stage91-targeted-linear-token.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
 permissions:
   contents: read
@@ -197,6 +198,7 @@ jobs:
             stage88-sandbox-clone-witness.json
             stage82-one-borrower-parity.json
             stage89-wnear-parity.json
+            stage91-linear-parity.json
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json

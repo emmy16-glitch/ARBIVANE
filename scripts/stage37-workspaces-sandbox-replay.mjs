@@ -14,6 +14,7 @@ import {cloneStage76Dependencies} from './stage76-bounded-clone-queue.mjs';
 import {createStage88CloneWitness,stage88FailureCode} from './stage88-sandbox-clone-witness.mjs';
 import {cloneStage82BorrowerLending} from './stage82-targeted-lending-clone.mjs';
 import {cloneStage89WrappedNear} from './stage89-targeted-wnear-clone.mjs';
+import {cloneStage91LinearToken} from './stage91-targeted-linear-token.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
@@ -143,9 +144,37 @@ async function main(){
    await writeFile('stage89-wnear-parity.json',
     JSON.stringify(wrapped.evidence,null,2)+'\n');
   }
+  if(ids.includes('linear-protocol.near')){
+   // Source-only, non-synthetic LiNEAR UnorderedMap closure. Stage91 ran
+   // against the actual historic borrower; this replay independently
+   // re-verifies its pinned deployed code and ALL required token views.
+   await cloneMonitor.update({contractId:'linear-protocol.near',status:'STARTED'});
+   let linear;
+   try{
+    linear=await cloneStage91LinearToken({
+     root,rpc,endpoint:e.NEAR_RPC_URL,blockHeight:block,
+     lendingAccountId:plan.lendingContract,
+     borrowerAccountId:plan.borrowerAccountId,
+     fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
+      'https://archival-rpc.mainnet.near.org',
+     paceMs:450,
+    });
+    await cloneMonitor.update({contractId:'linear-protocol.near',status:'COMPLETE',
+     evidence:linear.evidence});
+   }catch(error){
+    await cloneMonitor.update({contractId:'linear-protocol.near',status:'BLOCKED',
+     failureCode:stage88FailureCode(error)});
+    throw error;
+   }
+   contracts.set('linear-protocol.near',linear.contract);
+   cloneEvidence.push(linear.evidence);
+   await writeFile('stage91-linear-parity.json',
+    JSON.stringify(linear.evidence,null,2)+'\n');
+  }
  }
  const dependencyIds=oneBorrower?
-  ids.filter(id=>id!==plan.lendingContract&&id!=='wrap.near'):ids;
+  ids.filter(id=>id!==plan.lendingContract&&id!=='wrap.near'&&
+   id!=='linear-protocol.near'):ids;
  const clones=await cloneStage76Dependencies({
   ids:dependencyIds,concurrency:2,
   onStatus:event=>cloneMonitor.update(event),
@@ -176,6 +205,7 @@ async function main(){
   contracts:cloneEvidence,pinnedActivePythOnlyConfigVerified:true,
   disabledLegacyPriceOracleExcluded:true,completeTrieRootParityVerified:false,
   partialOneBorrowerState:oneBorrower,partialWnearState:oneBorrower,
+  partialLinearState:oneBorrower&&ids.includes('linear-protocol.near'),
   fullMarketImported:!oneBorrower,
   mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
  },null,2)+'\n');
