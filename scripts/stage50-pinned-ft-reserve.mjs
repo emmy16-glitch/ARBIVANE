@@ -57,8 +57,6 @@ export function inspectStage50RepayReserve({
  // The independently pinned metadata proves token precision, while Rhea
  // config controls conversion. Deployed WASM parity is still checked later
  // through identical source-state Sandbox import and actual FT balance deltas.
- if(decimals+extra>72)
-  throw Error('STAGE50_UNSUPPORTED_TOTAL_TOKEN_PRECISION');
  const balance=amount(repayFtBalance,'INVALID_REPAY_FT_VAULT_BALANCE');
  const supplied=amount(record(pool.supplied,'MISSING_SUPPLIED_POOL').balance,'INVALID_SUPPLIED_POOL');
  const borrowed=amount(record(pool.borrowed,'MISSING_BORROWED_POOL').balance,'INVALID_BORROWED_POOL');
