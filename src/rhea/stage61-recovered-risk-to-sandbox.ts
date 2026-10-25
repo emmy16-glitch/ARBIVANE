@@ -58,7 +58,8 @@ function assertReport(source:CompletePagedIndex,shards:Stage42Shard[],
     'NO_DEBT_NOW','STILL_BLOCKED'].includes(x.status)||
    (x.status!=='STILL_BLOCKED'&&(x.freshBlockHeight!==report.currentPricingBlockHeight||
     !heights(x.freshBlockHeight)||x.reasonCode!==null))||
-   (x.status==='STILL_BLOCKED'&&x.freshBlockHeight!==null))
+   (x.status==='STILL_BLOCKED'&&x.freshBlockHeight!==null&&
+     x.freshBlockHeight!==report.currentPricingBlockHeight))
    throw Error('STAGE61_UNTRUSTED_RECOVERED_TARGET');
   if(x.status==='PAPER_AT_RISK_NEEDS_FRESH_SIZING')counts.risk++;
   else if(x.status==='PAPER_HEALTHY_UNAPPROVED')counts.healthy++;
