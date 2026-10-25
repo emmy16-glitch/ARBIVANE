@@ -158,3 +158,38 @@ test('Stage57 preserves valid alternative collateral when higher-priority source
  assert.equal(out.consideredPairs,2);
  assert.equal(out.maySign,false);
 });
+
+test('Stage64 preserves tiny legitimate near-threshold liquidation discounts instead of erasing their gross spread',()=>{
+ const candidate=report();
+ // Source collateral adjusted $897.48 against $900 debt: 99.72% health
+ // and only 14 bps of the theoretical liquidation discount.
+ candidate.positions[0].legs=[debt(),source('collateral','collateral.near','1121850000',8000)];
+ candidate.positions[0].adjustedCollateralE27=String(89748n*E27/100n);
+ candidate.positions[0].healthFactorBps='9972';
+ const result=sizeStage35SourceLiquidation(candidate,assets(),options);
+ assert.equal(result.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(result.referenceRulesPass,true);
+ assert.ok(BigInt(result.referenceInitialDiscountE27)*10000n/E27<75n);
+ assert.ok(BigInt(result.seize.referenceUsdE27)>BigInt(result.repay.referenceUsdE27));
+ assert.ok(BigInt(result.paperGrossUsdE27)>=BigInt(options.minimumPaperGrossUsdE27));
+ assert.ok(BigInt(result.referenceAfterHealthBps)>9972n);
+ assert.ok(BigInt(result.referenceAfterHealthBps)<10000n);
+ assert.equal(result.contractRouteParityVerified,false);
+ assert.equal(result.mainnetWalletApproved,false);
+ assert.equal(result.mayBroadcast,false);
+});
+
+test('Stage64 cannot manufacture a profitable source-valid scenario where liquidation worsens health',()=>{
+ const candidate=report();
+ candidate.positions[0].legs=[debt(),source('collateral','collateral.near','899000000',10000)];
+ candidate.positions[0].adjustedCollateralE27=String(899n*E27);
+ candidate.positions[0].healthFactorBps=String(899n*10000n/900n);
+ const pools=assets();
+ pools[1][1].config.volatility_ratio=10000;
+ const result=sizeStage35SourceLiquidation(candidate,pools,options);
+ assert.equal(result.status,'NO_SAFE_SOURCE_SCENARIO');
+ assert.equal(result.referenceRulesPass,false);
+ assert.equal(result.repay,null);
+ assert.equal(result.seize,null);
+ assert.equal(result.maySign,false);
+});
