@@ -6,16 +6,23 @@ const receipt=()=>({result:{
  final_execution_status:'EXECUTED_OPTIMISTIC',status:{SuccessValue:''},
  receipts_outcome:[{outcome:{status:{SuccessValue:''}}}]
 }});
-function fixture({fail=null,canCollateral=true,zeroAfter=false}={}){
+function fixture({fail=null,canCollateral=true,zeroAfter=false,
+ wrongCollateral=false,vaultNotCredited=false,partialTransfer=false,
+ preexistingFt=false}={}){
  const calls=[],storage={lending:false,wnear:false};
- let wrapped=0n,tokenSent=false;
+ let wrapped=preexistingFt?1n:0n,vault=50n*BigInt(NEAR),tokenSent=false;
  const accountId='arbivane-replay.test.near';
  const actor={accountId,callRaw:async(contract,method,args,settings)=>{
   calls.push({contract:contract.accountId,method,args,settings});
   if(fail===method)throw Error('sandbox rejection');
   if(method==='storage_deposit')storage[contract.accountId==='wrap.near'?'wnear':'lending']=true;
   if(method==='near_deposit')wrapped+=BigInt(settings.attachedDeposit);
-  if(method==='ft_transfer_call'){wrapped-=BigInt(args.amount);tokenSent=true;}
+  if(method==='ft_transfer_call'){
+   const outgoing=partialTransfer?BigInt(args.amount)/2n:BigInt(args.amount);
+   wrapped-=outgoing;
+   if(!vaultNotCredited)vault+=outgoing;
+   tokenSent=true;
+  }
   return receipt();
  }};
  const lending={accountId:'contract.main.burrow.near',view:async(method)=>{
@@ -23,13 +30,14 @@ function fixture({fail=null,canCollateral=true,zeroAfter=false}={}){
   if(method==='storage_balance_of')return storage.lending?{total:NEAR}:null;
   if(method==='get_account_all_positions')
    return {positions:{REGULAR:{collateral:tokenSent&&!zeroAfter?
-    [{token_id:'wrap.near',balance:NEAR,shares:NEAR}]:[],borrowed:[]}}};
+    [{token_id:wrongCollateral?'unrelated.near':'wrap.near',balance:NEAR,shares:NEAR}]:[],borrowed:[]}}};
   throw Error('unknown lending view');
  }};
- const wnear={accountId:'wrap.near',view:async(method)=>{
+ const wnear={accountId:'wrap.near',view:async(method,args)=>{
   if(method==='storage_balance_bounds')return {min:'1250000000000000000000'};
   if(method==='storage_balance_of')return storage.wnear?{total:NEAR}:null;
-  if(method==='ft_balance_of')return wrapped.toString();
+  if(method==='ft_balance_of')
+   return args.account_id==='contract.main.burrow.near'?vault.toString():wrapped.toString();
   throw Error('unknown token view');
  }};
  return {actor,lending,wrapped:wnear,calls,assetRows:[
@@ -42,6 +50,10 @@ test('Stage49 uses genuine Sandbox wrapper deposit and NEP141 collateral-transfe
  assert.equal(r.status,'SANDBOX_WNEAR_COLLATERAL_DEPOSITED_NOT_BORROW_HEALTH_PROOF');
  assert.equal(r.observedActorCollateralReferenceInternal,NEAR);
  assert.equal(r.wrappedNativeSandboxYocto,NEAR);
+ assert.equal(r.observedWrappedNearCollateralInternal,NEAR);
+ assert.equal(r.observedSenderWrappedTokenDecreaseAtomic,NEAR);
+ assert.equal(r.observedRheaWrappedTokenVaultIncreaseAtomic,NEAR);
+ assert.equal(r.wrappedTokenConservationVerified,true);
  assert.equal(r.mainnetFundingVerified,false);
  assert.equal(r.mayBroadcastMainnet,false);
  assert.deepEqual(x.calls.map(y=>y.method),
@@ -60,11 +72,24 @@ test('unsupported collateral config rejects without any token or Sandbox tx',asy
 });
 test('successful FT transfer receipt is insufficient without actually increased lending collateral',async()=>{
  const x=fixture({zeroAfter:true});
- await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),/COLLATERAL_NOT_RECORDED/);
+ await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),/STAGE53_WRAPPED_COLLATERAL_CREDIT_NOT_RECONCILED/);
 });
 test('contract failures cannot be relabeled as funded liquidator proof',async()=>{
  for(const method of ['storage_deposit','near_deposit','ft_transfer_call']){
   const x=fixture({fail:method});
   await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),/sandbox rejection/);
+ }
+});
+
+test('Stage53 refuses dust collateral, non-wrapped collateral, missing Rhea token-vault credit and refunded tokens',async()=>{
+ for(const [patch,code] of [
+  [{zeroAfter:true},/STAGE53_WRAPPED_COLLATERAL_CREDIT_NOT_RECONCILED/],
+  [{wrongCollateral:true},/STAGE53_WRAPPED_COLLATERAL_CREDIT_NOT_RECONCILED/],
+  [{vaultNotCredited:true},/STAGE53_RHEA_WRAPPED_TOKEN_VAULT_CREDIT_NOT_EXACT/],
+  [{partialTransfer:true},/STAGE53_ACTOR_WRAPPED_TOKEN_DEBIT_NOT_EXACT/],
+  [{preexistingFt:true},/STAGE53_WRAPPED_TOKEN_PRESTATE_NOT_TRUSTED/],
+ ]){
+  const x=fixture(patch);
+  await assert.rejects(()=>seedSandboxLiquidatorWithWrappedNear(x),code);
  }
 });
