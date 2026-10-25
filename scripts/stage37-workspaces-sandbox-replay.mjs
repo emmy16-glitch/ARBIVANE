@@ -11,6 +11,7 @@ import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settle
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
+import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -41,6 +42,14 @@ async function main(){
  const marketReadiness=inspectStage49RheaAssets(plan,assets.value,block);
  await writeFile('stage49-sandbox-route-preflight.json',
   JSON.stringify(marketReadiness,null,2)+'\n');
+ // Verify that the Rhea lending contract actually controls a sufficient
+ // NEP-141 reserve and reference pool capacity at the SAME pinned block.
+ // Preflight comes before Sandbox imports, lowering wasted clone costs.
+ const repayReserve=await readStage50PinnedRepayReserve({
+  rpc,plan,pinnedAssets:assets.value,blockHeight:block,
+ });
+ await writeFile('stage50-pinned-repay-reserve.json',
+  JSON.stringify(repayReserve,null,2)+'\n');
  let pkg;
  try{pkg=await import('near-workspaces');}catch{
   throw Error('NEAR_WORKSPACES_MUST_BE_INSTALLED_LOCALLY');
@@ -100,6 +109,14 @@ async function main(){
  const repayToken=contracts.get(plan.actions[0].Borrow.token_id);
  const seizeToken=contracts.get(plan.actions[2].Withdraw.token_id);
  if(!repayToken||!seizeToken)throw Error('SANDBOX_FT_CONTRACT_NOT_IMPORTED');
+ // A cursor-exhausted clone is not verified merely because the archive
+ // returned all pages; require actual Sandbox vault balance to match the
+ // precise observed mainnet FT vault balance before attempting Borrow.
+ const localVault=await repayToken.view('ft_balance_of',{
+  account_id:plan.lendingContract,
+ });
+ if(localVault!==repayReserve.tokenVaultFtAtomic)
+  throw Error('STAGE50_CLONED_FT_VAULT_MISMATCH');
  const snapshot=()=>Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   repayToken.view('ft_balance_of',{account_id:actor.accountId}),
