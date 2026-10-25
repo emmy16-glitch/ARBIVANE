@@ -71,6 +71,7 @@ export interface SandboxSettlementEvidence {
  actorRepayFtBeforeAtomic:string;actorRepayFtAfterAtomic:string;
  actorSeizeFtBeforeAtomic:string;actorSeizeFtAfterAtomic:string;
  actorSeizeFtIncreaseAtomic:string;
+ repayAndSeizeShareToken:boolean;
  borrowerMutationVerified:boolean;assetTransferObserved:boolean;
  callbackSuccessObserved:boolean;currentMainnetAssetUnitsVerified:false;
  settlementAssetSold:false;swapProceedsVerified:false;gasCostInSettlementAssetVerified:false;
@@ -102,7 +103,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const repay=plan.actions[0]?.Borrow?.token_id;
  const seize=plan.actions[2]?.Withdraw?.token_id;
  if(typeof repay!=='string'||typeof seize!=='string'||!TOKEN.test(repay)||
-  !TOKEN.test(seize)||repay===seize||
+  !TOKEN.test(seize)||
   plan.actions[1]?.Liquidate?.account_id!==plan.borrowerAccountId||
   plan.actions[1]?.Liquidate?.in_assets?.length!==1||
   plan.actions[1]?.Liquidate?.out_assets?.length!==1||
@@ -118,6 +119,11 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const ftRepayAfter=uint(e.actorRepayFtAfter,'FT_REPAY_AFTER');
  const ftSeizeBefore=uint(e.actorSeizeFtBefore,'FT_SEIZE_BEFORE');
  const ftSeizeAfter=uint(e.actorSeizeFtAfter,'FT_SEIZE_AFTER');
+ // For a shared NEP-141 contract the repay and seized-asset observations
+ // refer to the SAME account/FT balance. An invented second balance can
+ // never be used to create a fictitious local liquidation success.
+ if(repay===seize&&(ftRepayBefore!==ftSeizeBefore||ftRepayAfter!==ftSeizeAfter))
+  throw Error('STAGE41_SAME_TOKEN_MUST_HAVE_IDENTICAL_FT_BALANCE_EVIDENCE');
  const debtDecreased=preDebt>postDebt;
  const collateralDecreased=preCollateral>postCollateral;
  const finalOrLaterPersisted=receipt.transactionFinal===true||
@@ -141,6 +147,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   ...(actorDebtBefore>0n?['REPLAY_ACTOR_ALREADY_HAS_OUTSTANDING_DEBT']:[]),
   ...(actorDebtAfter>0n?['REPLAY_ACTOR_STILL_HAS_OUTSTANDING_DEBT']:[]),
   ...(!actorFtReceived?['NO_SANDBOX_ACTOR_FT_COLLATERAL_TRANSFER_OBSERVED']:[]),
+  ...(repay===seize?['SHARED_TOKEN_ACTOR_FT_INCREASE_IS_NET_BALANCE_NOT_GROSS_SEIZURE']:[]),
   'COLLATERAL_UNSOLD_AND_NO_REALIZED_SETTLEMENT_PNL',
   'MAINNET_TOKEN_UNITS_GAS_AND_SWAP_COST_NOT_VERIFIED',
   'NO_VERIFIED_FULL_CONTRACT_STORAGE_PARITY_OR_WALLET_APPROVAL'];
@@ -157,6 +164,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   actorRepayFtBeforeAtomic:ftRepayBefore.toString(),actorRepayFtAfterAtomic:ftRepayAfter.toString(),
   actorSeizeFtBeforeAtomic:ftSeizeBefore.toString(),actorSeizeFtAfterAtomic:ftSeizeAfter.toString(),
   actorSeizeFtIncreaseAtomic:(actorFtReceived?ftSeizeAfter-ftSeizeBefore:0n).toString(),
+  repayAndSeizeShareToken:repay===seize,
   borrowerMutationVerified:validReceipt&&debtDecreased&&collateralDecreased,
   assetTransferObserved:validReceipt&&actorFtReceived,
   callbackSuccessObserved:validReceipt,
