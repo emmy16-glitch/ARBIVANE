@@ -68,7 +68,8 @@ test('Stage76 waits for in-flight Sandbox imports before a failing clone can esc
 test('Stage76 keeps source parity before actor funding and mainnet signing disabled',async()=>{
  const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
  const workflow=await readFile(new URL('../.github/workflows/rhea-stage69-fastlane.yml',import.meta.url),'utf8');
- assert.ok(runner.includes('cloneStage76Dependencies({ids,concurrency:2'));
+ assert.ok(runner.includes('ids:dependencyIds,concurrency:2'));
+ assert.ok(runner.includes('cloneStage82BorrowerLending({'));
  assert.ok(runner.includes('sourceBlockHash'));
  assert.ok(runner.indexOf('cloneStage76Dependencies')<runner.indexOf('attestStage51PythParity({rpc,contracts'));
  assert.ok(runner.indexOf('attestStage51PythParity({rpc,contracts')<runner.indexOf('sandboxTransactionSubmitted=true'));
