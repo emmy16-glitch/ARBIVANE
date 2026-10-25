@@ -9,13 +9,14 @@ import {createInterface} from 'node:readline';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {coverPinnedPagedState} from './stage45-cursor-pages.mjs';
 import {ArchivalStateRpc} from './stage45-archival-state-rpc.mjs';
+import {StateResponseTooLarge} from './stage45-prefix-state.mjs';
 
 const env=process.env,BLOCK=221433162;
 const LENDING='contract.main.burrow.near';
 const CODE_HASH='6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa';
 const reportPath='stage45-rhea-paged-state-import.json';
 const spoolPath='stage45-rhea-state-spool.ndjson';
-let worker,stateRpc=null;
+let worker,stateRpc=null,alternateRpc=null;
 const report={
  mode:'ARBIVANE_STAGE45_PINNED_RHEA_PREFIX_SANDBOX_IMPORT',
  chain:'NEAR_SANDBOX',sourceNetwork:'NEAR_MAINNET_READ_ONLY',
@@ -27,6 +28,7 @@ const report={
  completePrefixCoverage:false,unresolvedExactBoundaryPrefixCount:null,
  dataRecordsRead:0,dataRecordsPatched:0,sourceBytesObserved:0,
  prefixQueryCount:0,oversizeResponses:0,rateLimitResponses:0,
+ alternateSingleEntryReads:0,alternateFailures:0,alternateRpcAttempts:0,
  stateAppliedIntoSandbox:false,configMatchesPinnedSource:false,
  fullContractStorageParityVerified:false,
  realRheaLiquidationAttempted:false,transactionReplayVerified:false,
@@ -47,7 +49,7 @@ async function save(){
 }
 function reason(err){
  const msg=err instanceof Error?err.message:'';
- return /^STAGE45_[A-Z0-9_]+$/.test(msg)?msg:
+ return /^STAGE(?:45|77)_[A-Z0-9_]+$/.test(msg)?msg:
   'STAGE45_UNVERIFIED_ARCHIVAL_OR_SANDBOX_FAILURE';
 }
 async function main(){
@@ -76,11 +78,39 @@ async function main(){
   paceMs:integer('STAGE45_RPC_GAP_MS',220,0,5000),
   timeoutMs:18000,maxRetries:2,
  });
+ // Match the authenticated Stage77 fallback used by the real execution
+ // pipeline: only a single key rejected at page-size 1 may be recovered,
+ // always at this exact historical block and against another public archive.
+ const primary=new URL(env.NEAR_RPC_URL).href.replace(/\/$/,'');
+ if(primary==='https://archival-rpc.mainnet.fastnear.com')
+  alternateRpc=new ArchivalStateRpc({
+   endpoint:'https://archival-rpc.mainnet.near.org',
+   accountId:LENDING,blockHeight:BLOCK,paceMs:4000,
+   timeoutMs:18000,maxRetries:0
+  });
+ async function sourcePage(afterKey,limit){
+  try{return await stateRpc.viewPage(afterKey,limit);}
+  catch(error){
+   if(!(error instanceof StateResponseTooLarge)||limit!==1||!alternateRpc)
+    throw error;
+   try{
+    const page=await alternateRpc.viewPage(afterKey,1);
+    // Do not let a missing record masquerade as an exhausted cursor.
+    if(!Array.isArray(page?.values)||page.values.length!==1)
+     throw Error('STAGE77_EMPTY_SINGLE_ENTRY_FALLBACK');
+    report.alternateSingleEntryReads++;
+    return {...page,recoveredOversizedEntry:true};
+   }catch{
+    report.alternateFailures++;
+    throw Error('STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY');
+   }
+  }
+ }
  const spool=await open(spoolPath,'w',0o600);
  let coverage;
  try{
   coverage=await coverPinnedPagedState(
-   (afterKey,limit)=>stateRpc.viewPage(afterKey,limit),opts,
+   sourcePage,opts,
    async rows=>{
     if(rows.length){
      await spool.writeFile(rows.map(row=>JSON.stringify(row)+'\n').join(''));
@@ -90,9 +120,12 @@ async function main(){
  }finally{
   await spool.close();
   const stats=stateRpc.getStats();
-  report.prefixQueryCount=stats.rpcCalls;
-  report.oversizeResponses=stats.oversizeResponses;
-  report.rateLimitResponses=stats.rateLimitResponses;
+  report.prefixQueryCount=stats.rpcCalls+(alternateRpc?.getStats().rpcCalls??0);
+  report.oversizeResponses=stats.oversizeResponses+
+   (alternateRpc?.getStats().oversizeResponses??0);
+  report.rateLimitResponses=stats.rateLimitResponses+
+   (alternateRpc?.getStats().rateLimitResponses??0);
+  report.alternateRpcAttempts=alternateRpc?.getStats().transportAttempts??0;
  }
  report.paginationCursorExhausted=coverage.completePaginationCoverage;
  report.completePaginationCoverage=coverage.completePaginationCoverage;

@@ -80,3 +80,42 @@ test('workflow and runner use cursor pages, preserve read-only mainnet and local
  assert.ok(!script.includes('broadcast_tx'));
  assert.ok(!script.includes('callRaw('));
 });
+
+test('Stage78 recovers exactly one oversized historic key and resumes normal bounded page size',async()=>{
+ const seen=[];
+ const read=pages(3);
+ const recoveryCursor=row('aa').key;
+ const result=await coverPinnedPagedState(async(cursor,limit)=>{
+  seen.push({cursor,limit});
+  if(cursor===recoveryCursor){
+   if(limit>1)throw new StateResponseTooLarge();
+   return {blockHeight:String(HEIGHT),blockHash:HASH,
+    values:[row('b')],lastKey:row('b').key,recoveredOversizedEntry:true};
+  }
+  return read(cursor,limit);
+ },opts,()=>{});
+ assert.equal(result.records,6);
+ assert.equal(result.completePaginationCoverage,true);
+ assert.ok(seen.some(x=>x.cursor===row('b').key&&x.limit===opts.pageSize));
+ assert.equal(result.finalPageSize,opts.pageSize);
+});
+test('Stage78 rejects a forged two-record provider recovery, never bypassing source coverage',async()=>{
+ await assert.rejects(()=>coverPinnedPagedState(async()=>({
+  blockHeight:String(HEIGHT),blockHash:HASH,
+  values:[row('a'),row('b')],lastKey:row('b').key,
+  recoveredOversizedEntry:true
+ }),opts,()=>{}),/STAGE77_INVALID_SINGLE_ENTRY_RECOVERY/);
+});
+test('Stage78 standalone reader only uses a second public archival endpoint at limit 1',async()=>{
+ const script=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
+ assert.ok(script.includes("https://archival-rpc.mainnet.near.org"));
+ assert.ok(script.includes("https://archival-rpc.mainnet.fastnear.com"));
+ assert.ok(script.includes('error instanceof StateResponseTooLarge'));
+ assert.ok(script.includes('limit!==1'));
+ assert.ok(script.includes('page.values.length!==1'));
+ assert.ok(script.includes('recoveredOversizedEntry:true'));
+ assert.ok(script.includes('STAGE77_NO_ARCHIVAL_PROVIDER_CAN_READ_PINNED_STORAGE_ENTRY'));
+ assert.ok(script.includes('sourcePage,opts'));
+ assert.ok(script.includes('report.alternateSingleEntryReads++'));
+ assert.ok(!script.includes('broadcast_tx'));
+});
