@@ -51,6 +51,8 @@ jobs:
           set -euo pipefail
           node --experimental-strip-types src/rhea/active-pyth-debt-queue-cli.ts > stage31-summary.json
           jq -e '.mode == "RHEA_STAGE31_ACTIVE_PYTH_DEBT_QUEUE" and .executionEnabled == false and .maySign == false and .mayBroadcast == false and .transactionReplayPerformed == false and .profitVerified == false and .processed <= 12' stage31-summary.json
+          jq -e '. as $report | (.pricingBlockHeight | type) == "string" and (.pricingBlockHeight | test("^[1-9][0-9]*$")) and all(.items[]; (.classification | startswith("BLOCKED")) or (.freshBlockHeight == $report.pricingBlockHeight))' stage31-priced-debt-queue.json
+          jq -r '"Stage 32 coherent-block pin: "+.pricingBlockHeight' stage31-summary.json >> "$GITHUB_STEP_SUMMARY"
           jq -r '"Reviewed "+(.processed|tostring)+" indexed debt accounts. Paper-risk accounts: "+(.paperAtRisk|tostring)+", blocked: "+(.blocked|tostring)+", next debt finding cursor: "+(.nextFinding|tostring)+", remaining: "+(.remainingFindings|tostring)' stage31-summary.json >> "$GITHUB_STEP_SUMMARY"
           echo 'Candidates are PAPER ONLY; further execution eligibility, financing and on-chain replay are required.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
