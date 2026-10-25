@@ -44,6 +44,7 @@ const ok=id=>({mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',
   referenceUsdE27:'2500000000000000000000000000',
   shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
  paperGrossUsdE27:'500000000000000000000000000',
+ consideredPairs:1,blockers:['SANDBOX_REPLAY_REQUIRED'],
  contractRouteParityVerified:false,rawTokenDenominationsVerified:false,sandboxStateReplaySucceeded:false,
  gasAndSwapNetProfitVerified:false,walletCapitalVerified:false,mainnetWalletApproved:false,
  executionEnabled:false,maySign:false,mayBroadcast:false});
@@ -68,6 +69,17 @@ test('zero safe source plans means no Sandbox mutation can be attempted',async()
  assert.equal(result.sandboxPlanReady,false);assert.equal(result.bestProposal,null);
  assert.equal(result.positiveSourcePlans,0);
  assert.equal(result.status,'NO_EXECUTABLE_SOURCE_REFERENCE');
+});
+
+test('fresh sizing rows retain exact non-executable blocker evidence for recovery',async()=>{
+ const evidence=id=>({...ok(id),status:'NO_SAFE_SOURCE_SCENARIO',referenceRulesPass:false,
+  paperGrossUsdE27:null,repay:null,seize:null,consideredPairs:3,
+  blockers:['NO_UNVERIFIED_4_RULE_SCENARIO_WITH_POSITIVE_PAPER_SPREAD']});
+ const result=await qualifyStage38Candidates({},source(),stage32(),options,evidence);
+ assert.equal(result.rows[0].sizingStatus,'NO_SAFE_SOURCE_SCENARIO');
+ assert.equal(result.rows[0].consideredPairs,3);
+ assert.deepEqual(result.rows[0].sizingBlockers,
+  ['NO_UNVERIFIED_4_RULE_SCENARIO_WITH_POSITIVE_PAPER_SPREAD']);
 });
 test('candidate Oracle failures remain blocked and never leak secrets',async()=>{
  const result=await qualifyStage38Candidates({},source(),stage32(),options,

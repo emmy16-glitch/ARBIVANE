@@ -20,6 +20,8 @@ export interface Stage38Row {
  status:'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'|'NO_CURRENT_SOURCE_SCENARIO'|'BLOCKED_FRESH_READ';
  observationBlockHeight:string|null;reasonCode:string|null;
  referenceInitialHealthBps:string|null;paperGrossUsdE27:string|null;
+ sizingStatus:SourceLiquidationSizing['status']|null;
+ consideredPairs:number|null;sizingBlockers:string[];
  executionEligible:false;netProfitVerified:false;
 }
 export interface Stage38Result {
@@ -124,7 +126,8 @@ export async function qualifyStage38Candidates(
    borrowerAccountId:borrower,historicalFindingIndex:f.index,
    status:'BLOCKED_FRESH_READ',observationBlockHeight:null,
    reasonCode:'UNCLASSIFIED_READ_ERROR',referenceInitialHealthBps:null,
-   paperGrossUsdE27:null,executionEligible:false,netProfitVerified:false,
+   paperGrossUsdE27:null,sizingStatus:null,consideredPairs:null,sizingBlockers:[],
+   executionEligible:false,netProfitVerified:false,
   };
   try{
    const evidence=await evaluator(borrower);
@@ -146,7 +149,9 @@ export async function qualifyStage38Candidates(
    row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
     observationBlockHeight:evidence.blockHeight,reasonCode:null,
     referenceInitialHealthBps:evidence.referenceInitialHealthBps,
-    paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null};
+    paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null,
+    sizingStatus:evidence.status,consideredPairs:evidence.consideredPairs,
+    sizingBlockers:[...evidence.blockers]};
    retryAfterMs[i]=undefined;
   }catch(err){
    row={...row,reasonCode:classifyStage33Failure(err)};
