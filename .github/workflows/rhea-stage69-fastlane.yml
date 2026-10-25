@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rhea-stage69-fastlane.yml'
+      - 'src/rhea/stage35-atomic-reference-sizing.ts'
+      - 'src/rhea/stage37-sandbox-liquidation.ts'
 permissions:
   contents: read
   actions: read
