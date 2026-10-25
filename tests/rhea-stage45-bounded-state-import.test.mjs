@@ -115,3 +115,19 @@ test('Stage45 actual-workflow safeguards prevent a false liquidation or mainnet 
  assert.ok(!runner.includes('broadcast_tx'));
  assert.ok(!runner.includes('callRaw('));
 });
+
+
+test('Stage79 standalone importer refuses oversized source-record omission and reuses verified alternate archive',async()=>{
+ const runner=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
+ assert.ok(runner.includes('validateStage79ArchivalFallback'));
+ assert.ok(runner.includes('secondaryRpc.viewPage(afterKey,1)'));
+ assert.ok(runner.includes('error instanceof StateResponseTooLarge'));
+ assert.ok(runner.includes('recoveredOversizedEntry:true'));
+ assert.ok(runner.includes('STAGE45_ALL_ARCHIVES_EXCEEDED_SINGLE_ENTRY_LIMIT'));
+ assert.ok(workflow.includes('secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL'));
+ assert.ok(workflow.includes('alternateRpcAttempts'));
+ assert.ok(runner.includes('paginationCursorExhausted'));
+ assert.ok(runner.includes("EXECUTION_ENABLED!=='false'"));
+ assert.ok(!runner.includes('broadcast_tx'));
+});
