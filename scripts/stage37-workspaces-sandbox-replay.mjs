@@ -8,8 +8,10 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
+import {clonePinnedContractWithState} from './stage46-paged-sandbox-clone.mjs';
 const e=process.env;
 let worker;
+let sandboxTransactionSubmitted=false;
 async function main(){
  if(e.NEAR_WORKSPACES_NETWORK!=='sandbox'||e.EXECUTION_ENABLED!=='false'||
   e.STAGE37_ALLOW_SANDBOX_MUTATION!=='true'||
@@ -38,15 +40,29 @@ async function main(){
  worker=await pkg.Worker.init({network:'sandbox'});
  const root=worker.rootAccount;
  if(!root||typeof root.importContract!=='function')throw Error('NO_SANDBOX_IMPORT_API');
- // withData:true is mandatory: a no-data clone is NOT a real transaction replay.
+ // Reconstruct pinned lending, oracle and NEP-141 storage using bounded native
+ // archival cursors. Code-only import MUST be followed by complete local patch.
  const contracts=new Map();
+ const cloneEvidence=[];
  const ids=new Set([plan.lendingContract,'aggregate-oracle.near','priceoracle.near',
   plan.actions[0].Borrow.token_id,plan.actions[2].Withdraw.token_id]);
  for(const id of ids){
-  contracts.set(id,await root.importContract({
-   mainnetContract:id,blockId:block,withData:true,
-  }));
+  const {contract,evidence}=await clonePinnedContractWithState({
+   root,rpc,endpoint:e.NEAR_RPC_URL,contractId:id,blockHeight:block,
+   expectedCodeHash:id===plan.lendingContract?plan.sourceCodeHash:
+    id==='aggregate-oracle.near'?plan.sourceOracleHash:null,
+   onProgress:entry=>console.error(JSON.stringify({mode:'STAGE46_LOCAL_CLONE_PROGRESS',...entry})),
+  });
+  contracts.set(id,contract);
+  cloneEvidence.push(evidence);
  }
+ if(new Set(cloneEvidence.map(row=>row.sourceBlockHash)).size!==1)
+  throw Error('STAGE46_CROSS_CONTRACT_SOURCE_BLOCK_HASH_MISMATCH');
+ await writeFile('stage46-sandbox-clone-evidence.json',JSON.stringify({
+  mode:'STAGE46_PINNED_SANDBOX_DEPENDENCY_CLONES',chain:'NEAR_SANDBOX',
+  contracts:cloneEvidence,completeTrieRootParityVerified:false,
+  mainnetMutationEnabled:false,realRheaLiquidationVerified:false,
+ },null,2)+'\n');
  const lending=contracts.get(plan.lendingContract);
  const [sandboxConfig,sandboxBorrower]=await Promise.all([
   lending.view('get_config',{}),
@@ -74,6 +90,7 @@ async function main(){
  const [actorBefore,repayFtBefore,seizeFtBefore]=await snapshot();
  let raw;
  try{
+  sandboxTransactionSubmitted=true;
   raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
    gas:plan.gasUnits,attachedDeposit:plan.depositYocto,
   });
@@ -109,7 +126,7 @@ async function main(){
 }
 main().catch(err=>{
  console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
-  status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:false,
+  status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:sandboxTransactionSubmitted,
   reason:err instanceof Error?err.message:'UNKNOWN',
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
