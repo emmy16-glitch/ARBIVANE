@@ -3,10 +3,13 @@
  */
 export interface Stage44SandboxContractReport {
  mode:'ARBIVANE_STAGE44_EXECUTABLE_LOCAL_SANDBOX_WITNESS';
- chain:'NEAR_SANDBOX';status:'LOCAL_CONTRACT_TRANSACTION_AND_STATE_CHANGE_VERIFIED';
+ chain:'NEAR_SANDBOX';status:'LOCAL_CONTRACT_STATE_VERIFIED_AFTER_FINAL_BLOCK_ADVANCE';
  contractAccountId:string;actorAccountId:string;
  initialMessage:null;finalMessage:string;
- transactionFinal:true;transactionSucceeded:true;receiptCount:number;
+ transactionExecutionStatus:'FINAL'|'EXECUTED_OPTIMISTIC';
+ transactionFinal:boolean;transactionSucceeded:true;receiptCount:number;
+ finalizedBlockBefore:number;finalizedBlockAfter:number;
+ persistedAtLaterFinalizedBlock:true;
  failedReceiptCount:0;gasBurntGasUnits:string;
  contractStateMutationVerified:true;realRheaLiquidationAttempted:false;
  rheaContractParityVerified:false;liquidationEligibilityVerified:false;
@@ -23,18 +26,27 @@ function record(x:unknown,label:string):Record<string,unknown>{
 /** Works with the near-workspaces TransactionResult wrapper or its inner outcome. */
 export function attestStage44LocalContractExecution(input:{
  transaction:unknown;actorAccountId:string;contractAccountId:string;
- before:unknown;after:unknown;expectedMessage:string;
+ before:unknown;after:unknown;afterFastForward:unknown;
+ finalizedBlockBefore:unknown;finalizedBlockAfter:unknown;
+ expectedMessage:string;
 }):Stage44SandboxContractReport {
  if(!ID.test(input.actorAccountId)||!ID.test(input.contractAccountId)||
   input.actorAccountId===input.contractAccountId||
   typeof input.expectedMessage!=='string'||
   !/^ARBIVANE_STAGE44_[A-Z0-9_]{1,60}$/.test(input.expectedMessage)||
-  input.before!==null||input.after!==input.expectedMessage)
+  input.before!==null||input.after!==input.expectedMessage||
+  input.afterFastForward!==input.expectedMessage||
+  typeof input.finalizedBlockBefore!=='number'||
+  !Number.isSafeInteger(input.finalizedBlockBefore)||input.finalizedBlockBefore<1||
+  typeof input.finalizedBlockAfter!=='number'||
+  !Number.isSafeInteger(input.finalizedBlockAfter)||
+  input.finalizedBlockAfter<input.finalizedBlockBefore+2)
   throw Error('STAGE44_CONTRACT_STATE_TRANSITION_NOT_VERIFIED');
  const wrapper=record(input.transaction,'TRANSACTION');
  const result=record(wrapper.result??wrapper,'FINAL_OUTCOME');
  const status=record(result.status,'FINAL_STATUS');
- if(result.final_execution_status!=='FINAL'||!Object.hasOwn(status,'SuccessValue')||
+ if(!['FINAL','EXECUTED_OPTIMISTIC'].includes(String(result.final_execution_status))||
+  !Object.hasOwn(status,'SuccessValue')||
   Object.hasOwn(status,'Failure'))
   throw Error('STAGE44_TRANSACTION_NOT_FINAL_SUCCESS');
  const outcomes=result.receipts_outcome;
@@ -55,16 +67,22 @@ export function attestStage44LocalContractExecution(input:{
  }
  return {
   mode:'ARBIVANE_STAGE44_EXECUTABLE_LOCAL_SANDBOX_WITNESS',
-  chain:'NEAR_SANDBOX',status:'LOCAL_CONTRACT_TRANSACTION_AND_STATE_CHANGE_VERIFIED',
+  chain:'NEAR_SANDBOX',status:'LOCAL_CONTRACT_STATE_VERIFIED_AFTER_FINAL_BLOCK_ADVANCE',
   contractAccountId:input.contractAccountId,actorAccountId:input.actorAccountId,
   initialMessage:null,finalMessage:input.expectedMessage,
-  transactionFinal:true,transactionSucceeded:true,
+  transactionExecutionStatus:result.final_execution_status as 'FINAL'|'EXECUTED_OPTIMISTIC',
+  transactionFinal:result.final_execution_status==='FINAL',transactionSucceeded:true,
+  finalizedBlockBefore:input.finalizedBlockBefore,
+  finalizedBlockAfter:input.finalizedBlockAfter,
+  persistedAtLaterFinalizedBlock:true,
   receiptCount:outcomes.length,failedReceiptCount:0,gasBurntGasUnits:gas.toString(),
   contractStateMutationVerified:true,realRheaLiquidationAttempted:false,
   rheaContractParityVerified:false,liquidationEligibilityVerified:false,
   financingVerified:false,profitVerified:false,
   executionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
   blockers:[
+   ...(result.final_execution_status==='EXECUTED_OPTIMISTIC'?
+    ['ORIGINAL_TRANSACTION_STATUS_OPTIMISTIC_FINALIZED_STATE_PERSISTENCE_ATTESTED_NOT_TRANSACTION_FINALITY']:[]),
    'LOCAL_SANDBOX_CONTRACT_IS_NOT_RHEA_LENDING_CONTRACT',
    'NO_REPRODUCIBLE_FULL_RHEA_CONTRACT_STATE_IMPORT_OR_LIQUIDATION_RECEIPT',
    'NO_FINANCING_SWAP_GAS_CONVERSION_OR_REALIZED_PROFIT',
