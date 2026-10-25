@@ -242,6 +242,8 @@ test('Stage70 never proposes a same-token repay/seize route rejected by the real
  const r=sizeStage35SourceLiquidation(candidate,assets(),options);
  assert.equal(r.status,'NO_SAFE_SOURCE_SCENARIO');
  assert.equal(r.referenceRulesPass,false);
+ assert.ok(r.blockers.includes('SANDBOX_SAME_TOKEN_ROUTE_NOT_IMPLEMENTED'));
+
  assert.equal(r.repay,null);
  assert.equal(r.seize,null);
  assert.equal(r.mayBroadcast,false);
