@@ -153,3 +153,9 @@ test('Stage57 tracks Rhea async callback receipt without leaking provider failur
  assert.equal(r.failedCallbackReceiptCount,1);
  assert.equal(JSON.stringify(r).includes(secret),false);
 });
+
+test('Stage70 rejects source-positive same-asset route before any Sandbox state import or mutation',()=>{
+ const input=proposal();
+ input.seize={...input.seize,tokenId:input.repay.tokenId};
+ assert.throws(()=>buildStage37SandboxPlan(input),/STAGE37_REQUIRES_VALID_NONEXECUTABLE_STAGE35_REFERENCE_PROPOSAL/);
+});
