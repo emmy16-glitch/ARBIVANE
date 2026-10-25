@@ -109,7 +109,11 @@ test('Stage78 rejects a forged two-record provider recovery, never bypassing sou
 test('Stage78 standalone reader only uses a second public archival endpoint at limit 1',async()=>{
  const script=await readFile(new URL('../scripts/stage45-rhea-paged-sandbox-import.mjs',import.meta.url),'utf8');
  assert.ok(script.includes("https://archival-rpc.mainnet.near.org"));
- assert.ok(script.includes("https://archival-rpc.mainnet.fastnear.com"));
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage45-bounded-state-import.yml',import.meta.url),'utf8');
+ assert.ok(workflow.includes('NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com'));
+ assert.ok(script.includes('env.NEAR_RPC_URL'));
+ assert.ok(script.includes('validateStage80ArchivalFallback'));
+ assert.ok(script.includes('env.STAGE45_ARCHIVAL_FALLBACK_URL?.trim()'));
  assert.ok(script.includes('error instanceof StateResponseTooLarge'));
  assert.ok(script.includes('limit!==1'));
  assert.ok(script.includes('page.values.length!==1'));
