@@ -8,6 +8,7 @@ on:
       - 'scripts/stage49-sandbox-borrow-preflight.mjs'
       - 'scripts/stage49-sandbox-wrap-funding.mjs'
       - 'scripts/stage52-solvent-sandbox-borrow-capacity.mjs'
+      - 'scripts/stage55-sandbox-execution-ledger.mjs'
       - 'scripts/stage46-paged-sandbox-clone.mjs'
       - 'scripts/stage50-pinned-ft-reserve.mjs'
       - 'src/rhea/stage37-sandbox-liquidation.ts'
@@ -106,6 +107,15 @@ jobs:
             .transactionFinal == (.transactionExecutionStatus == "FINAL")
             else true end' stage37-sandbox-execution.json
           if test -s stage41-sandbox-balance-settlement.json; then jq '{status,borrowerDebtDecreaseInternal,borrowerCollateralDecreaseInternal,actorSeizeFtIncreaseAtomic,positiveNetProfitVerified}' stage41-sandbox-balance-settlement.json >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Summarize actual local execution phase, including failures
+        if: always()
+        run: |
+          if test -s stage55-sandbox-phase-evidence.json; then
+            jq -e '.mode == "ARBIVANE_STAGE55_LOCAL_RHEA_EXECUTION_PHASE_WITNESS" and .chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .realProfitVerified == false and .mayBroadcastMainnet == false and .maySignMainnet == false' stage55-sandbox-phase-evidence.json
+            jq '{status,currentPhase,observedFailureCode,localFundingAttempted,localLiquidationCallInvoked,actualRheaSettlementVerified,realMainnetExecuted,realProfitVerified}' stage55-sandbox-phase-evidence.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No Sandbox phase proof: no admitted actual Stage35 candidate, executor installation failure, or execution not started.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -118,6 +128,7 @@ jobs:
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
             stage52-actor-borrow-capacity.json
+            stage55-sandbox-phase-evidence.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
           if-no-files-found: warn
