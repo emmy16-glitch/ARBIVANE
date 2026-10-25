@@ -83,7 +83,7 @@ export class ArchivalStateRpc {
       cause.info.error_message.slice(0,250):null,
     };
     console.error(JSON.stringify(fingerprint));
-    if(SIZE.test(body)){
+    if(cause.name==='TOO_LARGE_CONTRACT_STATE'||SIZE.test(body)){
      this.oversizeResponses++;throw new StateResponseTooLarge();
     }
     throw Error('STAGE45_ARCHIVAL_RPC_QUERY_REJECTED');
