@@ -28,11 +28,24 @@ function success(result,label){
 }
 async function registerIfNeeded(actor,contract,label){
  if(typeof contract.view!=='function')throw Error('STAGE49_'+label+'_NO_STORAGE_VIEW');
- const existing=await contract.view('storage_balance_of',{account_id:actor.accountId});
- if(existing!==null&&existing!==undefined)return false;
+ const [existing,bounds]=await Promise.all([
+  contract.view('storage_balance_of',{account_id:actor.accountId}),
+  contract.view('storage_balance_bounds',{}),
+ ]);
+ const min=bounds?.min;
+ if(typeof min!=='string'||!/^(0|[1-9][0-9]{0,38})$/.test(min)||
+  BigInt(min)>STORAGE)
+  throw Error('STAGE49_'+label+'_STORAGE_FEE_OUT_OF_BOUNDS');
+ if(existing!==null&&existing!==undefined){
+  if(typeof existing.total!=='string'||
+   !/^(0|[1-9][0-9]{0,38})$/.test(existing.total)||
+   BigInt(existing.total)<BigInt(min))
+   throw Error('STAGE49_'+label+'_EXISTING_STORAGE_INSUFFICIENT');
+  return false;
+ }
  const result=await actor.callRaw(contract,'storage_deposit',{
   account_id:actor.accountId,registration_only:true,
- },{gas:MAX_GAS,attachedDeposit:STORAGE.toString()});
+ },{gas:MAX_GAS,attachedDeposit:min});
  success(result,label+'_STORAGE_REGISTRATION');
  const now=await contract.view('storage_balance_of',{account_id:actor.accountId});
  if(!now||typeof now!=='object')throw Error('STAGE49_'+label+'_STORAGE_NOT_REGISTERED');
