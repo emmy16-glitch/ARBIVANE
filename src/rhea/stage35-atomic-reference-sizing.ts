@@ -153,6 +153,7 @@ export function sizeStage35SourceLiquidation(
   qtyIn:bigint;qtyOut:bigint;repaidUsd:bigint;seizedUsd:bigint;
   newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
  let considered=0;
+ let permittedPairs=0,liquidPairs=0,validRuleScenarios=0,positiveGrossScenarios=0;
  for(const p of evidence.positions){
   if(p.status!=='PAPER_AT_RISK_UNAPPROVED')continue;
   if(!/^[A-Za-z0-9._:-]{1,100}$/.test(p.positionId)||p.reason!==null||
@@ -179,54 +180,71 @@ export function sizeStage35SourceLiquidation(
     const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
     // Bound the proposed repayment by actual pinned supply minus outstanding
     // borrow pool balances; actual transferable FT reserve remains unverified.
-    const amount=budget<debtPool.borrowCapacityInternal?
+    permittedPairs++;
+    const maxAmount=budget<debtPool.borrowCapacityInternal?
      budget:debtPool.borrowCapacityInternal;
-    if(amount===0n)continue;
-    const repaidUsd=asValue(amount,debt);
-    if(repaidUsd===0n)continue;
-    // The old fixed 75-bps haircut destroyed ALL gross spread when a real
-    // borrower was only slightly undercollateralized (source discount <75bps).
-    // Instead search the exact maximum source-valid seizure at integer
-    // lending units; never relax the original four liquidation rules.
-    const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
-    if(repayAdjusted>=d)continue;
-    const newD=d-repayAdjusted;
-    const theoreticalUsd=repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount);
-    let low=0n,high=maxInternalAmount(collateral,theoreticalUsd);
-    // At fixed repayment, the discounted-collateral bound and strictly
-    // improving borrower health impose monotonic UPPER seizure bounds.
-    // FINAL_POSITION_NOT_AT_RISK is a LOWER bound, checked only at the end.
-    // No sampling/halving may skip a narrow valid profitable interval.
-    while(low<high){
-     const mid=(low+high+1n)/2n;
-     const midUsd=asValue(mid,collateral);
-     const midAdjusted=sourceMulRatio(midUsd,collateral.vol);
-     if(midAdjusted>=c){high=mid-1n;continue;}
-     const midRules=sourceCheckLiquidationRules({
-      beforeCollateralE27:c,beforeDebtE27:d,
-      afterCollateralE27:c-midAdjusted,afterDebtE27:newD,
-      repaidE27:repaidUsd,seizedE27:midUsd});
-     if(midRules.reasons.includes('DISCOUNTED_COLLATERAL_EXCEEDS_REPAYMENT')||
-      midRules.reasons.includes('BORROWER_HEALTH_NOT_IMPROVED')){
-      high=mid-1n;
-     }else low=mid;
+    if(maxAmount===0n)continue;
+    liquidPairs++;
+    // A max-repay liquidation can make a barely underwater borrower healthy,
+    // while a smaller repay leaves them at risk AND improves health. Keep the
+    // original 1%-of-debt cap; search only monotonically smaller amounts.
+    // Every result still passes the complete source four-rule check below.
+    for(const repayFractionBps of [10000n,7500n,5000n,2500n,1000n,500n,250n,100n]){
+     const amount=maxAmount*repayFractionBps/MAX_BPS;
+     if(amount===0n)continue;
+     const repaidUsd=asValue(amount,debt);
+     if(repaidUsd===0n)continue;
+     // The old fixed 75-bps haircut destroyed ALL gross spread when a real
+     // borrower was only slightly undercollateralized (source discount <75bps).
+     // Instead search the exact maximum source-valid seizure at integer
+     // lending units; never relax the original four liquidation rules.
+     const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
+     if(repayAdjusted>=d)continue;
+     const newD=d-repayAdjusted;
+     const theoreticalUsd=repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount);
+     let low=0n,high=maxInternalAmount(collateral,theoreticalUsd);
+     // At fixed repayment, the discounted-collateral bound and strictly
+     // improving borrower health impose monotonic UPPER seizure bounds.
+     // FINAL_POSITION_NOT_AT_RISK is a LOWER bound, checked only at the end.
+     // No sampling/halving may skip a narrow valid profitable interval.
+     while(low<high){
+      const mid=(low+high+1n)/2n;
+      const midUsd=asValue(mid,collateral);
+      const midAdjusted=sourceMulRatio(midUsd,collateral.vol);
+      if(midAdjusted>=c){high=mid-1n;continue;}
+      const midRules=sourceCheckLiquidationRules({
+       beforeCollateralE27:c,beforeDebtE27:d,
+       afterCollateralE27:c-midAdjusted,afterDebtE27:newD,
+       repaidE27:repaidUsd,seizedE27:midUsd});
+      if(midRules.reasons.includes('DISCOUNTED_COLLATERAL_EXCEEDS_REPAYMENT')||
+       midRules.reasons.includes('BORROWER_HEALTH_NOT_IMPROVED')){
+       high=mid-1n;
+      }else low=mid;
+     }
+     if(low===0n)continue;
+     const seizedUsd=asValue(low,collateral);
+     const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
+     if(seizeAdjusted>=c)continue;
+     const newC=c-seizeAdjusted;
+     const source=sourceCheckLiquidationRules({
+      beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
+      repaidE27:repaidUsd,seizedE27:seizedUsd});
+     const gross=seizedUsd-repaidUsd;
+     if(source.validBySourceRules)validRuleScenarios++;
+     if(source.validBySourceRules&&gross>0n)positiveGrossScenarios++;
+     if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
+      (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
+       qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross};
     }
-    if(low===0n)continue;
-    const seizedUsd=asValue(low,collateral);
-    const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
-    if(seizeAdjusted>=c)continue;
-    const newC=c-seizeAdjusted;
-    const source=sourceCheckLiquidationRules({
-     beforeCollateralE27:c,beforeDebtE27:d,afterCollateralE27:newC,afterDebtE27:newD,
-     repaidE27:repaidUsd,seizedE27:seizedUsd});
-    const gross=seizedUsd-repaidUsd;
-    if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
-     (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
-      qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross};
    }
   }
  }
  if(!best)return failure(evidence,null,considered,[
+  permittedPairs===0?'NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR':
+  liquidPairs===0?'NO_SOURCE_POOL_BORROW_HEADROOM':
+  validRuleScenarios===0?'FOUR_SOURCE_RULES_REJECTED_ALL_BOUNDED_REPAY_SIZES':
+  positiveGrossScenarios===0?'FOUR_SOURCE_RULES_PASS_BUT_NO_POSITIVE_GROSS':
+  'SOURCE_VALID_SPREAD_BELOW_MINIMUM_PAPER_GROSS',
   'NO_UNVERIFIED_4_RULE_SCENARIO_WITH_POSITIVE_PAPER_SPREAD',
   'DEPLOYED_RULES_SOURCE_WASM_REPLAY_FINANCING_AND_CAPITAL_UNVERIFIED']);
  return {mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',chain:'NEAR_MAINNET',
