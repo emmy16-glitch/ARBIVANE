@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/rhea-stage69-fastlane.yml'
+      - 'scripts/stage49-sandbox-route-readiness.mjs'
+      - 'scripts/stage51-active-pyth-sandbox-parity.mjs'
+      - 'src/rhea/stage41-sandbox-settlement.ts'
 permissions:
   contents: read
   actions: read
