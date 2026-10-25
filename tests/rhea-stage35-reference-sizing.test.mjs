@@ -193,3 +193,54 @@ test('Stage64 cannot manufacture a profitable source-valid scenario where liquid
  assert.equal(result.seize,null);
  assert.equal(result.maySign,false);
 });
+
+test('Stage65 discovers genuine smaller-repay pair when maximal repayment exceeds the accessible collateral leg',()=>{
+ const candidate=report();
+ // $800 total adjusted collateral/$900 debt. Only the $4 collateral leg
+ // allows withdrawals; the other $996 leg must never be liquidated.
+ candidate.positions[0].legs=[
+  debt(),
+  source('collateral','collateral.near','4000000',8000),
+  source('collateral','locked.near','996000000',8000),
+ ];
+ const pools=assets();
+ pools.push(['locked.near',{
+  config:{volatility_ratio:8000,can_borrow:false,can_withdraw:false},
+  supplied:{balance:'2000000000',shares:'2000000000'},
+  borrowed:{balance:'0',shares:'0'}
+ }]);
+ const result=sizeStage35SourceLiquidation(candidate,pools,options);
+ assert.equal(result.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(result.repay.tokenId,'usd-debt.near');
+ assert.equal(result.seize.tokenId,'collateral.near');
+ assert.ok(BigInt(result.repay.amountLendingInternalAtomic)<9000000n);
+ assert.ok(BigInt(result.seize.amountLendingInternalAtomic)<=4000000n);
+ assert.ok(BigInt(result.seize.referenceUsdE27)>BigInt(result.repay.referenceUsdE27));
+ assert.ok(BigInt(result.paperGrossUsdE27)>=BigInt(options.minimumPaperGrossUsdE27));
+ assert.ok(BigInt(result.referenceAfterHealthBps)>BigInt(result.referenceInitialHealthBps));
+ assert.ok(BigInt(result.referenceAfterHealthBps)<10000n);
+ assert.equal(result.consideredPairs,2);
+ assert.equal(result.referenceRulesPass,true);
+ assert.equal(result.mainnetWalletApproved,false);
+ assert.equal(result.executionEnabled,false);
+ assert.equal(result.mayBroadcast,false);
+});
+
+test('Stage65 submaximum search never promotes a disabled collateral route',()=>{
+ const candidate=report();
+ candidate.positions[0].legs=[
+  debt(),source('collateral','collateral.near','4000000',8000),
+  source('collateral','locked.near','996000000',8000),
+ ];
+ const pools=assets();
+ pools[1][1].config.can_withdraw=false;
+ pools.push(['locked.near',{
+  config:{volatility_ratio:8000,can_borrow:false,can_withdraw:false},
+  supplied:{balance:'2000000000',shares:'2000000000'},
+  borrowed:{balance:'0',shares:'0'}
+ }]);
+ const result=sizeStage35SourceLiquidation(candidate,pools,options);
+ assert.equal(result.status,'NO_SAFE_SOURCE_SCENARIO');
+ assert.equal(result.repay,null);
+ assert.equal(result.maySign,false);
+});
