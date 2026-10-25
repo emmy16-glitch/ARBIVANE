@@ -175,6 +175,10 @@ export function sizeStage35SourceLiquidation(
     // A high paper spread is worthless if Rhea has disabled Borrow or
     // Withdraw for either asset. Do not discard other valid pairs because
     // the highest reference-profit pair would fail the deployed preflight.
+    // Stage70: the imported Sandbox Borrow -> Liquidate -> Withdraw route
+    // requires DISTINCT NEP-141 repay/seize contracts. The deployed
+    // preflight rejects identical IDs; skip that pair and search others.
+    if(debt.token===collateral.token)continue;
     const debtPool=vol.get(debt.token),collateralPool=vol.get(collateral.token);
     if(!debtPool?.canBorrow||!collateralPool?.canWithdraw)continue;
     const budget=debt.amount*BigInt(options.maxRepayBps)/MAX_BPS;
