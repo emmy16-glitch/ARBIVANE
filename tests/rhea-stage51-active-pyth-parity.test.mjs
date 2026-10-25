@@ -181,3 +181,29 @@ test('Stage108 never retries a contract error or accepts fallback block drift',a
  await assert.rejects(attestStage51PythParity({...transient,fallbackRpc:drifted}),
   /STAGE51_SOURCE_BLOCK_DRIFT/);
 });
+
+test('Stage109 names only the failed local Pyth stage and keeps real quote mismatches blocked',async()=>{
+ const stages=[
+  [lending,'get_config','LENDING_CONFIG'],
+  [lending,'get_all_token_pyth_infos','LENDING_PYTH_INFO'],
+  [oracle,'get_price_no_older_than','ORACLE_FRESH_QUOTE'],
+  ['wrap.near','ft_price','DERIVED_TOKEN_RATIO'],
+ ];
+ for(const [id,method,stage] of stages){
+  const h=harness({local:(account,m,args,base)=>{
+   if(account===id&&m===method)
+    throw Error('SECRET_RPC_URL https://private.example/?key=DO_NOT_EXPOSE');
+   return base(account,m,args);
+  }});
+  await assert.rejects(()=>attestStage51PythParity(h),
+   new RegExp('STAGE109_SANDBOX_'+stage+'_VIEW_FAILED'));
+  // Original underlying exception text must never become an evidence code.
+ }
+ const q=harness({local:(account,method,args,base)=>{
+  if(account===oracle&&method==='get_price_no_older_than')
+   return {...base(account,method,args),price:'999'};
+  return base(account,method,args);
+ }});
+ await assert.rejects(()=>attestStage51PythParity(q),
+  /STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT/);
+});
