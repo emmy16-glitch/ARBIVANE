@@ -123,6 +123,18 @@ profit or permission to sign transactions.
 
 See [Stage 32 evidence and limitations](docs/RHEA_STAGE32_COHERENT_BLOCK_QUEUE.md).
 
+## Stage 43 — retry blocked Stage 42 borrower observations
+
+`npm run probe:rhea:stage43-blocked-recovery` consumes a verified Stage 42
+reconciliation **and all four real shard artifacts** to retry precisely the
+borrowers whose active-Pyth or later source-sizing checks failed. Each
+result is a new read-only observation with bounded errors, retry counts and
+explicitly unresolved blockers. A positive reference-only scenario may reach
+**isolated Sandbox replay only**, not mainnet signing or profit withdrawal.
+
+See [Stage 43](docs/RHEA_STAGE43_BLOCKED_EVIDENCE_RECOVERY.md). This does not
+establish complete current market screening, liquidation eligibility or profit.
+
 ## Not financial advice / not production-ready
 
 Tests use fabricated positions (including Rhea's own published numerical example) and mocked-RPC responses. A passing unit test does not prove current Rhea liquidation math, true execution profitability, compliance with hackathon rules, deployed contract security, or that an external transfer can succeed. Do not fund, connect secrets, or deploy an autonomous executor based on this stage.
