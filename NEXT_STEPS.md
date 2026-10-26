@@ -1,3 +1,10 @@
+## Stage162 — distinguish source-ineligible borrowers from missing supported token routes
+
+- Stage161 four batches finished successfully, but no candidate qualified and all Sandbox replays were skipped. This is **not** a larger liquidation success.
+- Stage162 filters only the *Sandbox-executable LiNEAR/LiNEAR pair* within each borrower's current Stage35 source sizing pass, and exposes original source blocker codes and rejection rollups.
+- After next workflow completion, inspect `sourceRejectionCounts`, `sourceSizingStatusCounts`, current source block, and any actual FINAL/partner-debt receipts. Do not classify a healthy borrower or unsupported collateral as a bot failure, or classify a successful search job as trading profit.
+- No mandatory minimum transaction size; remain keyless/read-only mainnet with `EXECUTION_ENABLED=false`. See [Stage162 details](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md).
+
 ## Stage160 — any positive source-sized amount and repaired large-search CI (26 October 2026)
 
 - Removed the hardcoded $1,000 reference repay, $10 reference gross and ten-times-previous-size requirements from both Stage157 search lanes. These are no longer mandatory; optional user-specified filters default to zero.
