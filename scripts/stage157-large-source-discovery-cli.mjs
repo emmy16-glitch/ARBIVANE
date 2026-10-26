@@ -36,6 +36,7 @@ async function main(){
   expectedPythOracleCodeHash:env.RHEA_EXPECTED_ORACLE_CODE_HASH,
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
   minimumPaperGrossUsdE27:'1',
+  requiredSameTokenId:'linear-protocol.near',
  };
  const rows=[];let largest=null;
  for(const item of selected.candidates){
