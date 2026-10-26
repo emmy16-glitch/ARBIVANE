@@ -24,7 +24,7 @@ import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
-import {prefundStage124RheaSupply} from './stage124-rhea-supply-prefund.mjs';
+import {prefundStage124RheaSupply,stage126PrefundFailureCode} from './stage124-rhea-supply-prefund.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
@@ -361,9 +361,27 @@ async function main(){
  // Actual Borrow sends LiNEAR FT to the actor; it does not create Rhea
  // 'supplied' balance for Liquidate. Complete and attest a signed local
  // Borrow -> FT transfer to lending before the settlement transaction.
- const supplyPrefund=await prefundStage124RheaSupply({
-  actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
- });
+ let supplyPrefund;
+ try{
+  supplyPrefund=await prefundStage124RheaSupply({
+   actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
+   onEvidence:async(phase,outcome)=>{
+    if(!['borrowRaw','borrowFinal','depositRaw','depositFinal'].includes(phase))
+     throw Error('STAGE124_UNKNOWN_PREFUND_RECEIPT_PHASE');
+    await writeFile('stage126-prefund-'+phase+'.json',
+     JSON.stringify(outcome,null,2)+'\n');
+   },
+  });
+ }catch(error){
+  const code=stage126PrefundFailureCode(error);
+  await writeFile('stage126-prefund-failure.json',JSON.stringify({
+   mode:'STAGE126_ACTUAL_PREFUND_FAILURE_EVIDENCE',chain:'NEAR_SANDBOX',
+   status:'BLOCKED_NOT_SETTLEMENT',reasonCode:code,
+   liquidationCallInvoked:false,mainnetExecutionEnabled:false,
+   maySignMainnet:false,mayBroadcastMainnet:false,
+  },null,2)+'\n');
+  throw Error(code);
+ }
  await writeFile('stage124-rhea-supplied-prefund.json',
   JSON.stringify(supplyPrefund,null,2)+'\n');
  const snapshot=()=>Promise.all([
