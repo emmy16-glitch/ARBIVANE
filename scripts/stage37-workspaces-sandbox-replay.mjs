@@ -337,7 +337,7 @@ async function main(){
    observations:pricingReadDiagnostics,realMainnetExecuted:false,
    mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
    actualRheaSettlementVerified:false,
-  },null,2)+'\\n',{mode:0o600});
+  },null,2)+'\n',{mode:0o600});
  };
  const derivedParity=await attestStage164PricingClosure({
   rpc:stage166Primary,fallbackRpc:stage166Fallback,
