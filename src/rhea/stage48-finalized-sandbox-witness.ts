@@ -44,11 +44,57 @@ export function attestStage48FinalizedSandboxReplay(input:{
   input.finalizedBlockAfter<input.finalizedBlockBefore+2||
   !valid(before)||!valid(immediatelyAfter)||!valid(afterFinalBlock))
   throw Error('STAGE48_INCOMPLETE_FINALIZED_STATE_EVIDENCE');
- const canonical=(s:Stage48PositionSnapshot)=>JSON.stringify(s);
- // Require at least actual borrower mutation; Stage41 additionally demands
- // positive debt/collateral deltas, actor solvency and seized FT proceeds.
- if(JSON.stringify(before.borrower)===JSON.stringify(immediatelyAfter.borrower)||
-  canonical(immediatelyAfter)!==canonical(afterFinalBlock))
+ // Historical source interest continues accruing across the 10,000
+ // Sandbox finality blocks. Comparing the full JSON (balances and APR strings)
+ // incorrectly treats this protocol accrual as a state rollback. Require the
+ // ACCOUNTED SHARES of each supplied, collateral and borrowed position to stay
+ // identical. Stage41 independently rejects any leftover actor debt and checks
+ // genuine borrower balance reductions and external FT receipts.
+ const shares=(rows:unknown):string|null=>{
+  if(!Array.isArray(rows)||rows.length>256)return null;
+  const out:Array<[string,string]>=[];
+  const seen=new Set<string>();
+  for(const row of rows){
+   if(!plain(row))return null;
+   const x=row as Record<string,unknown>;
+   if(typeof x.token_id!=='string'||typeof x.shares!=='string'||
+    !/^[a-z0-9._-]{2,64}$/.test(x.token_id)||
+    !/^(0|[1-9][0-9]{0,38})$/.test(x.shares)||seen.has(x.token_id))
+    return null;
+   seen.add(x.token_id);out.push([x.token_id,x.shares]);
+  }
+  return JSON.stringify(out.sort((a,b)=>a[0].localeCompare(b[0])));
+ };
+ const state=(account:unknown):string|null=>{
+  if(!plain(account))return null;
+  const a=account as Record<string,unknown>;
+  if(typeof a.account_id!=='string'||!plain(a.positions))return null;
+  const top=shares(a.supplied);
+  if(top===null)return null;
+  const positions=a.positions as Record<string,unknown>;
+  if(Object.keys(positions).length>64)return null;
+  const mapped:Array<[string,string,string]>=[];
+  for(const [id,position] of Object.entries(positions)){
+   if(!plain(position))return null;
+   const p=position as Record<string,unknown>;
+   const borrowed=shares(p.borrowed),collateral=shares(p.collateral);
+   if(borrowed===null||collateral===null)return null;
+   mapped.push([id,borrowed,collateral]);
+  }
+  return JSON.stringify([a.account_id,top,mapped.sort((x,y)=>x[0].localeCompare(y[0]))]);
+ };
+ const sameAccount=(a:unknown,b:unknown):boolean=>{
+  const x=state(a),y=state(b);
+  // Legacy mock fixtures lack shares; never substitute an incomplete witness.
+  return x!==null&&y!==null?x===y:JSON.stringify(a)===JSON.stringify(b);
+ };
+ const samePersistent=
+  sameAccount(immediatelyAfter.borrower,afterFinalBlock.borrower)&&
+  sameAccount(immediatelyAfter.actor,afterFinalBlock.actor)&&
+  immediatelyAfter.repayFt===afterFinalBlock.repayFt&&
+  immediatelyAfter.seizeFt===afterFinalBlock.seizeFt;
+ // The borrower's position SHARES must change, not merely accrued balances.
+ if(sameAccount(before.borrower,immediatelyAfter.borrower)||!samePersistent)
   throw Error('STAGE48_STATE_CHANGE_OR_LATER_PERSISTENCE_NOT_VERIFIED');
  return {...receipt,
   status:'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF',
