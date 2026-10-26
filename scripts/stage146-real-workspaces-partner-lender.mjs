@@ -36,7 +36,27 @@ function hasZeroCollateral(account){
   p&&Array.isArray(p.collateral)&&
   p.collateral.every(x=>x&&balance(x.shares,'BAD_COLLATERAL_SHARES')===0n));
 }
-function findLegShares(account,kind,token){
+/** Exact Rhea get_account_all_positions layout:
+ * - Account.supplied is TOP LEVEL (global non-collateral deposits).
+ * - Account.positions.REGULAR.collateral and .borrowed are per-position.
+ * Stage93's authentic get_account_all_positions snapshots attest this.
+ * Never assume position.supplied exists: it would falsely reject a real
+ * successful NEP-141 supply as a zero-share deposit.
+ */
+export function stage146FindLegShares(account,kind,token){
+ if(kind==='supplied'){
+  if(!Array.isArray(account?.supplied)||account.supplied.length>256)
+   throw Error('STAGE146_BAD_ACCOUNT_SUPPLIED_LEGS');
+  let total=0n;
+  for(const leg of account.supplied){
+   if(!leg||typeof leg.token_id!=='string')
+    throw Error('STAGE146_MALFORMED_SUPPLIED_LEG');
+   if(leg.token_id===token)total+=balance(leg.shares,'BAD_SUPPLIED_SHARES');
+  }
+  return total;
+ }
+ if(kind!=='borrowed'&&kind!=='collateral')
+  throw Error('STAGE146_UNKNOWN_POSITION_LEG_KIND');
  const positions=account?.positions;
  if(!positions||typeof positions!=='object'||Array.isArray(positions))
   throw Error('STAGE146_BAD_BORROWER_POSITIONS');
@@ -101,6 +121,8 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   observedPartnerIssuedLiNEARAtomic:null,
   observedPartnerToLiquidatorTransferAtomic:null,
   observedLiquidatorDepositAtomic:null,
+  observedLiquidatorRheaSuppliedShares:null,
+  observedLiquidatorWalletFtAfterSupplyAtomic:null,
   observedLiquidationDebtDecreaseShares:null,
   observedLiquidationCollateralDecreaseShares:null,
   observedLiquidatorToPartnerRepaymentAtomic:null,
@@ -227,8 +249,11 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
    result.receiptProofs.supply=await call(liquidator,token,'ft_transfer_call',{
     receiver_id:lending.accountId,amount:principal.toString(),msg:''
    },1n,200000000000000n);
-   const actorShares=findLegShares(await snapshot(liquidator.accountId),'supplied','linear-protocol.near');
+   const actorShares=stage146FindLegShares(await snapshot(liquidator.accountId),'supplied','linear-protocol.near');
    const now=balance(await ft(liquidator.accountId),'FT_AFTER_SUPPLY');
+   result.observedLiquidatorRheaSuppliedShares=actorShares.toString();
+   result.observedLiquidatorWalletFtAfterSupplyAtomic=now.toString();
+   await save();
    if(actorShares===0n||now!==0n)
     throw Error('STAGE146_FT_DEPOSIT_NOT_RECORDED_AS_RHEA_SUPPLY');
    result.observedLiquidatorDepositAtomic=principal.toString();await save();
@@ -242,10 +267,10 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
     ]
    });
    const afterBorrower=await snapshot(plan.borrowerAccountId);
-   const debtReduction=findLegShares(borrowerBefore,'borrowed','linear-protocol.near')-
-    findLegShares(afterBorrower,'borrowed','linear-protocol.near');
-   const collateralReduction=findLegShares(borrowerBefore,'collateral','linear-protocol.near')-
-    findLegShares(afterBorrower,'collateral','linear-protocol.near');
+   const debtReduction=stage146FindLegShares(borrowerBefore,'borrowed','linear-protocol.near')-
+    stage146FindLegShares(afterBorrower,'borrowed','linear-protocol.near');
+   const collateralReduction=stage146FindLegShares(borrowerBefore,'collateral','linear-protocol.near')-
+    stage146FindLegShares(afterBorrower,'collateral','linear-protocol.near');
    if(debtReduction<=0n||collateralReduction<=0n)
     throw Error('STAGE146_REAL_BORROWER_DEBT_AND_COLLATERAL_NOT_REDUCED');
    if(borrowedShareTotal(await snapshot(liquidator.accountId),'linear-protocol.near')!==0n)
