@@ -61,8 +61,12 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
  if(same&&(!selfRepay||selfRepay.token_id!==repay))
   throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
  const selfRepayUnits=same?u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
+ // Non-forgeable local plan invariant: 10 ppm ceiling in excess borrowing,
+ // fully self-repaid before any surplus is withdrawn. Source liquidation
+ // repay/seize leg amounts themselves are never padded or repriced.
+ const cushion=same?(repaidUnits+99999n)/100000n:0n;
  if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
-  borrowedUnits!==repaidUnits||
+  borrowedUnits!==repaidUnits+cushion||
   (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=borrowedUnits||
     withdrawnUnits!==seizedUnits-borrowedUnits):seizedUnits!==withdrawnUnits))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
