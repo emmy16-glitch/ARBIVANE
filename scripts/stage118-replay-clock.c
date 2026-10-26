@@ -13,17 +13,20 @@
 
 static _Atomic uint64_t origin_ns;
 static _Atomic uint64_t execution_ns;
-static int reconstructing(void) {
+static char replay_phase(void) {
  const char *path=getenv("ARBIVANE_REPLAY_PHASE_FILE");
- if(!path || !*path)return 0;
- // No stdio/allocator/dlsym in jemalloc's initialization path. A missing or
- // unreadable control defaults to normal speed, never a freshness bypass.
+ if(!path || !*path)return '1';
+ // Zero is slow historical import, one is ordinary local-time execution,
+ // two is an explicitly flagged Stage147 LOCAL-ONLY multi-receipt experiment.
+ // This NEVER changes the real Pyth contract's stored quote/expiry config,
+ // but 20x local clock compression is NOT proof of mainnet time-to-execute.
  int fd=(int)syscall(SYS_openat,AT_FDCWD,path,O_RDONLY|O_CLOEXEC,0);
- if(fd<0)return 0;
+ if(fd<0)return '1';
  char phase='1';
  long count=syscall(SYS_read,fd,&phase,1);
  syscall(SYS_close,fd);
- return count==1 && phase=='0';
+ if(count!=1 || (phase!='0' && phase!='1' && phase!='2'))return '1';
+ return phase;
 }
 static uint64_t ns(const struct timespec *t) {
  return (uint64_t)t->tv_sec*1000000000ULL+(uint64_t)t->tv_nsec;
@@ -43,9 +46,9 @@ int clock_gettime(clockid_t id, struct timespec *out) {
  uint64_t now=ns(&mono),expected=0;
  atomic_compare_exchange_strong(&origin_ns,&expected,now);
  uint64_t origin=atomic_load(&origin_ns);
- int staging=reconstructing();
+ char phase=replay_phase();
  uint64_t transition=atomic_load(&execution_ns);
- if(!staging && !transition){
+ if(phase!='0' && !transition){
   expected=0;
   atomic_compare_exchange_strong(&execution_ns,&expected,now);
   transition=atomic_load(&execution_ns);
@@ -55,7 +58,7 @@ int clock_gettime(clockid_t id, struct timespec *out) {
  // execution phase starts it can never return to reconstruction or rewind.
  uint64_t elapsed;
  if(transition)elapsed=(transition>=origin?(transition-origin)/100:0)+
-  (now>=transition?now-transition:0);
+  (now>=transition?(phase=='2'?(now-transition)/20:now-transition):0);
  else elapsed=(now>=origin?now-origin:0)/100;
  uint64_t result=anchor+elapsed;
  out->tv_sec=(time_t)(result/1000000000ULL);
