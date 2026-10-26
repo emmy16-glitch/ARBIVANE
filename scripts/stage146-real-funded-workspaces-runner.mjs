@@ -215,10 +215,11 @@ async function main(){
  await cloneMonitor.finish();
  // Copying a historical snapshot must not consume the market's quote window.
  // Resume normal, forward-only chain time before source parity and all actions.
- await writeFile('stage115-historical-clock.json',JSON.stringify(
-  await historical.startReplayClock({
-   localPartnerTimeCompression:e.STAGE147_LOCAL_CLOCK_COMPRESSION==='true'
-  }),null,2)+'\n');
+ const stage149ReplayClockWitness=await historical.startReplayClock({
+  localPartnerTimeCompression:e.STAGE147_LOCAL_CLOCK_COMPRESSION==='true'
+ });
+ await writeFile('stage115-historical-clock.json',
+  JSON.stringify(stage149ReplayClockWitness,null,2)+'\n');
  for(let i=0;i<dependencyIds.length;i++){
   contracts.set(dependencyIds[i],clones[i].contract);
   cloneEvidence.push(clones[i].evidence);
@@ -292,7 +293,16 @@ async function main(){
  await markStage55('SANDBOX_PYTH_PARITY');
  await writeFile('stage115-historical-clock.json',JSON.stringify(
   {...attestReplayClock(sourceClock,(await worker.provider.block({finality:'final'})).header),
-   clockPhase:'HISTORICAL_EXECUTION',reconstructionClockRate:0.01},null,2)+'\n');
+   // Never overwrite the actual configured local clock speed with an
+   // inaccurate 1x witness. Publish the exact source-pinned timing choice.
+   clockPhase:stage149ReplayClockWitness.clockPhase,
+   reconstructionClockRate:0.01,
+   clockRate:stage149ReplayClockWitness.clockRate,
+   localTimeCompressionEnabled:stage149ReplayClockWitness.localTimeCompressionEnabled,
+   nominalTimeCompressionRatio:stage149ReplayClockWitness.nominalTimeCompressionRatio,
+   oracleQuoteAndFreshnessRulesUnmodified:true,
+   timingPerformanceOnRealMainnetNotProven:
+    stage149ReplayClockWitness.localTimeCompressionEnabled===true},null,2)+'\n');
  const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block,
   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
    'https://archival-rpc.mainnet.near.org',
