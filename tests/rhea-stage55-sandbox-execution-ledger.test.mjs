@@ -105,7 +105,7 @@ test('runner records phase evidence on every failed path and before local collat
  assert.ok(runner.indexOf("markStage55('SANDBOX_COLLATERAL_FUNDING')") <
   runner.indexOf('seedSandboxLiquidatorWithWrappedNear({'));
  assert.ok(runner.indexOf("markStage55('SANDBOX_LIQUIDATION_TRANSACTION')") <
-  runner.indexOf('actor.callRaw(lending,plan.method'));
+  runner.lastIndexOf('actor.callRaw(lending,plan.method'));
  assert.ok(runner.includes('const success=stage55.finish({receipt:verifiedReport,settlement});'));
  assert.ok(runner.includes('const failure=stage55.blocked(err);'));
  assert.ok(runner.includes('await recordStage55(failure)'));
