@@ -1,3 +1,4 @@
+import {attestStage125ActorBorrowCushion} from './stage125-route-margin.ts';
 import type {SandboxReplayPlan,SandboxResult} from './stage37-sandbox-liquidation.ts';
 
 /** Stage41: reconcile an ACTUAL local NEAR Sandbox liquidation callback against
@@ -122,10 +123,11 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const liquidationRepay=uint(plan.actions[1].Liquidate.in_assets[0].amount,'LIQUIDATION_REPAY');
  const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
- if(borrowed===0n||liquidationRepay!==borrowed||
+ if(borrowed===0n||!attestStage125ActorBorrowCushion(plan,
+  borrowed.toString(),liquidationRepay.toString(),liquidationSeize.toString())||
   (same?(!selfRepay||selfRepay.token_id!==repay||
     uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
-    liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
+    liquidationSeize<=liquidationRepay||withdrawn!==liquidationSeize-liquidationRepay):
     withdrawn!==liquidationSeize))
   throw Error('STAGE41_INVALID_ATOMIC_ROUTE_AMOUNTS');
  const preDebt=amountIn(scoped(e.borrowerBefore,e.positionId,'borrowed'),repay);
