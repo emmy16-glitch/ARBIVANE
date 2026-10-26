@@ -23,7 +23,7 @@ test('stage37 builds observed Pyth 3-action route for Sandbox only from vetted p
  assert.equal(p.actions[1].Liquidate.account_id,'example.near');
  assert.equal(p.actions[1].Liquidate.in_assets[0].amount,'100000000000000000000');
  assert.equal(p.actions[2].Withdraw.amount,'110000000000000000000');
- assert.equal(p.depositYocto,'0');assert.equal(p.gasUnits,'300000000000000');
+ assert.equal(p.depositYocto,'1');assert.equal(p.gasUnits,'300000000000000');
  assert.equal(p.executionEnabled,false);assert.equal(p.mayBroadcastMainnet,false);
  assert.equal(p.realContractReplayVerified,false);
 });
@@ -209,4 +209,33 @@ test('Stage72 uses only pinned active Pyth storage clones with cross-token and S
  assert.ok(!script.includes("'priceoracle.near',\n  'wrap.near'"));
  assert.ok(script.includes('clonePinnedContractWithState'));
  assert.ok(script.includes('STAGE37_ALLOW_SANDBOX_MUTATION'));
+});
+
+test('Stage122 permits only attested temporal accrual when authentic source view bytes differ',()=>{
+ const raw={final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts_outcome:[receipt({SuccessValue:''})],
+  receipts:[callbackReceipt('4'.repeat(43))]};
+ const inspection={pinnedConfigMatches:true,pinnedBorrowerMatches:false,
+  temporalAccrualVerified:true,importedContractCount:4,allStoredKeysAttested:false};
+ const accepted=summarizeStage37SandboxOutcome(raw,inspection);
+ assert.equal(accepted.status,'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF');
+ assert.ok(accepted.blockers.includes('BORROWER_TEMPORAL_ACCRUAL_PROVED_NOT_EXACT_PINNED_VIEW_PARITY'));
+ for(const bad of [
+  {...inspection,temporalAccrualVerified:false},
+  {...inspection,temporalAccrualVerified:undefined},
+  {...inspection,pinnedConfigMatches:false},
+  {...inspection,importedContractCount:2},
+ ]){
+  const blocked=summarizeStage37SandboxOutcome(raw,bad);
+  assert.equal(blocked.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
+  assert.equal(blocked.attemptedTransaction,false);
+ }
+});
+test('Stage122 deploy call always uses exact Rhea one-yocto deposit, without mainnet signing',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const replay=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.match(replay,/attachedDeposit:BigInt\\(plan.depositYocto\\)/);
+ const p=buildStage37SandboxPlan(proposal());
+ assert.equal(p.depositYocto,'1');
+ assert.equal(p.maySignMainnet,false);
 });
