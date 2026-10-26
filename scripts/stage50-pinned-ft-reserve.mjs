@@ -1,3 +1,4 @@
+import {attestStage125ActorBorrowCushion} from '../src/rhea/stage125-route-margin.ts';
 /** Stage50: require observed FT vault liquidity and pool capacity at the
  * EXACT pinned Rhea block before paying for a multi-contract Sandbox clone.
  * This is public mainnet view-only evidence, NOT financing/profit proof.
@@ -40,7 +41,8 @@ export function inspectStage50RepayReserve({
  if(!repay||!ID.test(repay.token_id)||!liquidation||
   liquidation.in_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==repay.token_id||
-  liquidation.in_assets[0]?.amount!==repay.amount)
+  !attestStage125ActorBorrowCushion(plan,repay.amount,
+   liquidation.in_assets[0]?.amount,liquidation.out_assets?.[0]?.amount))
   throw Error('STAGE50_REPAY_ROUTE_MISMATCH');
  const requiredInternal=amount(repay.amount,'INVALID_REPAY_INTERNAL_UNITS');
  if(requiredInternal===0n)throw Error('STAGE50_ZERO_REPAY');
