@@ -9,6 +9,9 @@ on:
   push:
     branches: [main]
     paths:
+      - 'scripts/stage164-source-pricing-closure.mjs'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
       - 'scripts/stage157-large-source-candidates.mjs'
       - 'scripts/stage157-large-source-discovery-cli.mjs'
@@ -39,11 +42,13 @@ jobs:
           node --check scripts/stage157-large-source-candidates.mjs
           node --check scripts/stage157-large-source-discovery-cli.mjs
           node --check scripts/stage162-source-rejection-diagnostics.mjs
+          node --check scripts/stage164-source-pricing-closure.mjs
           node --experimental-strip-types --test \
             tests/rhea-stage157-larger-source.test.mjs \
             tests/rhea-stage134-finality-fallback.test.mjs \
             tests/rhea-stage35-reference-sizing.test.mjs \
-            tests/rhea-stage162-source-diagnostics.test.mjs
+            tests/rhea-stage162-source-diagnostics.test.mjs \
+            tests/rhea-stage164-pricing-closure.test.mjs
       - name: Validate discovery-report jq gate before any source rechecks
         shell: bash
         run: |
@@ -180,6 +185,8 @@ jobs:
             stage49-sandbox-funding.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
+            stage164-derived-price-parity.json
+            stage88-sandbox-clone-witness.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
             stage56-sandbox-attempt-evidence.json
