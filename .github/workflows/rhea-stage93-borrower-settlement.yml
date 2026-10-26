@@ -239,6 +239,7 @@ jobs:
             stage124-rhea-supplied-prefund.json
             stage124-raw-borrow-transaction.json
             stage124-final-borrow-transaction.json
+            stage127-actor-borrow-balance-witness.json
             stage124-raw-supply-transaction.json
             stage124-final-supply-transaction.json
             stage49-wnear-transfer-receipt.json
