@@ -1,5 +1,13 @@
 # Stage 111 handoff
 
+## Stage123 consolidated executable Sandbox proof checkpoint (26 October 2026)
+- Main `ca7efd1b76121583393a12875b5a48708aa78bc8` already merged PR #173 with the independently evidenced **exact 1 yoctoNEAR** execute_with_pyth deposit (original failed transaction `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe`, actual run `40305687819`, artifact `12642846079`). No verified liquidation or settlement yet.
+- PRs #171/#172 overlapped the merged ABI fix and now conflict. This dedicated branch `fix/stage123-consolidated-sandbox-proof` preserves their distinct improvements without changing the 1-yocto ABI again.
+- The real source-backed temporal accrual proof is passed explicitly into the Stage37 signed receipt summarizer, never relabeling historical view parity as exact. Unknown/forged proof or failed callback remains blocked. Stage37 writes standalone `stage37-process-result.json`; workflow copies that to the Stage56 machine gate while saving SDK-native chatter to `stage69-sandbox-runner.log`. The previous `stage49-wnear-transfer-receipt.json` was confirmed invalid JSON due to literal trailing `\\n`; it now emits a normal newline. Tests cover temporal proof refusal and parseable receipt.
+- Next: review PR CI, merge only when green. A clean Stage93 will rerun on main; inspect actual transaction outcome, callback receipts, borrower debt and collateral delta, and seized FT increase before claiming any verified liquidation. Do not dispatch redundant parallel scans.
+- Mainnet transaction execution, signing and spending remain DISABLED. No synthetic prices, borrower mutations, freshness extension, or unproved profit claims.
+
+
 ## Stage122 confirmed deployed execute ABI blocker (2026-10-26)
 - Main `06302cd` (PR #170 merged); actual Stage93 run `40305687819` FAILED in SANDBOX_FINALIZED_STATE with `STAGE48_UNTRUSTED_OR_FAILED_CALLBACK_REPORT`. The underlying authentic local raw execution (artifact `12642846079`, txn `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe`) shows `execute_with_pyth` called and rejected by contract.main.burrow.near: `Requires attached deposit of exactly 1 yoctoNEAR`. The builder incorrectly hardcoded depositYocto `0`. No verified liquidation, callback settlement or balance deltas.
 - Branch `fix/stage122-execute-one-yocto` changes only the Sandbox plan ABI deposit from 0 to exactly 1 yoctoNEAR, updating tests and preserving typed bigint transfer, signed receipts, all oracle/state/finality/economic checks and disabled mainnet signing/spending. Public successful on-chain Rhea execute_with_pyth evidence also attaches deposit `1` (nearblocks transaction `7AF24kgjBptrQbRHod7VBetMg9c2jmRWSg716HsTeHs`).
