@@ -190,7 +190,7 @@ test('Stage122 persists valid parseable status evidence for genuine Sandbox FT r
    raw,actorAccountId:'arbivane-replay.test.near',evidencePath:path,
   });
   const text=await readFile(path,'utf8');
-  assert.ok(text.endsWith('\\n'));
+  assert.ok(text.endsWith('\n'));
   const parsed=JSON.parse(text);
   assert.equal(parsed.mode,'STAGE121_GENUINE_SANDBOX_WNEAR_TRANSFER_RECEIPTS');
   assert.equal(parsed.classification,'FINAL_STATUS_OBSERVED');
