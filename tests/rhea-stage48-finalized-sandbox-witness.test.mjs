@@ -17,10 +17,18 @@ const raw=(status='EXECUTED_OPTIMISTIC',failed=false)=>({
 });
 const inspected={pinnedConfigMatches:true,pinnedBorrowerMatches:true,
  importedContractCount:5,allStoredKeysAttested:false};
-const before={borrower:{positions:{REGULAR:{borrowed:[{balance:'100'}]}}},
- actor:{positions:{}},repayFt:'0',seizeFt:'0'};
-const after={borrower:{positions:{REGULAR:{borrowed:[{balance:'80'}]}}},
- actor:{positions:{}},repayFt:'0',seizeFt:'30'};
+const borrower=(balance,shares,collateral='200')=>({
+ account_id:'source-borrower.near',positions:{REGULAR:{
+  borrowed:[{token_id:'linear-protocol.near',balance,shares,apr:'0.1'}],
+  collateral:[{token_id:'linear-protocol.near',balance:collateral,
+   shares:collateral,apr:'0.2'}],
+ }}});
+const localActor={account_id:'arbivane-replay.test.near',positions:{
+ REGULAR:{borrowed:[],collateral:[]}}};
+const before={borrower:borrower('100','100'),actor:localActor,
+ repayFt:'0',seizeFt:'0'};
+const after={borrower:borrower('80','80','170'),actor:localActor,
+ repayFt:'0',seizeFt:'30'};
 function args(receipt=summarizeStage37SandboxOutcome(raw(),inspected)){
  return {receipt,before,immediatelyAfter:after,afterFinalBlock:after,
   finalizedBlockBefore:8,finalizedBlockAfter:10008};
@@ -51,6 +59,25 @@ test('FINAL callback also requires persisted change when Stage48 is in the execu
  const confirmed=attestStage48FinalizedSandboxReplay(args(receipt));
  assert.equal(confirmed.transactionFinal,true);
  assert.equal(confirmed.persistedAtLaterFinalizedBlock,true);
+});
+test('Stage131 accepts genuine accrued display balances but NEVER share or FT drift',()=>{
+ const view=structuredClone(after);
+ view.borrower.positions.REGULAR.borrowed[0].balance='81';
+ view.borrower.positions.REGULAR.borrowed[0].apr='0.3';
+ view.actor.positions.REGULAR.collateral=[];
+ const ok=attestStage48FinalizedSandboxReplay({...args(),afterFinalBlock:view});
+ assert.equal(ok.persistedAtLaterFinalizedBlock,true);
+ const changedShares=structuredClone(after);
+ changedShares.borrower.positions.REGULAR.borrowed[0].shares='79';
+ assert.throws(()=>attestStage48FinalizedSandboxReplay({
+  ...args(),afterFinalBlock:changedShares
+ }),/STAGE48_STATE_CHANGE_OR_LATER_PERSISTENCE_NOT_VERIFIED/);
+ const changedActor=structuredClone(after);
+ changedActor.actor.positions.REGULAR.borrowed=[{
+  token_id:'linear-protocol.near',shares:'1',balance:'2'}];
+ assert.throws(()=>attestStage48FinalizedSandboxReplay({
+  ...args(),afterFinalBlock:changedActor
+ }),/STAGE48_STATE_CHANGE_OR_LATER_PERSISTENCE_NOT_VERIFIED/);
 });
 test('failing callbacks, insufficient block movement, unchanged borrower and post-block drift reject',()=>{
  const receipt=summarizeStage37SandboxOutcome(raw(),inspected);
