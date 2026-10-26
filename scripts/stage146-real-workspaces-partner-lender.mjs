@@ -1,6 +1,7 @@
 import {writeFile} from 'node:fs/promises';
 import {registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
+import {stage134AdvanceFinalizedSandbox} from './stage134-finality-fallback.mjs';
 
 /** Stage146: preserve EXACT observed deployed Rhea enum ABI.
  * The inner `Liquidate` parameters ARE NOT a standalone action; the deployed
@@ -337,18 +338,14 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
         typeof worker.provider.fastForward==='function'){
       try{
        const before=await worker.provider.block({finality:'final'});
-       const h=before?.header?.height;
-       if(!Number.isSafeInteger(h)||h<1||h>Number.MAX_SAFE_INTEGER-64)
-        throw Error('STAGE154_BAD_SANDBOX_FINAL_BLOCK_HEIGHT');
-       await worker.provider.fastForward(h+64);
-       const after=await worker.provider.block({finality:'final'});
-       const later=after?.header?.height;
-       if(!Number.isSafeInteger(later)||later<h)
-        throw Error('STAGE154_INVALID_FINALITY_ADVANCE');
-       log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCED',
-        originalTransactionHash:receiptHash,beforeFinalBlock:h,
-        requestedBlock:h+64,observedFinalBlock:later,
-        enoughFinalityProgress:later>=h+2});
+       // Stage154's 64-block fast-forward returned height 74 unchanged three
+       // times in ORIGINAL run #40363964271. Reuse Stage134's independently
+       // exercised fail-closed bounded 64 -> 10,000-block local fallback.
+       // It advances only the isolated Sandbox and never signs a new action.
+       const advanced=await stage134AdvanceFinalizedSandbox(worker.provider,before);
+       log.push({attempt,status:'STAGE156_STAGE134_BOUNDED_FINALITY_RECOVERY',
+        originalTransactionHash:receiptHash,
+        ...advanced.witness});
       }catch(recoveryError){
        log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCE_FAILED',
         originalTransactionHash:receiptHash,
