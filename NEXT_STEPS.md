@@ -1,3 +1,11 @@
+## Stage160 — any positive source-sized amount and repaired large-search CI (26 October 2026)
+
+- Removed the hardcoded $1,000 reference repay, $10 reference gross and ten-times-previous-size requirements from both Stage157 search lanes. These are no longer mandatory; optional user-specified filters default to zero.
+- A candidate must still be genuinely liquidatable at a fresh pinned Rhea/Pyth source block with a positive internal repayment and a positive same-token remainder; the amount cannot exceed its proven source size and must ultimately repay all financing.
+- [Stage159 post-merge large-search run #40372238960](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40372238960) FAILED before scanning because Node 22.16.0 was launched without `--experimental-strip-types` while reading a `.ts` module. Stage160 corrects the workflow test command so the read-only four-shard scan can run after merge.
+- The separate [Stage93 Sandbox verification #40372238637](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40372238637) passed, but it is not a newly settled large partner-funded liquidation or real profit. No current large-run result is credited without its original artifacts.
+- Technical explanation: [Stage160](docs/STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md). `EXECUTION_ENABLED=false`; mainnet signing and wallet transfers disabled.
+
 ### Stage157 — next genuinely larger source-backed Rhea liquidation (26 October 2026)
 
 - Stage151 100 test LiNEAR borrowed against the same tiny borrower 2579 had negative financing economics. Do not scale an unrelated loan principal again and mistake it for a larger liquidation. Stage156 artificial clock finality is an independent mechanics experiment.

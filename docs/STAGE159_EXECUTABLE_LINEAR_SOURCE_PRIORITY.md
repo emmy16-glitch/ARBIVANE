@@ -1,6 +1,8 @@
 # Stage159 — executable LiNEAR source priority and funding-size guard
 
-**Status:** implementation and CI verification; not a funded mainnet liquidation and not an economic success claim.
+**Historical Stage159 record; the size floors in item 3 below were superseded by [Stage160](STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md).** Stage159 remains the source of the verified LiNEAR-only route prioritization. Neither stage is evidence of profitable mainnet liquidation.
+
+**Status:** Stage159 implementation was merged; Stage160 separately changes the old minimum-policy rule.
 
 ## Observed problem
 

@@ -7,6 +7,7 @@ This page is the starting point for understanding ARBIVANE **as it exists now**,
 | Question | Document |
 | --- | --- |
 | What is ARBIVANE, and is it running? | [README](../README.md) |
+| How does ARBIVANE accept any positive liquidation size without arbitrary mandatory minima? | [Stage160 source-size policy and repaired large scanner](STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md) |
 | What has genuinely succeeded, with proof? | [Status and evidence](STATUS_AND_EVIDENCE.md) |
 | How do the scanners, Rhea math and local execution fit together? | [Architecture](ARCHITECTURE.md) |
 | How do I install, test, inspect or rerun the project? | [Operations](OPERATIONS.md) |

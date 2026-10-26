@@ -2,6 +2,8 @@
 
 **Objective:** identify and (only if truly qualified) execute a *materially larger liquidation* in isolated NEAR Workspaces Sandbox. This is not a larger loan against the old tiny borrower.
 
+**Stage160 policy update:** the optional minimum-value screens documented in earlier Stage157 work are now disabled by default; any positive source-sized candidate can be examined. See [no arbitrary minima and repaired CI](STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md). This does not make negative-profit borrowing safe.
+
 ## Existing evidence and why large borrowing alone is insufficient
 
 - The Stage150 genuine original 10-test-LiNEAR run fully repaid the temporary Rhea partner with zero borrowed shares; see [#40363964469](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40363964469).
@@ -16,7 +18,7 @@ Stage157 requires, at one fresh, genuine finalized NEAR block, all of the follow
 
 1. Verified Rhea and Pyth contract code identity; real indexed borrow position; genuinely current account debt; active, timely, bounded-confidence Pyth prices; exact same-block valuation.
 2. Original four-rule Rhea reference eligibility, authentic fixed-point precision, identical `repay`/`seize` token for the available reference route, borrower identity and final source block preserved in the written artifact.
-3. **At least $1,000 USD reference repay value** and **at least $10 USD reference liquidation gross** before financing/gas/slippage. These values are expressed as decimal integer strings in E27 units, NEVER floating-point dollars or spendable token quantities.
+3. **Any strictly positive source-approved repay and gross** (Stage160); **no arbitrary $1,000, $10 or 10× size floors**. Optional user filters default to zero and are *not* economic or protocol permissions. USD references remain E27 integer strings, never spendable token quantities.
 4. No claims that a gross margin proves net realizable profit, reserve funding, collateral-free lending, settled callback receipts or mainnet safety. The result can only authorize a *separate disposable local Sandbox attempt*, not a live transaction.
 5. If the eligible source cannot actually be cloned, converted to NEP-141 atomic units, funded, finalized and settled at zero temporary debt in Workspaces, mark the attempt **FAILED/BLOCKED** with the original source and transaction evidence. Do not alter historical storage or silently enlarge borrower positions.
 
