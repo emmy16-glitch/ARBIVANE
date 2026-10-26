@@ -48,8 +48,18 @@ export async function resolveStage124RheaCallbackReceipts({
     new Promise((_,reject)=>{timer=setTimeout(
      ()=>reject(Error('STAGE124_FINAL_RECEIPTS_TIMEOUT')),15000);}),
    ]);
-  }catch{
+  }catch(error){
+   const message=typeof error?.message==='string'?error.message:'';
    report.classification='FINAL_RECEIPT_QUERY_FAILED';
+   // Never expose provider URLs, tokens or any error message in an artifact.
+   // Distinguish local-finality timeout from RPC rejection and missing result.
+   // Both remain UNVERIFIED; neither grants execution or resends a call.
+   report.finalReceiptQueryFailureClass=message==='STAGE124_FINAL_RECEIPTS_TIMEOUT'?
+    'LOCAL_FINAL_RECEIPT_QUERY_TIMEOUT':
+    (error?.name==='AbortError'?'LOCAL_FINAL_RECEIPT_QUERY_ABORTED':
+     'LOCAL_FINAL_RECEIPT_QUERY_PROVIDER_ERROR');
+   report.finalReceiptQueryTimeoutMs=15000;
+   report.finalReceiptQueryReturnedCanonicalFinal=false;
    await save();
    throw Error('STAGE124_FINAL_RECEIPT_QUERY_FAILED');
   }finally{clearTimeout(timer);}
