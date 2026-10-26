@@ -121,6 +121,8 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   observedPartnerIssuedLiNEARAtomic:null,
   observedPartnerToLiquidatorTransferAtomic:null,
   observedLiquidatorDepositAtomic:null,
+  observedLiquidatorRheaSuppliedShares:null,
+  observedLiquidatorWalletFtAfterSupplyAtomic:null,
   observedLiquidationDebtDecreaseShares:null,
   observedLiquidationCollateralDecreaseShares:null,
   observedLiquidatorToPartnerRepaymentAtomic:null,
@@ -249,6 +251,9 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
    },1n,200000000000000n);
    const actorShares=stage146FindLegShares(await snapshot(liquidator.accountId),'supplied','linear-protocol.near');
    const now=balance(await ft(liquidator.accountId),'FT_AFTER_SUPPLY');
+   result.observedLiquidatorRheaSuppliedShares=actorShares.toString();
+   result.observedLiquidatorWalletFtAfterSupplyAtomic=now.toString();
+   await save();
    if(actorShares===0n||now!==0n)
     throw Error('STAGE146_FT_DEPOSIT_NOT_RECORDED_AS_RHEA_SUPPLY');
    result.observedLiquidatorDepositAtomic=principal.toString();await save();
