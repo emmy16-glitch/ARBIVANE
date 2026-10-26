@@ -159,7 +159,9 @@ test('Stage58 live CLI chooses full-shard exhaustive risk limit without enabling
  const {readFile}=await import('node:fs/promises');
  const cli=await readFile(new URL('../src/rhea/stage38-live-candidate-cli.ts',import.meta.url),'utf8');
  const wf=await readFile(new URL('../.github/workflows/rhea-stage42-reconciled-continuation.yml',import.meta.url),'utf8');
- assert.ok(cli.includes('maxRiskCandidates:80,concurrency:2'));
+ assert.ok(cli.includes('maxRiskCandidates:80,'));
+ assert.ok(cli.includes("concurrency:n('RHEA_STAGE38_CONCURRENCY','2')"));
+ assert.ok(cli.includes("maxRecoveryAttempts:n('RHEA_STAGE38_MAX_RECOVERY_ATTEMPTS','8')"));
  assert.ok(wf.includes('src/rhea/stage38-live-candidate-cli.ts'));
  assert.ok(wf.includes('STAGE37_ALLOW_SANDBOX_MUTATION=true'));
  assert.ok(wf.includes('STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true'));
