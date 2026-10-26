@@ -19,6 +19,15 @@
 
 # Stage 111 handoff
 
+## Stage129 execution path correction — 26 October 2026
+- Latest completed authentic Stage93 40310497704 failed at STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT BEFORE Liquidate, although separate genuine Borrow signed tx 6Sq4VHBUvh96zkKP5AnY8J5vSzp5U6fs7tHw5uweYqc9 had FINAL successful callbacks (artifact 12643993207). Source assets were not fabricated or source quote changed.
+- Earlier run 40309174523 on main af1438df had an ATOMIC Borrow → Liquidate → Repay → Withdraw sequence; genuine Rhea Liquidate and Repay events were emitted before only the exact minimum Withdraw failed Not enough asset balance. No finalized settlement. Merged PR #186 subsequently changed same-token Withdraw to source-capped max_amount, but PR #182 later changed Stage37 execution to standalone Borrow + mandatory external FT prefund and actions.slice(1). Therefore the four-leg atomic route with BOTH source-capped Liquidate AND Withdraw has never actually been run.
+- Branch fix/stage129-atomic-liquidation-replay removes the separate pre-Borrow/FT-wallet assumption ONLY from Stage37 execution, returns to the entire original signed plan.actions in ONE genuine execute_with_pyth, and omits standalone prefinancing evidence (actor must begin with no debt; Stage41 rejects outstanding actor debt). Retains native actor wNEAR funded collateral, 1 yocto attached, authentic Rhea lending/oracle Wasm, source-pinned borrower and prices, temporal parity, full complete callback receipts and Stage48 finality, borrower debt/collateral deltas, full actor self-repay and seized FT gain. No mainnet execution.
+- Stage127 PR #195 was separately merged to main 56e6366 for diagnosing actual actor debt vs wallet FT; auto Stage93 40311509643 must be inspected before merging. Do not dispatch duplicate manually. PR #197 diagnostic branch and #196 speculative FT rounding branch overlap earlier prefunding code; avoid merging those over a verified atomic route without reconciliation.
+- Last branch SHA af600b1. Next: require CI, review latest main, then merge tested correction and examine ONE auto Stage93 actual signed final receipt/settlement result. Never call an emitted event a settled liquidation. Verified liquidation: NONE.
+
+
+
 ## Stage127 observed signed Borrow accounting blocker (26 Oct 2026)
 - Main base `1c3be343`. Genuine Stage93 run `40310497704` on #190 merge `d776293` FAILED at `SANDBOX_BORROW_CAPACITY`, reason `STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT`, before any liquidation call. Source borrower 2579 still qualified; original Borrow transaction `6Sq4VHBUvh96zkKP5AnY8J5vSzp5U6fs7tHw5uweYqc9` is on isolated Sandbox with authentic FINAL child success receipts (artifact `12643993207`), but the combined debt-or-FT amount check rejected. No successful liquidation or FT seizure.
 - The Stage124 error conflates two different read conditions: actor debt below requested lending internal units, or actor LiNEAR FT below requested token atomic units. Neither exact post-Borrow amount appears in prior failure artifacts. Do not infer the underlying rounding/transfer cause.
