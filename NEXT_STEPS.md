@@ -1,5 +1,14 @@
 # Stage 111 handoff
 
+## Stage122 actual execution checkpoint (26 October 2026)
+- Base main `06302cd2709fce4da802cf9394f271d0071410bb` merged PR #170. Actual Stage93 run `40305687819` was in progress at this checkpoint (borrower 2579); inspect its final jobs, failure enum and `stage49-wnear-transfer-receipt.json` before further edits. No verified liquidation yet.
+- Previous actual Stage93 `40304412267` failed at `SANDBOX_COLLATERAL_FUNDING` / `STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT`. A genuine WNEAR/Rhea transfer event alone does not verify the final callback, borrower deltas or liquidation.
+- Stage122 fixes a workflow-evidence integrity defect: near-workspaces SDK native logs contaminate stdout, so `stage69-sandbox-actual.json` could not be parsed and Stage56 lost the original failure evidence. Stage37 now also saves a canonical `stage37-process-result.json`; the workflow retains original stdout in `stage69-sandbox-runner.log` and uses only the trusted result for Stage56 and jq. It also corrects a receipt artifact newline and adds a parseability regression.
+- Mainnet signing, spending, account mutation and execution remain DISABLED. Never infer liquidation success from passing tests or emitted events.
+- Next: await Stage122 PR checks; merge only when green; inspect the resulting single actual Stage93 run and independently verify finalized receipts, callbacks, borrower debt/collateral decreases and seized FT balance increases. Requalify another authentic borrower if 2579 becomes ineligible.
+- Working branch: `fix/stage122-actual-evidence-gates`. Next command: `gh run view 40305687819 --json status,conclusion,jobs` then review Stage122 PR checks. If this run already failed, inspect exact failure artifact first; do not dispatch duplicate scans.
+
+
 ## Stage121 real collateral funding receipt checkpoint
 - Main `66c9af8` merged PR #169 after 732 tests/native clock passed. Actual Stage93 run `40304412267` FAILED after passing authentic Pyth parity and actor registration. Its code `STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT` occurs before any liquidation transaction. Artifact `12642176466` records Rhea's genuine `increase_collateral` event plus a wNEAR transfer, so the top-level provisional receipt interpretation may be the culprit; do not infer finalized resolver success from emitted logs.
 - This branch `fix/stage121-wnear-final-receipt` checks the Workspaces `callRaw` receipt, resolves an incomplete async `SuccessReceiptId` through LOCAL Sandbox `txStatus(hash, actor, 'FINAL')` without resending the transaction, and still requires successful callbacks plus real actor/collateral/vault deltas. It records redacted status classes and hashes as `stage49-wnear-transfer-receipt.json` even on failure. No mainnet signing/spending, invented prices, tampered positions, or relaxed economic gates.
