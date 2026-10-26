@@ -118,3 +118,70 @@ test('Stage165 rejects incomplete or forged pinned borrower position data before
   borrowerPositions:{positions:{REGULAR:{collateral:[]}}}}),
   /STAGE165_INVALID_PINNED_BORROWER_POSITION/);
 });
+
+
+test('Stage166 transient 429 uses independent pinned archival source while retaining exact ratio parity',async()=>{
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ const {dependencies}=selectStage164PricingClosure(input());
+ const p=harness();
+ let fallbackCalls=0,events=[];
+ p.rpc.view=async()=>{throw new NearRpcHttpError(429,'0');};
+ const fallbackRpc={view:async(id,method,args,block)=>{
+  fallbackCalls++;assert.equal(block,height);
+  return {blockHeight:String(height),value:'1250000000000000000000000'};
+ }};
+ const got=await attestStage164PricingClosure({...p,dependencies,
+  fallbackRpc,onDiagnostic:async v=>events.push(v)});
+ assert.equal(got.clonedPricingDependencyCount,2);
+ assert.equal(got.transientPinnedFallbacks,2);
+ assert.equal(fallbackCalls,2);
+ assert.equal(got.sourceAndSandboxDerivedPricesMatch,true);
+ assert.deepEqual(events.map(x=>x.status),['PINNED_RATIO_PARITY_PASS','PINNED_RATIO_PARITY_PASS']);
+ assert.ok(events.every(x=>x.fallbackAttempted===true));
+ assert.equal(got.realMainnetExecuted,undefined);
+ assert.equal(got.mainnetExecutionEnabled,false);
+});
+test('Stage166 NEVER falls back on contract panics, source block drift or changed prices',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const panic=harness();let calls=0,events=[];
+ panic.rpc.view=async()=>{throw Error('contract panicked: original source');};
+ const fallbackRpc={view:async()=>{calls++;return {blockHeight:String(height),value:'1'}}};
+ await assert.rejects(()=>attestStage164PricingClosure({
+  ...panic,dependencies,fallbackRpc,onDiagnostic:async v=>events.push(v),
+ }),/STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED/);
+ assert.equal(calls,0);
+ assert.equal(events[0].status,'NONTRANSIENT_SOURCE_VIEW_REJECTED');
+ const altered=harness('1','2');
+ await assert.rejects(()=>attestStage164PricingClosure({...altered,dependencies,fallbackRpc}),
+  /STAGE164_DERIVED_PRICE_SOURCE_CLONE_MISMATCH/);
+ assert.equal(calls,0);
+ const cross=harness();cross.rpc.view=async()=>({blockHeight:String(height+1),
+  value:'1250000000000000000000000'});
+ await assert.rejects(()=>attestStage164PricingClosure({...cross,dependencies,fallbackRpc}),
+  /STAGE164_PINNED_SOURCE_RATIO_BLOCK_DRIFT/);
+ assert.equal(calls,0);
+});
+test('Stage166 fails closed when independent archival fallback is unavailable or returns different block',async()=>{
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ const {dependencies}=selectStage164PricingClosure(input());
+ const p=harness();let events=[];
+ p.rpc.view=async()=>{throw new NearRpcHttpError(503,'0');};
+ let fallbackRpc={view:async()=>{throw Error('archival is unavailable')}};
+ await assert.rejects(()=>attestStage164PricingClosure({
+  ...p,dependencies,fallbackRpc,onDiagnostic:async x=>events.push(x),
+ }),/STAGE166_PINNED_ARCHIVAL_RATIO_FALLBACK_FAILED/);
+ assert.equal(events[0].status,'PINNED_ARCHIVAL_FALLBACK_FAILED');
+ fallbackRpc={view:async()=>({blockHeight:String(height+1),value:'10'})};
+ await assert.rejects(()=>attestStage164PricingClosure({
+  ...p,dependencies,fallbackRpc,
+ }),/STAGE164_PINNED_SOURCE_RATIO_BLOCK_DRIFT/);
+});
+test('Stage166 runner uses archive pinned RPC and persists safe original pricing diagnostics BEFORE signing',async()=>{
+ const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(runner.includes('new NearReadOnlyRpc(archivePrimary)'));
+ assert.ok(runner.includes('new NearReadOnlyRpc(archiveSecondary)'));
+ assert.ok(runner.includes('fallbackRpc:stage166Fallback'));
+ assert.ok(runner.includes('stage166-pinned-pricing-read-diagnostics.json'));
+ assert.ok(runner.indexOf('onDiagnostic,')<runner.indexOf('sandboxTransactionSubmitted=true'));
+ assert.ok(!runner.includes('broadcast_tx'));
+});
