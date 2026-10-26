@@ -14,7 +14,7 @@ function replay(supplied='999990'){
    positions:{REGULAR:{borrowed:borrowedLeg,collateral:[]}}};
  };
  const raw=(hash)=>({final_execution_status:'FINAL',status:{SuccessValue:''},
-  transaction:{hash},receipts_outcome:[
+  transaction:{hash,signer_id:actorAccountId},receipts_outcome:[
    {id:'5'.repeat(43),outcome:{status:{SuccessValue:''}}}
   ]});
  const actor={accountId:actorAccountId,async callRaw(contract,method,args,opts){
