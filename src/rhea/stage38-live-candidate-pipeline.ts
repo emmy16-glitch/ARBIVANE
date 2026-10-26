@@ -14,10 +14,14 @@ import {classifyStage33Failure} from './stage33-diagnostics.ts';
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 export interface Stage38Options extends Omit<SweepOptions,'batchSize'> {
  maxRiskCandidates:number;minimumPaperGrossUsdE27:string;
+ // Stage159: optional execution-lane route, not a broad market-screening rule.
+ // Only source-qualified, same-token LiNEAR proposals can reach the existing
+ // Stage37 LiNEAR execution lane. Other candidates stay visible in rows.
+ requiredSameTokenId?:'linear-protocol.near';
 }
 export interface Stage38Row {
  borrowerAccountId:string;historicalFindingIndex:number;
- status:'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'|'NO_CURRENT_SOURCE_SCENARIO'|'BLOCKED_FRESH_READ';
+ status:'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'|'FRESH_SOURCE_UNSUPPORTED_SANDBOX_ROUTE'|'NO_CURRENT_SOURCE_SCENARIO'|'BLOCKED_FRESH_READ';
  observationBlockHeight:string|null;reasonCode:string|null;
  referenceInitialHealthBps:string|null;paperGrossUsdE27:string|null;
  sizingStatus:SourceLiquidationSizing['status']|null;
@@ -29,7 +33,7 @@ export interface Stage38Result {
  status:'SANDBOX_PLAN_READY_NOT_AUTHORIZED'|'NO_EXECUTABLE_SOURCE_REFERENCE'|'BLOCKED_CANDIDATE_LIMIT';
  sourceBlockHeight:string;sourceDebtAccounts:number;
  startFinding:number;nextFinding:number;reviewed:number;paperAtRiskFromPreviousScan:number;
- refreshed:number;positiveSourcePlans:number;failedFreshReads:number;
+ refreshed:number;positiveSourcePlans:number;rejectedByRequiredRoute:number;failedFreshReads:number;
  boundedRecoveryAttempts:number;recoveredRateLimitedFindings:number;
  recoveredPriceFreshnessFindings:number;
  rows:Stage38Row[];
@@ -82,7 +86,8 @@ export async function qualifyStage38Candidates(
   !number(o.startFinding,0,source.debtAccounts)||
   !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,80)||
   !number(o.concurrency,1,3)||
-  !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27))
+  !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27)||
+  (o.requiredSameTokenId!==undefined&&o.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('INVALID_STAGE38_CANDIDATE_OPTIONS');
  const check:SweepOptions={...o,batchSize:20};
  checkSweepCheckpoint(source,check,prior);
@@ -112,13 +117,14 @@ export async function qualifyStage38Candidates(
  // A narrower caller-defined cap must fail CLOSED rather than pretending all
  // at-risk accounts were checked. No uncontrolled fan-out: concurrency <= 3.
  if(risk.length>o.maxRiskCandidates)return {...base,
-  status:'BLOCKED_CANDIDATE_LIMIT',refreshed:0,positiveSourcePlans:0,failedFreshReads:0,
+  status:'BLOCKED_CANDIDATE_LIMIT',refreshed:0,positiveSourcePlans:0,rejectedByRequiredRoute:0,failedFreshReads:0,
   rows:[],bestProposal:null,sandboxPlanReady:false};
  // Every authentic at-risk finding in the completed source window must receive
  // a fresh source evaluation, including cohorts larger than the old cap of 12.
  // Only results actually verified as positive can produce a Sandbox plan.
  const rows:Stage38Row[]=new Array(risk.length);
  const proposals:SourceLiquidationSizing[]=[];
+ let rejectedByRequiredRoute=0;
  const retryAfterMs:(number|undefined)[]=new Array(risk.length);
  // Each retry observes current deployed code and a NEW pinned final block.
  // A failed, expired, malformed or untrusted oracle result is never promoted.
@@ -144,11 +150,20 @@ export async function qualifyStage38Candidates(
     throw Error('STAGE38_UNTRUSTED_SIZING_EVIDENCE');
    const positive=evidence.status==='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'&&
     evidence.referenceRulesPass===true;
+   const unsupportedRoute=positive&&o.requiredSameTokenId!==undefined&&
+    (evidence.repay?.tokenId!==o.requiredSameTokenId||
+     evidence.seize?.tokenId!==o.requiredSameTokenId);
    if(positive){
-    buildStage37SandboxPlan(evidence);
-    proposals.push(evidence);
+    if(unsupportedRoute){
+     // Still a genuine source observation, but not an executable asset route.
+     rejectedByRequiredRoute++;
+    }else{
+     buildStage37SandboxPlan(evidence);
+     proposals.push(evidence);
+    }
    }
-   row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
+   row={...row,status:unsupportedRoute?'FRESH_SOURCE_UNSUPPORTED_SANDBOX_ROUTE':
+    positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
     observationBlockHeight:evidence.blockHeight,reasonCode:null,
     referenceInitialHealthBps:evidence.referenceInitialHealthBps,
     paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null,
@@ -202,7 +217,7 @@ export async function qualifyStage38Candidates(
  proposals.sort((a,b)=>BigInt(b.paperGrossUsdE27??'0')>BigInt(a.paperGrossUsdE27??'0')?1:
   BigInt(b.paperGrossUsdE27??'0')<BigInt(a.paperGrossUsdE27??'0')?-1:0);
  return {...base,status:proposals.length?'SANDBOX_PLAN_READY_NOT_AUTHORIZED':'NO_EXECUTABLE_SOURCE_REFERENCE',
-  refreshed:risk.length,boundedRecoveryAttempts,recoveredRateLimitedFindings,
+  refreshed:risk.length,rejectedByRequiredRoute,boundedRecoveryAttempts,recoveredRateLimitedFindings,
   recoveredPriceFreshnessFindings,positiveSourcePlans:proposals.length,
   failedFreshReads:rows.filter(x=>x.status==='BLOCKED_FRESH_READ').length,
   rows,bestProposal:proposals[0]??null,sandboxPlanReady:proposals.length>0};

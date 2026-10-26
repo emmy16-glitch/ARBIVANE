@@ -3,13 +3,21 @@ on:
   pull_request:
     paths:
       - 'scripts/stage157-large-source-liquidation-gate.mjs'
+      - 'scripts/stage157-large-source-candidates.mjs'
       - 'tests/rhea-stage157-large-source-liquidation-gate.test.mjs'
+      - 'src/rhea/stage38-live-candidate-pipeline.ts'
+      - 'src/rhea/stage38-live-candidate-cli.ts'
+      - 'tests/rhea-stage38-live-candidate-pipeline.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/stage157-large-source-liquidation-gate.mjs'
+      - 'scripts/stage157-large-source-candidates.mjs'
       - 'tests/rhea-stage157-large-source-liquidation-gate.test.mjs'
+      - 'src/rhea/stage38-live-candidate-pipeline.ts'
+      - 'src/rhea/stage38-live-candidate-cli.ts'
+      - 'tests/rhea-stage38-live-candidate-pipeline.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
   workflow_dispatch:
 permissions:
@@ -30,7 +38,7 @@ jobs:
       - run: |
           set -euo pipefail
           node --check scripts/stage157-large-source-liquidation-gate.mjs
-          node --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs
+          node --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs
   source_attested_large_candidates:
     if: github.event_name != 'pull_request'
     needs: source_gate_regression
@@ -70,6 +78,8 @@ jobs:
       RHEA_STAGE38_STAGE32_REPORT_FILE: stage32-reprice-report.json
       RHEA_STAGE38_MAX_FINDINGS: '80'
       RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27: '10000000000000000000000000000'
+      # Stage159: never select higher-gross unsupported WNEAR proposals over LiNEAR.
+      STAGE157_REQUIRED_ROUTE: linear-protocol.near
       STAGE157_STAGE38_EVIDENCE: stage38-qualification.json
       STAGE157_REPORT: stage157-large-source-admission.json
       RHEA_RPC_SPACING_MS: '900'
@@ -117,6 +127,8 @@ jobs:
           node scripts/stage157-large-source-liquidation-gate.mjs > stage157-gate-summary.json
           jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false
             and .mayBroadcastMainnet == false and .realizedNetEconomicProfitVerified == false' stage157-large-source-admission.json
+          jq -c '{refreshed,positiveSourcePlans,rejectedByRequiredRoute,failedFreshReads}' \
+            stage38-qualification.json >> "$GITHUB_STEP_SUMMARY"
           jq -c '{status,canAttemptSandbox,sourceBorrower,referenceRepayUsdE27,
              referenceGrossUsdE27,blockers}' stage157-large-source-admission.json >> "$GITHUB_STEP_SUMMARY"
       - name: Execute actual imported Rhea Workspaces liquidation only if sizeable and source-qualified

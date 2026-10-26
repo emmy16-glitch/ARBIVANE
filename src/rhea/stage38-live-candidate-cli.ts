@@ -24,6 +24,14 @@ const n=(key:string,def:string)=>{
    e.MAINNET_PRIVATE_KEY||!/^[1-9][0-9]{0,38}$/.test(sandboxGross)))
   throw Error('STAGE68_TINY_GROSS_REQUIRES_KEYLESS_LOCAL_SANDBOX');
  const minimumPaperGrossUsdE27=sandboxGross??'1000000000000000000000000';
+ // Stage159 explicitly limits the large-liquidation execution lane to its
+ // independently exercised LiNEAR/LiNEAR path, without hiding other reads.
+ const requiredSameTokenId=e.STAGE157_REQUIRED_ROUTE;
+ if(requiredSameTokenId!==undefined&&
+   (requiredSameTokenId!=='linear-protocol.near'||
+    e.EXECUTION_ENABLED!=='false'||e.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+    e.NEAR_PRIVATE_KEY||e.MAINNET_PRIVATE_KEY))
+  throw Error('STAGE159_UNTRUSTED_SOURCE_EXECUTION_ROUTE');
  const source=JSON.parse(await readFile(e.RHEA_STAGE38_SOURCE_FILE,'utf8')) as CompletePagedIndex;
  const prior=JSON.parse(await readFile(e.RHEA_STAGE38_STAGE32_REPORT_FILE,'utf8')) as SweepCheckpoint;
  const endpoints=[e.NEAR_RPC_URL,e.NEAR_RPC_FALLBACK_URL].filter((x):x is string=>Boolean(x));
@@ -35,7 +43,7 @@ const n=(key:string,def:string)=>{
   expectedLendingCodeHash:e.RHEA_EXPECTED_LENDING_CODE_HASH??'',
   expectedPythOracleCodeHash:e.RHEA_EXPECTED_ORACLE_CODE_HASH??'',
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
-  minimumPaperGrossUsdE27,
+  minimumPaperGrossUsdE27,requiredSameTokenId,
  });
  await writeFile('stage38-qualification.json',JSON.stringify(results,null,2)+'\n',
   {encoding:'utf8',mode:0o600});
