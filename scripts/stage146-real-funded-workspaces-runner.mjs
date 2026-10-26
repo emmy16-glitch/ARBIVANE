@@ -313,7 +313,10 @@ async function main(){
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
  await markStage55('SANDBOX_ACTOR_REGISTRATION');
  const actor=await root.createSubAccount('arbivane-replay',{
-  initialBalance:3n*10n**24n,
+  // The isolated Stage150 partner brings its OWN disposable Sandbox
+  // collateral; no mainnet keys or owner wallet involved.
+  initialBalance:e.STAGE150_LARGE_SANDBOX==='true'?
+   1003n*10n**24n:3n*10n**24n,
  });
  if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
   throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
@@ -344,6 +347,8 @@ async function main(){
  const collateralFunding=await seedSandboxLiquidatorWithWrappedNear({
   actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
   provider:worker.provider,evidencePath:'stage49-wnear-transfer-receipt.json',
+  sandboxCollateralYocto:e.STAGE150_LARGE_SANDBOX==='true'?
+   1000n*10n**24n:10n**24n,
  });
  const actorPositionsForFunding=await lending.view('get_account_all_positions',{
   account_id:actor.accountId,
