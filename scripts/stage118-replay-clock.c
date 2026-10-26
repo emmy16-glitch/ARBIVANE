@@ -17,15 +17,15 @@ static char replay_phase(void) {
  const char *path=getenv("ARBIVANE_REPLAY_PHASE_FILE");
  if(!path || !*path)return '1';
  // Zero is slow historical import, one is ordinary local-time execution,
- // two is an explicitly flagged Stage147 LOCAL-ONLY multi-receipt experiment.
+ // two is Stage147 at 0.05x; three is Stage152 at 0.001x; both LOCAL-ONLY.
  // This NEVER changes the real Pyth contract's stored quote/expiry config,
- // but 20x local clock compression is NOT proof of mainnet time-to-execute.
+ // but local clock compression is NOT proof of mainnet time-to-execute or realistic interest.
  int fd=(int)syscall(SYS_openat,AT_FDCWD,path,O_RDONLY|O_CLOEXEC,0);
  if(fd<0)return '1';
  char phase='1';
  long count=syscall(SYS_read,fd,&phase,1);
  syscall(SYS_close,fd);
- if(count!=1 || (phase!='0' && phase!='1' && phase!='2'))return '1';
+ if(count!=1 || (phase!='0' && phase!='1' && phase!='2' && phase!='3'))return '1';
  return phase;
 }
 static uint64_t ns(const struct timespec *t) {
@@ -58,7 +58,7 @@ int clock_gettime(clockid_t id, struct timespec *out) {
  // execution phase starts it can never return to reconstruction or rewind.
  uint64_t elapsed;
  if(transition)elapsed=(transition>=origin?(transition-origin)/100:0)+
-  (now>=transition?(phase=='2'?(now-transition)/20:now-transition):0);
+  (now>=transition?(phase=='3'?(now-transition)/1000:(phase=='2'?(now-transition)/20:now-transition)):0);
  else elapsed=(now>=origin?now-origin:0)/100;
  uint64_t result=anchor+elapsed;
  out->tv_sec=(time_t)(result/1000000000ULL);

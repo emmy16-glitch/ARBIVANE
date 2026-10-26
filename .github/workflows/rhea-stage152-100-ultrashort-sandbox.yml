@@ -1,0 +1,174 @@
+name: Stage152 100 LiNEAR extremely short synthetic local financing window
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage146-real-workspaces-partner-lender.mjs'
+      - 'scripts/stage115-historical-sandbox-clock.mjs'
+      - 'scripts/stage118-replay-clock.c'
+      - 'tests/rhea-stage147-local-oracle-clock.test.mjs'
+      - 'tests/rhea-stage148-partner-dust.test.mjs'
+      - 'tests/rhea-stage150-large-sandbox-funding.test.mjs'
+      - 'tests/rhea-stage152-ultrashort-timing.test.mjs'
+      - 'scripts/stage49-sandbox-wrap-funding.mjs'
+      - 'scripts/stage146-real-funded-workspaces-runner.mjs'
+      - 'tests/rhea-stage146-local-partner-loan.test.mjs'
+      - '.github/workflows/rhea-stage152-100-ultrashort-sandbox.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage146-real-workspaces-partner-lender.mjs'
+      - 'scripts/stage146-real-funded-workspaces-runner.mjs'
+      - 'tests/rhea-stage146-local-partner-loan.test.mjs'
+      - '.github/workflows/rhea-stage152-100-ultrashort-sandbox.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage152-100-linear-ultrashort-local-time
+  cancel-in-progress: false
+jobs:
+  local_execution_contract_regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs tests/rhea-stage148-partner-dust.test.mjs tests/rhea-stage150-large-sandbox-funding.test.mjs tests/rhea-stage152-ultrashort-timing.test.mjs
+  genuine_ft_transfer_and_rhea_partner_funding:
+    if: github.event_name != 'pull_request'
+    needs: local_execution_contract_regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXECUTION_ENABLED: 'false'
+      NEAR_WORKSPACES_NETWORK: sandbox
+      STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
+      STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true'
+      STAGE146_ALLOW_LOCAL_NEAR_LOAN: 'true'
+      # These token units are actually moved through deployed cloned Rhea.
+      # The source borrower liquidation amount is still source-pinned and small.
+      STAGE150_LARGE_SANDBOX: 'true'
+      STAGE150_LARGE_SANDBOX_TOKENS: '100'
+      # Artificial local time compression; does NOT prove real-time mainnet
+      # oracle freshness. Pyth contract's original quote and expiry unchanged.
+      STAGE147_LOCAL_CLOCK_COMPRESSION: 'true'
+      # This is 1000x TIME COMPRESSION, not real economics! Existing Stage151
+      # same-size, 20x replay failed the full loan interest debt settlement.
+      STAGE152_ULTRA_SHORT_LOCAL_CLOCK: 'true'
+      STAGE82_SINGLE_BORROWER: 'true'
+      SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
+      NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+      NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+      # Stage101 must retry all pinned LiNEAR views on an independent archival
+      # provider; use the owner-configured high-limit read-only endpoint if
+      # available, exactly as in the previously successful Stage93 workflow.
+      STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
+      RHEA_RPC_SPACING_MS: '900'
+      STAGE37_STAGE35_EVIDENCE_PATH: stage38-positive-stage35-evidence.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Restore ORIGINAL successful Rhea borrower source proposal
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40317139342'
+          name: stage93-authentic-borrower-2579
+          path: original-stage93
+          github-token: ${{ github.token }}
+      - name: Check original borrower identity and historical source proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s original-stage93/stage38-positive-stage35-evidence.json
+          test -s original-stage93/stage49-sandbox-funding.json
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING"
+            and .chain == "NEAR_MAINNET"
+            and .referenceRulesPass == true
+            and .executionEnabled == false
+            and .maySign == false
+            and .mayBroadcast == false
+            and .repay.tokenId == "linear-protocol.near"
+            and .seize.tokenId == "linear-protocol.near"' original-stage93/stage38-positive-stage35-evidence.json
+          jq -e '.chain == "NEAR_SANDBOX"
+            and .collateralFunding.wrappedNativeSandboxYocto == "1000000000000000000000000"
+            and .maySignMainnet == false' original-stage93/stage49-sandbox-funding.json
+          cp original-stage93/stage38-positive-stage35-evidence.json stage38-positive-stage35-evidence.json
+          echo 'Source historical borrower is independently pinned; local partner will have separate disposable wNEAR collateral.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Install isolated Workspaces SDK (no user wallet secrets)
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Real Sandbox NEP141 partner funding, liquidation, repayment, outstanding debt check
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --kill-after=10s 20m node --experimental-strip-types scripts/stage146-real-funded-workspaces-runner.mjs > stage146-workspaces-runner.log 2> stage146-workspaces-stderr.log
+          test -s stage146-actual-partner-evidence.json
+          test -s stage146-process-result.json
+          test -s stage150-large-funding-preflight.json
+          jq -e '.borrowWholeLinear == "100" and .chain == "NEAR_SANDBOX" and .actualLocalPartnerCollateralYocto == "1000000000000000000000000000" and .sourceBorrowerNotArtificiallyEnlarged == true and .realProfitOrMainnetFundingVerified == false' stage150-large-funding-preflight.json
+          # Stage147 is a historical, locally compressed execution proof ONLY.
+          # Its native clock witness must not misleadingly advertise 1x/mainnet.
+          jq -e '.clockRate == 0.001 and
+            .clockPhase == "STAGE152_ARTIFICIAL_ULTRASHORT_SANDBOX_FINANCING" and
+            .nominalTimeCompressionRatio == 1000
+            and .stage152AssumesNonRealizableNearZeroFinancingTime == true
+            and .syntheticTimeMayUnderstateBorrowInterest == true
+            and .originalStage151HundredTokenEconomicFailureRetained == true
+            and .realisticEconomicsAndMainnetViabilityVerified == false and
+            .localTimeCompressionEnabled == true and
+            .timingPerformanceOnRealMainnetNotProven == true and
+            .oracleQuoteAndFreshnessRulesUnmodified == true and
+            .mainnetExecutionEnabled == false' stage115-historical-clock.json
+          # A locally green cycle under 1000x clock cannot supersede the
+          # known negative 100-token result at 20x from Stage151.
+          jq -e '
+            .mode == "STAGE146_REAL_LOCAL_WORKSPACES_PARTNER_FINANCING_ATTEMPT"
+            and .chain == "NEAR_SANDBOX"
+            and .status == "ACTUAL_LOCAL_PARTNER_FINANCED_RHEA_AND_FT_REPAYMENT_VERIFIED"
+            and .stage150LargeFundingEnabled == true
+            and .stage150BorrowedFtLargeAmountVerified == true
+            and .stage150RemainingRheaSupplyReclaimed == true
+            and (.receiptProofs.stage150ReturnUnusedSupply.finalCallbackReceiptsVerified == true)
+            and (.stage150ActualReturnedUnusedSupplyAtomic | tonumber > 0)
+            and (.stage150TargetLoanTokenAtomic == "100000000000000000000000000")
+            and ((.observedPartnerToLiquidatorTransferAtomic | tonumber) > 99000000000000000000000000)
+            and .actualOnchainLoanAndLiquidationVerified == true
+            and .liquidatorInitialCollateralShares == "0"
+            and (.observedPartnerToLiquidatorTransferAtomic | tonumber > 0)
+            and (.observedLiquidationDebtDecreaseShares | tonumber > 0)
+            and (.observedLiquidationCollateralDecreaseShares | tonumber > 0)
+            and (.observedLiquidatorToPartnerRepaymentAtomic == .observedPartnerToLiquidatorTransferAtomic)
+            and .observedPartnerRemainingRheaDebtShares == "0"
+            and .partnerAccruedDebtDustClosed == true
+            and (.finalActorWalletResidualAtomic | tonumber > 0)
+            and (.observedPartnerAdditionalDebtPaymentAtomic | tonumber >= 0)
+            and .realizedNetEconomicProfitVerified == false
+            and .actualFlashLoan == false
+            and .maySignMainnet == false and .mayBroadcastMainnet == false
+          ' stage146-actual-partner-evidence.json
+      - name: Keep original receipts and all incomplete/failing steps visible
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage152-ultrashort-100-linear-original-receipts-and-loss-disclaimer
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            stage146-actual-partner-evidence.json
+            stage150-large-funding-preflight.json
+            stage146-process-result.json
+            stage146-workspaces-runner.log
+            stage146-workspaces-stderr.log
+            stage37-process-result.json
+            stage38-positive-stage35-evidence.json
+            stage49-sandbox-funding.json
+            stage49-sandbox-registration.json
+            stage51-active-pyth-sandbox-parity.json
+            stage52-actor-borrow-capacity.json
+            stage115-historical-clock.json
+            stage119-clone-failure.json
+            stage55-sandbox-phase-evidence.json

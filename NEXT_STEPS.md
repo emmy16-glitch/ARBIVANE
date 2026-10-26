@@ -1,3 +1,10 @@
+## Stage152 100-token real-callback mechanics under 1000× artificial Sandbox compression (26 October 2026)
+
+- Stage151 genuine 100-LiNEAR local transaction [run #40354682373](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40354682373) did NOT close partner loan: original verified extra accrued debt `24899422835948` atomic LiNEAR exceeded source borrower's liquidation surplus. All principal returned but **economics failed**.
+- Stage152 is **mechanics-only**. Sandbox native historical wall-clock phase 3 advances at `0.001x` normal rate (1000x artificial compression), instead of Stage147 phase 2 at `0.05x`. An explicit test-only guard requires near-workspaces Sandbox, Stage146 loan opt-in, exactly 100-token test and no private keys. Original Rhea token/Oracle WASM and actual borrower are unchanged.
+- A complete green genuine original receipt set would prove large local NEP-141 transfer/liquidation/repay **only under unrealistically short time**, not make the 100-token strategy financially viable under real timing. Stage151 failure evidence is preserved as the baseline. [Technical caveat](docs/STAGE152_EXTREME_LOCAL_TIMING_STRESS_TEST.md).
+- Separately needed: source-identify large eligible Rhea borrower(s), size loans to liquidation, verify realistic current oracle/gas/slippage, and prove positive realized profit without external capital subsidy. Mainnet authorization remains false.
+
 ## Stage151 verified 100-LiNEAR financing stress run — FAILS economic debt settlement (26 October 2026)
 
 - [Real local NEAR Workspaces Stage151 Actions run #40354682373](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40354682373), original independently downloaded [artifact #12666025832](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40354682373/artifacts/12666025832). The isolated Sandbox partner deposited **1,000 test NEAR** and borrowed/withdrew **99,999,999,999,999,999,999,999,999 atomic LiNEAR (approximately 100 full LiNEAR)**, then successfully transferred it to a fresh zero-collateral liquidator. Genuine cloned Rhea/LiNEAR calls sourced the original borrower liquidation and withdrew the unused extra supplied funds.
