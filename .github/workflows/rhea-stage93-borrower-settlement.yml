@@ -16,6 +16,7 @@ on:
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage134-finality-fallback.mjs'
       - 'scripts/stage135-independent-proof.mjs'
+      - 'scripts/stage136-near-borsh-preimage.mjs'
       - 'scripts/stage124-rhea-supply-prefund.mjs'
       - 'scripts/stage124-final-rhea-receipts.mjs'
       - 'scripts/stage115-historical-sandbox-clock.mjs'
@@ -326,7 +327,8 @@ jobs:
           set -euo pipefail
           test -n "$(find verified -name stage37-sandbox-execution.json -print -quit)"
           node scripts/stage135-independent-proof.mjs verified verified
-          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .chain == "NEAR_SANDBOX" and .finalReceiptCount > 0 and .callbackCount == 1 and .actorOutstandingDebtAfterInternal == "0" and .mainnetExecutionEnabled == false and .outcomeMerkleProofIndependentlyVerified == false' verified/stage135-independent-proof.json
+          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .chain == "NEAR_SANDBOX" and .finalReceiptCount > 0 and .callbackCount == 1 and .actorOutstandingDebtAfterInternal == "0" and .hashBorshPreimageIndependentlyVerified == true and .mainnetExecutionEnabled == false and .outcomeMerkleProofIndependentlyVerified == false' verified/stage135-independent-proof.json
+          jq -e '.mode == "STAGE136_INDEPENDENT_NEAR_V0_BORSH_TRANSACTION_PREIMAGE" and .reconstructedBorshHashMatchesSignedTransaction == true and .ed25519SignatureOverComputedHashVerified == true and .receiptOutcomeMerkleInclusionVerified == false and .mainnetExecutionEnabled == false' verified/stage136-borsh-preimage.json
 
       - name: Publish successful actual liquidation proof
         if: success()
