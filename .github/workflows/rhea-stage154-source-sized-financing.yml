@@ -1,0 +1,87 @@
+name: Stage154 real-receipt source-sized financing admission
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage154-real-funding-admission.mjs'
+      - 'tests/rhea-stage154-financing-admission.test.mjs'
+      - '.github/workflows/rhea-stage154-source-sized-financing.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage154-real-funding-admission.mjs'
+      - 'tests/rhea-stage154-financing-admission.test.mjs'
+      - '.github/workflows/rhea-stage154-source-sized-financing.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify_measured_financing_cost_not_mock_profit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      NEAR_WORKSPACES_NETWORK: sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify economics parser and rejection of forged original signed receipt proof
+        run: node --check scripts/stage154-real-funding-admission.mjs && node --test tests/rhea-stage154-financing-admission.test.mjs
+      - name: Download ORIGINAL successful 10-LiNEAR receipts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40353279895'
+          name: stage146-real-local-partner-to-rhea-financing-attempt
+          path: evidence/ten
+          github-token: ${{ github.token }}
+      - name: Download ORIGINAL unprofitable 100-LiNEAR receipts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40354682373'
+          name: stage151-100-linear-local-partner-financing-original-receipts
+          path: evidence/hundred
+          github-token: ${{ github.token }}
+      - name: Verify exact original files and audit both independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          for size in ten hundred; do
+            test -s "evidence/$size/stage146-actual-partner-evidence.json"
+            test -s "evidence/$size/stage146-workspaces-runner.log"
+          done
+          STAGE154_ORIGINAL_RUN_ID=40353279895 node scripts/stage154-real-funding-admission.mjs --original-evidence evidence/ten/stage146-actual-partner-evidence.json evidence/ten/stage146-workspaces-runner.log
+          mv stage154-original-funding-admission.json stage154-authentic-ten-source-audit.json
+          STAGE154_ORIGINAL_RUN_ID=40354682373 node scripts/stage154-real-funding-admission.mjs --original-evidence evidence/hundred/stage146-actual-partner-evidence.json evidence/hundred/stage146-workspaces-runner.log
+          mv stage154-original-funding-admission.json stage154-authentic-hundred-source-audit.json
+          jq -e '
+            .mode=="STAGE154_GENUINE_HISTORICAL_SANDBOX_LOAN_SIZING_AUDIT"
+            and .originalGitHubRunId=="40353279895"
+            and .status=="HISTORICAL_LOCAL_TOKENS_SUFFICIENT_AFTER_FINANCING"
+            and .originalLocalEndToEndRepaid==true
+            and .observedPartnerRemainingDebtShares=="0"
+            and (.estimatedResidualAfterRheaDebtAtomic|tonumber)>0
+            and .realizedNetEconomicProfitVerified==false
+            and .mayBroadcastMainnet==false
+          ' stage154-authentic-ten-source-audit.json
+          jq -e '
+            .mode=="STAGE154_GENUINE_HISTORICAL_SANDBOX_LOAN_SIZING_AUDIT"
+            and .originalGitHubRunId=="40354682373"
+            and .status=="BLOCKED_FINANCING_COST_EXCEEDS_SOURCE_LIQUIDATION"
+            and .estimatedResidualAfterRheaDebtAtomic=="-22367968412531"
+            and .originalLocalEndToEndRepaid==false
+            and .financingEconomicallyCoveredByThisBorrower==false
+            and .realizedNetEconomicProfitVerified==false
+            and .mayBroadcastMainnet==false
+          ' stage154-authentic-hundred-source-audit.json
+      - name: Preserve independent exact loss calculations and original hash links
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage154-original-ten-and-hundred-financing-admission
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            stage154-authentic-ten-source-audit.json
+            stage154-authentic-hundred-source-audit.json
