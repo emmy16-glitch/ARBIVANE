@@ -94,3 +94,12 @@ test('Stage146 copied authentic Workspaces runner parses before any state import
  const run=spawnSync(process.execPath,['--check',file],{encoding:'utf8',timeout:10000});
  assert.equal(run.status,0,run.stderr);
 });
+
+test('Stage146 must preserve independent archival source fallback from successful Stage93',async()=>{
+ const runner=await readFile(new URL('../scripts/stage146-real-funded-workspaces-runner.mjs',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml',import.meta.url),'utf8');
+ assert.match(runner,/e\.STAGE45_ARCHIVAL_FALLBACK_URL/);
+ assert.match(workflow,/STAGE45_ARCHIVAL_FALLBACK_URL:/);
+ assert.match(workflow,/secrets\.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL/);
+ assert.match(workflow,/NEAR_CLI_MAINNET_RPC_SERVER_URL:/);
+});
