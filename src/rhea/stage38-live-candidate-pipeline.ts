@@ -14,6 +14,9 @@ import {classifyStage33Failure} from './stage33-diagnostics.ts';
 const HASH=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/;
 export interface Stage38Options extends Omit<SweepOptions,'batchSize'> {
  maxRiskCandidates:number;minimumPaperGrossUsdE27:string;
+ // Bounded across the shard; default eight for callers not opting into
+ // Stage163. Larger source sweeps may allot enough for all blocked borrowers.
+ maxRecoveryAttempts?:number;
  // Stage159: optional execution-lane route, not a broad market-screening rule.
  // Only source-qualified, same-token LiNEAR proposals can reach the existing
  // Stage37 LiNEAR execution lane. Other candidates stay visible in rows.
@@ -34,6 +37,7 @@ export interface Stage38Result {
  sourceBlockHeight:string;sourceDebtAccounts:number;
  startFinding:number;nextFinding:number;reviewed:number;paperAtRiskFromPreviousScan:number;
  refreshed:number;positiveSourcePlans:number;rejectedByRequiredRoute:number;failedFreshReads:number;
+ recoveryDeferredFindings:number;recoveryBudgetExhausted:boolean;
  boundedRecoveryAttempts:number;recoveredRateLimitedFindings:number;
  recoveredPriceFreshnessFindings:number;
  rows:Stage38Row[];
@@ -87,6 +91,7 @@ export async function qualifyStage38Candidates(
   !number(o.startFinding,0,source.debtAccounts)||
   !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,80)||
   !number(o.concurrency,1,3)||
+  (o.maxRecoveryAttempts!==undefined&&!number(o.maxRecoveryAttempts,0,160))||
   !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27)||
   (o.requiredSameTokenId!==undefined&&o.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('INVALID_STAGE38_CANDIDATE_OPTIONS');
@@ -118,7 +123,8 @@ export async function qualifyStage38Candidates(
  // A narrower caller-defined cap must fail CLOSED rather than pretending all
  // at-risk accounts were checked. No uncontrolled fan-out: concurrency <= 3.
  if(risk.length>o.maxRiskCandidates)return {...base,
-  status:'BLOCKED_CANDIDATE_LIMIT',refreshed:0,positiveSourcePlans:0,rejectedByRequiredRoute:0,failedFreshReads:0,
+  status:'BLOCKED_CANDIDATE_LIMIT',refreshed:0,positiveSourcePlans:0,rejectedByRequiredRoute:0,
+  failedFreshReads:0,recoveryDeferredFindings:0,recoveryBudgetExhausted:false,
   rows:[],bestProposal:null,sandboxPlanReady:false};
  // Every authentic at-risk finding in the completed source window must receive
  // a fresh source evaluation, including cohorts larger than the old cap of 12.
@@ -184,42 +190,48 @@ export async function qualifyStage38Candidates(
  // Stage94: an authentic quote may be stale at the first read even though
  // the earlier Pyth classification still reports risk. Never waive contract
  // valid_seconds, confidence bands, source block pinning, or exact sizing.
- // Retry at most twice per affected borrower; each attempt fetches a NEW
- // finalized block and verifies the original deployed source again.
- // Price freshness and HTTP 429 retries share one strict eight-attempt budget.
+ // Stage163: two recovery rounds, at most once per borrower in each round.
+ // The old eight-attempt shard budget exhausted two retries on only the first
+ // four accounts and could abandon another seven proven at-risk accounts.
+ // A bounded operator budget (default eight, Stage157 forty) is still shared
+ // by the entire shard. No retries on malformed/altered source or stale
+ // information without re-reading the current finalized tip.
+ const maxRecoveryAttempts=o.maxRecoveryAttempts??8;
  let boundedRecoveryAttempts=0,recoveredRateLimitedFindings=0;
  let recoveredPriceFreshnessFindings=0;
  const recoverable=new Set(['HTTP_RATE_LIMIT_OR_TIMEOUT','PYTH_PRICE_STALE_OR_UNCERTAIN']);
- for(let i=0;i<risk.length&&boundedRecoveryAttempts<8;i++){
-  const firstReason=rows[i]?.reasonCode;
-  if(rows[i]?.status!=='BLOCKED_FRESH_READ'||!firstReason||
-   !recoverable.has(firstReason))continue;
-  for(let attempt=0;attempt<2&&boundedRecoveryAttempts<8;attempt++){
-   const reason=rows[i]?.reasonCode;
-   if(reason!==firstReason)break;
-   // Respect 429 cooling periods; a stale feed is retried only after a
-   // bounded delay, never by relaxing the historical price timestamp.
-   const waitMs=reason==='PYTH_PRICE_STALE_OR_UNCERTAIN'?
-    4000*2**attempt:
-    Math.max(1500*2**attempt,retryAfterMs[i]??0);
-   if(waitMs>30000)break;
+ const firstReasons=rows.map(row=>row?.status==='BLOCKED_FRESH_READ'?row.reasonCode:null);
+ const cooldownDeferred=new Set<number>();
+ for(let round=0;round<2&&boundedRecoveryAttempts<maxRecoveryAttempts;round++){
+  for(let i=0;i<risk.length&&boundedRecoveryAttempts<maxRecoveryAttempts;i++){
+   const firstReason=firstReasons[i];
+   if(!firstReason||!recoverable.has(firstReason)||cooldownDeferred.has(i)||
+    rows[i]?.status!=='BLOCKED_FRESH_READ'||rows[i]?.reasonCode!==firstReason)continue;
+   const waitMs=firstReason==='PYTH_PRICE_STALE_OR_UNCERTAIN'?
+    4000*2**round:
+    Math.max(1500*2**round,retryAfterMs[i]??0);
+   // Honor provider cooldown: no quick retry against a 90-second Retry-After.
+   // Record this as deferred for a future fresh run, not as ineligible debt.
+   if(waitMs>30000){cooldownDeferred.add(i);continue;}
    await delay(waitMs);
    boundedRecoveryAttempts++;
    await assess(i);
    if(rows[i]?.status!=='BLOCKED_FRESH_READ'){
-    if(firstReason==='HTTP_RATE_LIMIT_OR_TIMEOUT')
-     recoveredRateLimitedFindings++;
+    if(firstReason==='HTTP_RATE_LIMIT_OR_TIMEOUT')recoveredRateLimitedFindings++;
     else recoveredPriceFreshnessFindings++;
-    break;
    }
-   if(rows[i]?.reasonCode!==firstReason)break;
   }
  }
+ const recoveryDeferredFindings=rows.filter((row,i)=>row?.status==='BLOCKED_FRESH_READ'&&
+  firstReasons[i]!==null&&recoverable.has(firstReasons[i]!)).length;
+ const recoveryBudgetExhausted=boundedRecoveryAttempts>=maxRecoveryAttempts&&
+  recoveryDeferredFindings>0;
  proposals.sort((a,b)=>BigInt(b.paperGrossUsdE27??'0')>BigInt(a.paperGrossUsdE27??'0')?1:
   BigInt(b.paperGrossUsdE27??'0')<BigInt(a.paperGrossUsdE27??'0')?-1:0);
  return {...base,status:proposals.length?'SANDBOX_PLAN_READY_NOT_AUTHORIZED':'NO_EXECUTABLE_SOURCE_REFERENCE',
   refreshed:risk.length,rejectedByRequiredRoute,boundedRecoveryAttempts,recoveredRateLimitedFindings,
   recoveredPriceFreshnessFindings,positiveSourcePlans:proposals.length,
   failedFreshReads:rows.filter(x=>x.status==='BLOCKED_FRESH_READ').length,
+  recoveryDeferredFindings,recoveryBudgetExhausted,
   rows,bestProposal:proposals[0]??null,sandboxPlanReady:proposals.length>0};
 }
