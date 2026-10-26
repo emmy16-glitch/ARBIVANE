@@ -25,6 +25,7 @@ on:
       - 'scripts/stage89-targeted-wnear-clone.mjs'
       - 'scripts/stage91-targeted-linear-token.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
+      - 'src/rhea/stage48-finalized-sandbox-witness.ts'
 permissions:
   contents: read
   actions: read
@@ -254,6 +255,7 @@ jobs:
             stage129-finalized-transaction.json
             stage116-signed-transaction.json
             stage116-before-state.json
+            stage131-immediate-after-state.json
             stage116-after-state.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
