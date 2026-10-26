@@ -177,7 +177,8 @@ test('Stage124 bounded repay preserves source sizing without imposing unpayable 
   const p=buildStage37SandboxPlan(q);
   assert.deepEqual(p.actions[1].Liquidate.in_assets,[{token_id:q.repay.tokenId,max_amount:q.repay.amountLendingInternalAtomic}]);
   assert.equal(p.actions[0].Borrow.amount,q.repay.amountLendingInternalAtomic);
-  assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+  assert.equal(p.actions[2].Repay.amount,undefined);
+  assert.equal(p.actions[2].Repay.max_amount,undefined);
   assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
  assert.equal(p.actions[3].Withdraw.amount,undefined);
   assert.equal(p.depositYocto,'1');assert.equal(p.maySignMainnet,false);
