@@ -210,3 +210,38 @@ test('Stage72 uses only pinned active Pyth storage clones with cross-token and S
  assert.ok(script.includes('clonePinnedContractWithState'));
  assert.ok(script.includes('STAGE37_ALLOW_SANDBOX_MUTATION'));
 });
+
+
+test('Stage123 accepts only genuine independently attested temporal accrual during receipt inspection',()=>{
+ const raw={final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts_outcome:[receipt({SuccessValue:''})],
+  receipts:[callbackReceipt('4'.repeat(43))]};
+ const observation={pinnedConfigMatches:true,pinnedBorrowerMatches:false,
+  temporalAccrualVerified:true,importedContractCount:4,allStoredKeysAttested:false};
+ const reported=summarizeStage37SandboxOutcome(raw,observation);
+ assert.equal(reported.status,'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF');
+ assert.equal(reported.attemptedTransaction,true);
+ assert.ok(reported.blockers.includes('BORROWER_TEMPORAL_ACCRUAL_PROVED_NOT_EXACT_PINNED_VIEW_PARITY'));
+ for(const change of [
+  {temporalAccrualVerified:false},
+  {temporalAccrualVerified:undefined},
+  {pinnedConfigMatches:false},
+  {importedContractCount:2},
+ ]){
+  const r=summarizeStage37SandboxOutcome(raw,{...observation,...change});
+  assert.equal(r.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
+  assert.equal(r.attemptedTransaction,false);
+ }
+});
+
+test('Stage123 preserves machine-readable process results separate from Workspaces log stdout',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
+ assert.ok(script.includes("writeFile('stage37-process-result.json'"));
+ assert.ok(workflow.includes('cp stage69-sandbox-actual.json stage69-sandbox-runner.log'));
+ assert.ok(workflow.includes('cp stage37-process-result.json stage69-sandbox-actual.json'));
+ assert.ok(workflow.includes('STAGE123_CANONICAL_SANDBOX_RESULT_MISSING'));
+ assert.ok(workflow.includes('stage37-process-result.json'));
+ assert.equal(buildStage37SandboxPlan(proposal()).depositYocto,'1');
+});
