@@ -38,7 +38,7 @@ jobs:
       - run: |
           set -euo pipefail
           node --check scripts/stage157-large-source-liquidation-gate.mjs
-          node --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs
+          node --experimental-strip-types --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs
   source_attested_large_candidates:
     if: github.event_name != 'pull_request'
     needs: source_gate_regression
