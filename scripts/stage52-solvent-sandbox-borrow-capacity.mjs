@@ -80,7 +80,11 @@ export async function attestStage52BorrowCollateralCapacity({
   proposal.blockHeight!==String(blockHeight)||
   !ID.test(plan.actions?.[0]?.Borrow?.token_id)||
   proposal.repay?.tokenId!==plan.actions[0].Borrow.token_id||
-  proposal.repay?.amountLendingInternalAtomic!==plan.actions[0].Borrow.amount)
+  proposal.repay?.amountLendingInternalAtomic!==plan.actions[1]?.Liquidate?.in_assets?.[0]?.amount||
+  !attestStage125ActorBorrowCushion(plan,plan.actions[0].Borrow.amount,
+   plan.actions[1].Liquidate.in_assets[0].amount,
+   plan.actions[1].Liquidate.out_assets?.[0]?.amount,
+   plan.actions[1].Liquidate.out_assets?.[0]?.token_id===plan.actions[0].Borrow.token_id))
   throw Error('STAGE52_UNTRUSTED_SOURCE_SIZED_SANDBOX_ROUTE');
  const lender=contracts.get(plan.lendingContract);
  const oracle=contracts.get('aggregate-oracle.near');
