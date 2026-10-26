@@ -88,6 +88,24 @@ export function stage148BoundDebtTopup({debtSharesAtomic,debtBalanceAtomic,
   throw Error('STAGE148_DUST_BUDGET_OR_ACTOR_RESIDUAL_EXCEEDED');
  return add.toString();
 }
+/** Large financing test: 100 genuine disposable LiNEAR token units (24
+ * decimals). The source-authenticated borrower liquidation stays tiny and
+ * unchanged, while all unused supplied principal must be withdrawn.
+ */
+export function stage150ChooseLargeLocalPrincipal({env,sourceBorrowAmountInternal}){
+ const baseline=balance(sourceBorrowAmountInternal,'SOURCE_BORROW');
+ if(env?.STAGE150_LARGE_SANDBOX!=='true')
+  return {enabled:false,borrowInternalAtomic:baseline.toString()};
+ if(env?.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+  env?.EXECUTION_ENABLED!=='false'||
+  env?.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'||
+  env?.NEAR_PRIVATE_KEY||env?.MAINNET_PRIVATE_KEY||env?.NEAR_ACCOUNT_ID)
+  throw Error('STAGE150_NON_LOCAL_BORROW_FORBIDDEN');
+ const target=100n*10n**24n;
+ if(baseline===0n||baseline>=target)
+  throw Error('STAGE150_SOURCE_BORROW_NOT_SMALLER_THAN_LARGE_TEST');
+ return {enabled:true,borrowInternalAtomic:target.toString()};
+}
 function hasZeroCollateral(account){
  const positions=account?.positions;
  if(!positions||typeof positions!=='object'||Array.isArray(positions))return false;
@@ -169,8 +187,17 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
  if(!token||!lending||token.accountId!=='linear-protocol.near'||
   lending.accountId!=='contract.main.burrow.near')
   throw Error('STAGE146_MISSING_IMPORTED_REAL_RHEA_AND_LINEAR');
+ const large=stage150ChooseLargeLocalPrincipal({
+  env:process.env,sourceBorrowAmountInternal:loan.amount
+ });
+ const chosenBorrow=large.borrowInternalAtomic;
  const result={
   mode:'STAGE146_REAL_LOCAL_WORKSPACES_PARTNER_FINANCING_ATTEMPT',
+  stage150LargeFundingEnabled:large.enabled,
+  stage150TargetLoanTokenAtomic:large.enabled?chosenBorrow:null,
+  stage150RemainingRheaSupplyReclaimed:false,
+  stage150BorrowedFtLargeAmountVerified:false,
+  stage150ActualReturnedUnusedSupplyAtomic:null,
   chain:'NEAR_SANDBOX',sourceBlock:plan.mainnetSourceBlockHeight,
   borrowerAccountId:plan.borrowerAccountId,
   partnerAccountId:partner.accountId,
@@ -286,8 +313,8 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   await guard('PARTNER_REAL_RHEA_BORROW_AND_WITHDRAW',async()=>{
    result.receiptProofs.partnerBorrow=await call(partner,lending,'execute_with_pyth',{
     actions:[
-     {Borrow:{token_id:'linear-protocol.near',amount:loan.amount}},
-     {Withdraw:{token_id:'linear-protocol.near',max_amount:loan.amount}}
+     {Borrow:{token_id:'linear-protocol.near',amount:chosenBorrow}},
+     {Withdraw:{token_id:'linear-protocol.near',max_amount:chosenBorrow}}
     ]
    });
    const now=balance(await ft(partner.accountId),'PARTNER_FT_AFTER_BORROW');
@@ -295,6 +322,12 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
    if(now<=partnerFtBefore||debt===0n)
     throw Error('STAGE146_PARTNER_BORROW_NOT_SPENDABLE_FT');
    result.observedPartnerIssuedLiNEARAtomic=(now-partnerFtBefore).toString();
+   if(large.enabled){
+    const actual=now-partnerFtBefore;
+    if(actual<100n*10n**24n-10n**20n||actual>100n*10n**24n)
+     throw Error('STAGE150_LARGE_RHEA_BORROW_FT_NOT_DELIVERED');
+    result.stage150BorrowedFtLargeAmountVerified=true;
+   }
    await save();
   });
   const principal=BigInt(result.observedPartnerIssuedLiNEARAtomic);
@@ -337,6 +370,33 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
     throw Error('STAGE146_LIQUIDATOR_CREATED_UNEXPECTED_RHEA_DEBT');
    result.observedLiquidationDebtDecreaseShares=debtReduction.toString();
    result.observedLiquidationCollateralDecreaseShares=collateralReduction.toString();
+   await save();
+  });
+  if(large.enabled)await guard('STAGE150_WITHDRAW_UNUSED_LARGE_SUPPLIED_LINEAR',async()=>{
+   // Source borrower limits remain unchanged. This explicitly returns ALL
+   // unused actual supplied token funding before repaying partner.
+   const actorBefore=await snapshot(liquidator.accountId);
+   const supplyBefore=stage146FindLegShares(
+    actorBefore,'supplied','linear-protocol.near');
+   if(supplyBefore===0n||!hasZeroCollateral(actorBefore)||
+    borrowedShareTotal(actorBefore,'linear-protocol.near')!==0n)
+    throw Error('STAGE150_ACTOR_CANNOT_RECLAIM_UNVERIFIED_SUPPLY');
+   const walletBefore=balance(await ft(liquidator.accountId),'ACTOR_BEFORE_RECOVERY');
+   result.receiptProofs.stage150ReturnUnusedSupply=await call(
+    liquidator,lending,'execute_with_pyth',{
+     actions:[{Withdraw:{token_id:'linear-protocol.near'}}]
+    });
+   const actorAfter=await snapshot(liquidator.accountId);
+   const supplyAfter=stage146FindLegShares(
+    actorAfter,'supplied','linear-protocol.near');
+   const walletAfter=balance(await ft(liquidator.accountId),'ACTOR_AFTER_RECOVERY');
+   if(supplyAfter!==0n||walletAfter<=walletBefore||
+    walletAfter-walletBefore<principal-10n**20n||
+    !hasZeroCollateral(actorAfter)||
+    borrowedShareTotal(actorAfter,'linear-protocol.near')!==0n)
+    throw Error('STAGE150_UNUSED_SUPPLY_NOT_RETURNED_AS_GENUINE_FT');
+   result.stage150ActualReturnedUnusedSupplyAtomic=(walletAfter-walletBefore).toString();
+   result.stage150RemainingRheaSupplyReclaimed=true;
    await save();
   });
   await guard('ACTUAL_FT_REPAYMENT_TO_EXTERNAL_PARTNER_ACCOUNT',async()=>{
