@@ -237,6 +237,10 @@ jobs:
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
             stage124-rhea-supplied-prefund.json
+            stage124-raw-borrow-transaction.json
+            stage124-final-borrow-transaction.json
+            stage124-raw-supply-transaction.json
+            stage124-final-supply-transaction.json
             stage49-wnear-transfer-receipt.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json

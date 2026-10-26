@@ -1,3 +1,4 @@
+import {writeFile} from 'node:fs/promises';
 /** Stage124: fund the liquidator's genuine Rhea *supplied* LiNEAR balance.
  * Borrow creates a token withdrawal, not internal supply. After finality,
  * return the real borrowed FT via ft_transfer_call before Liquidate.
@@ -27,10 +28,10 @@ function debt(account,tokenId){
 function supply(account,tokenId){
  return rows(account?.supplied,'SUPPLIED',tokenId);
 }
-async function finalized(raw,provider,actorId,label){
+export async function stage124FinalizeSandboxTransaction(raw,provider,actorId,label){
  let v=raw?.result??raw;
  const error=()=>Error('STAGE124_'+label+'_UNVERIFIED_RECEIPTS');
- if(!v||!['FINAL','EXECUTED_OPTIMISTIC'].includes(v.final_execution_status)||
+ if(!v||!['FINAL','EXECUTED_OPTIMISTIC','EXECUTED'].includes(v.final_execution_status)||
   !Array.isArray(v.receipts_outcome)||v.receipts_outcome.length===0)
   throw error();
  if((v.status&&Object.hasOwn(v.status,'Failure'))||
@@ -48,6 +49,12 @@ async function finalized(raw,provider,actorId,label){
    ]);
   }finally{clearTimeout(timer);}
  }
+ // Require the final response to attest the SAME signed local transaction.
+ const initial=raw?.result??raw;
+ if(typeof initial?.transaction?.hash!=='string'||
+  v?.transaction?.hash!==initial.transaction.hash||
+  v?.transaction?.signer_id!==actorId)
+  throw error();
  if(v.final_execution_status!=='FINAL'||!Object.hasOwn(v.status??{},'SuccessValue')||
   !Array.isArray(v.receipts_outcome)||v.receipts_outcome.length===0||
   v.receipts_outcome.some(x=>x.outcome?.status?.Failure||
@@ -88,7 +95,13 @@ export async function prefundStage124RheaSupply({
  const borrowRaw=await actor.callRaw(lending,plan.method,{
   actions:[plan.actions[0]],
  },{gas:300000000000000n,attachedDeposit:1n});
- const borrowFinal=await finalized(borrowRaw,provider,actor.accountId,'BORROW');
+ // Persist the authentic signed local outcome BEFORE final-status checks;
+ // even rejected or provisional transactions remain independently inspectable.
+ await writeFile('stage124-raw-borrow-transaction.json',
+  JSON.stringify(borrowRaw?.result??borrowRaw,null,2)+'\n');
+ const borrowFinal=await stage124FinalizeSandboxTransaction(borrowRaw,provider,actor.accountId,'BORROW');
+ await writeFile('stage124-final-borrow-transaction.json',
+  JSON.stringify(borrowFinal,null,2)+'\n');
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
  if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
@@ -97,7 +110,11 @@ export async function prefundStage124RheaSupply({
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
   receiver_id:lending.accountId,amount:amount.toString(),msg:'',
  },{gas:200000000000000n,attachedDeposit:1n});
- const depositFinal=await finalized(depositRaw,provider,actor.accountId,'SUPPLY');
+ await writeFile('stage124-raw-supply-transaction.json',
+  JSON.stringify(depositRaw?.result??depositRaw,null,2)+'\n');
+ const depositFinal=await stage124FinalizeSandboxTransaction(depositRaw,provider,actor.accountId,'SUPPLY');
+ await writeFile('stage124-final-supply-transaction.json',
+  JSON.stringify(depositFinal,null,2)+'\n');
  const [funded,ftFunded]=await Promise.all([readPositions(),readFt()]);
  const debtAfter=debt(funded,tokenId);
  const suppliedAfter=supply(funded,tokenId);
