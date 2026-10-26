@@ -286,7 +286,8 @@ test('Stage159 selects smaller eligible LiNEAR proposal over larger unsupported 
  assert.equal(result.positiveSourcePlans,1);
  assert.equal(result.rejectedByRequiredRoute,1);
  assert.equal(result.refreshed,2);
- assert.ok(result.rows.every(x=>x.status==='FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'));
+ assert.equal(result.rows[0].status,'FRESH_SOURCE_UNSUPPORTED_SANDBOX_ROUTE');
+ assert.equal(result.rows[1].status,'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY');
  assert.equal(result.maySignMainnet,false);
 });
 test('Stage159 never authorizes Sandbox when every positive proposal is unsupported',async()=>{
