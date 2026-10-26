@@ -231,3 +231,32 @@ test('Stage122 permits only attested temporal accrual when authentic source view
   assert.equal(blocked.attemptedTransaction,false);
  }
 });
+
+test('Stage124 authentic failed child receipt remains a failure if Workspaces omits callback definitions',()=>{
+ const child=receipt({Failure:{ActionError:{FunctionCallError:{
+  ExecutionError:'internal_repay: Not enough supplied balance'
+ }}}},'5'.repeat(43));
+ const raw={final_execution_status:'EXECUTED',status:{SuccessValue:''},
+  receipts_outcome:[receipt({SuccessValue:''}),child]};
+ const r=summarizeStage37SandboxOutcome(raw,{
+  pinnedConfigMatches:true,pinnedBorrowerMatches:false,
+  temporalAccrualVerified:true,importedContractCount:4,allStoredKeysAttested:false,
+ });
+ assert.equal(r.status,'SANDBOX_RECEIPT_FAILURE');
+ assert.equal(r.attemptedTransaction,true);
+ assert.equal(r.transactionFinal,false);
+ assert.equal(r.transactionExecutionStatus,'EXECUTED');
+ assert.equal(r.failedReceiptCount,1);
+ assert.equal(r.callbackReceiptCount,0);
+ assert.equal(r.actualRheaSettlementVerified,undefined);
+ assert.ok(r.blockers.includes('SANDBOX_AUTHENTIC_FAILED_CHILD_RECEIPT'));
+ assert.equal(JSON.stringify(r).includes('internal_repay'),false);
+});
+test('Stage124 never treats absent callback definitions as successful settlement',()=>{
+ assert.throws(()=>summarizeStage37SandboxOutcome({
+  final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts_outcome:[receipt({SuccessValue:''})],
+ },{pinnedConfigMatches:true,pinnedBorrowerMatches:true,
+  importedContractCount:4,allStoredKeysAttested:false,
+ }),/SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT/);
+});
