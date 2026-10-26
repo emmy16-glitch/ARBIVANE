@@ -72,6 +72,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage166](docs/STAGE166_PINNED_DERIVED_PRICING_READ_RECOVERY.md) addresses the original [#40387459139](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40387459139) result: Stage165 successfully imported original deployed `meta-pool.near` with 62,971 storage keys and passed Stage51 LiNEAR Pyth parity, but a subsequent standalone derived-price read failed before the local transaction (`STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED`). An **independent archival, exact-block read fallback is now allowed only for classified transient RPC errors**. Real contract rejection, invalid oracle ratios, block drift or missing source data still block. Tests alone do not demonstrate actual settlement, real loan repayment or profit, and mainnet spending remains disabled.
 
+## Stage168 — fail-closed wNEAR SDK import recovery
+
+[Stage168](docs/STAGE168_WNEAR_PINNED_WASM_RPC_FAILOVER.md) addresses a verified original [Stage93 run #40400219939](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40400219939): source-backed candidate checks passed, but the NEAR Workspaces SDK failed to import pinned `wrap.near` code after provider **JSON-RPC -429 rate limiting**. The resulting clone failure was **before** local funding or liquidation. The new bounded SDK import fallback reads unchanged deployed code at the same pinned block from an independent archival endpoint, verifies the original code hash and all cloned FT state, and blocks on provider exhaustion. Its regression tests reject false success, changing contract code or deterministic source errors. No mainnet spending or realized profit is enabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |
