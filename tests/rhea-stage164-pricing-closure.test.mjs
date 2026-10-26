@@ -118,3 +118,60 @@ test('Stage165 rejects incomplete or forged pinned borrower position data before
   borrowerPositions:{positions:{REGULAR:{collateral:[]}}}}),
   /STAGE165_INVALID_PINNED_BORROWER_POSITION/);
 });
+
+
+test('Stage166 falls back only on transient transport errors at identical historic block',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const baseHarness=harness('1250000000000000000000000');
+ let failCalls=0,fallbackCalls=0;
+ const primary={view:async()=>{failCalls++;throw new (await import('../src/rhea/rpc.ts')).NearRpcHttpError(429,'0');}};
+ const fallback={view:async(id,method,args,block)=>{
+  fallbackCalls++;
+  assert.equal(block,height);
+  return baseHarness.rpc.view(id,method,args,block);
+ }};
+ const result=await attestStage164PricingClosure({
+  ...baseHarness,rpc:primary,fallbackRpc:fallback,dependencies,
+ });
+ assert.equal(failCalls,2);
+ assert.equal(fallbackCalls,2);
+ assert.equal(result.sourceFallbackReads,2);
+ assert.equal(result.allSourceReadsPinned,true);
+ assert.equal(result.actualLiquidationVerified,false);
+ assert.equal(result.mayBroadcastMainnet,false);
+});
+test('Stage166 never uses archival fallback to override real contract errors',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ let fallbackCalled=0;
+ const fallbackRpc={view:async()=>{fallbackCalled++;return {blockHeight:String(height),value:'123'};}};
+ const rpc={view:async()=>{throw Error('contract view panicked');}};
+ await assert.rejects(()=>attestStage164PricingClosure({
+  ...harness(),rpc,fallbackRpc,dependencies,
+ }),/STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED/);
+ assert.equal(fallbackCalled,0);
+});
+test('Stage166 does not accept mismatched archival ratios, stale heights or provider failures',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ const rpc={view:async()=>{throw new NearRpcHttpError(503,'0');}};
+ let calls=0;
+ const fallbackRpc={view:async()=>{calls++;return {blockHeight:String(height+1),value:'1250000000000000000000000'};}};
+ await assert.rejects(()=>attestStage164PricingClosure({...harness(),
+  rpc,fallbackRpc,dependencies}),/STAGE164_PINNED_SOURCE_RATIO_BLOCK_DRIFT/);
+ assert.equal(calls,1);
+ await assert.rejects(()=>attestStage164PricingClosure({...harness(),
+  rpc,fallbackRpc:{view:async()=>({blockHeight:String(height),value:'8'})},dependencies}),
+  /STAGE164_DERIVED_PRICE_SOURCE_CLONE_MISMATCH/);
+ await assert.rejects(()=>attestStage164PricingClosure({...harness(),
+  rpc,fallbackRpc:{view:async()=>{throw Error('provider unavailable');}},dependencies}),
+  /STAGE166_PINNED_ARCHIVAL_RATIO_FALLBACK_FAILED/);
+});
+test('Stage166 keeps archival view parity before funding and transaction submission',async()=>{
+ const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(runner.includes("fallbackRpc:new ResilientNearReadOnlyRpc(new NearReadOnlyRpc("));
+ assert.ok(runner.indexOf('attestStage164PricingClosure({')<
+  runner.indexOf('sandboxTransactionSubmitted=true'));
+ assert.ok(runner.indexOf('attestStage164PricingClosure({')<
+  runner.indexOf('seedSandboxLiquidatorWithWrappedNear({'));
+ assert.ok(!runner.includes('broadcast_tx'));
+});

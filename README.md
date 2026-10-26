@@ -68,6 +68,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage164](docs/STAGE164_DERIVED_PRICE_CLONE_CLOSURE.md) addresses the first genuine new-source LiNEAR attempt that reached Rhea's Sandbox callback: [run #40382961811](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40382961811) failed because **`meta-pool.near` was not cloned**, and the deployed Rhea contract invoked `get_st_near_price` when pricing collateral. Its prior LiNEAR oracle parity and actor funding checks passed, but no liquidation/repayment completed. The new clone closure imports all recognized source-declared derived pricing dependencies, compares each pinned source price with its original-code Sandbox clone, and refuses execution when any dependency is missing or mismatched. No fake contracts, prices, transaction approval or mainnet spending.
 
+## Stage166 — source-pinned derived-price RPC recovery
+
+[Stage166](docs/STAGE166_PINNED_DERIVED_PRICING_READ_RECOVERY.md) addresses the original [#40387459139](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40387459139) result: Stage165 successfully imported original deployed `meta-pool.near` with 62,971 storage keys and passed Stage51 LiNEAR Pyth parity, but a subsequent standalone derived-price read failed before the local transaction (`STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED`). An **independent archival, exact-block read fallback is now allowed only for classified transient RPC errors**. Real contract rejection, invalid oracle ratios, block drift or missing source data still block. Tests alone do not demonstrate actual settlement, real loan repayment or profit, and mainnet spending remains disabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |

@@ -314,6 +314,12 @@ async function main(){
  // Rhea may call while valuing unrelated borrower collateral on callback.
  const derivedParity=await attestStage164PricingClosure({
   rpc,contracts,blockHeight:block,dependencies:priceClosure.dependencies,
+  // Stage166: independent archival SAME-BLOCK read fallback, only after a
+  // classified transient primary RPC failure. No unpinned reads or fake prices.
+  fallbackRpc:new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(
+   e.STAGE45_ARCHIVAL_FALLBACK_URL||'https://archival-rpc.mainnet.near.org'),{
+   maxRetries:1,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:16,
+  }),
  });
  await writeFile('stage164-derived-price-parity.json',
   JSON.stringify(derivedParity,null,2)+'\n');

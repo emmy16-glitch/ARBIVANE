@@ -11,6 +11,9 @@ const ID=/^[a-z0-9._-]{2,64}$/;
 const KNOWN_EXTRA=new Set(['get_st_near_price','get_nearx_price','ft_price',
  'get_high_precision_virtual_price']);
 const UNITS=/^[1-9][0-9]{0,77}$/;
+// A fallback is only permitted for a recoverable read-only RPC transport
+// failure, never when original code rejects its call or a quote changes.
+import {isTransientNearRpcError} from '../src/rhea/resilient-readonly-rpc.ts';
 function obj(x){return x!==null&&typeof x==='object'&&!Array.isArray(x);}
 /** Stage165: source-pinned account position closure, not every Rhea asset. */
 export function selectStage164PricingClosure({baseIds,priceInfos,borrowerPositions}){
@@ -56,12 +59,15 @@ export function selectStage164PricingClosure({baseIds,priceInfos,borrowerPositio
   throw Error('STAGE164_UNSUPPORTED_DEPENDENCY_CLOSURE_SIZE');
  return {ids,dependencies,borrowerPositionScoped:true};
 }
-export async function attestStage164PricingClosure({rpc,contracts,blockHeight,dependencies}){
+export async function attestStage164PricingClosure({
+ rpc,contracts,blockHeight,dependencies,fallbackRpc=null,
+}){
  if(!rpc||typeof rpc.view!=='function'||!contracts||
   typeof contracts.get!=='function'||!Number.isSafeInteger(blockHeight)||
-  blockHeight<1||!Array.isArray(dependencies)||dependencies.length>6)
+  blockHeight<1||!Array.isArray(dependencies)||dependencies.length>6||
+  (fallbackRpc!==null&&typeof fallbackRpc.view!=='function'))
   throw Error('STAGE164_UNTRUSTED_PINNED_PARITY_CONTEXT');
- let checks=0;
+ let checks=0,sourceFallbackReads=0;
  for(const dep of dependencies){
   if(!dep||!ID.test(dep.contractId)||!KNOWN_EXTRA.has(dep.method))
    throw Error('STAGE164_INVALID_PINNED_CROSSCALL');
@@ -70,7 +76,16 @@ export async function attestStage164PricingClosure({rpc,contracts,blockHeight,de
    throw Error('STAGE164_DERIVED_PRICE_DEPENDENCY_NOT_CLONED');
   let source,local;
   try{source=await rpc.view(dep.contractId,dep.method,{},blockHeight);}
-  catch{throw Error('STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED');}
+  catch(error){
+   // Historical source RPC can be rate-limited even after a complete source
+   // clone. Use an INDEPENDENT archival endpoint for the SAME block only.
+   // Contract panic, invalid view schema or other permanent errors fail shut.
+   if(!fallbackRpc||!isTransientNearRpcError(error))
+    throw Error('STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED');
+   try{source=await fallbackRpc.view(dep.contractId,dep.method,{},blockHeight);}
+   catch{throw Error('STAGE166_PINNED_ARCHIVAL_RATIO_FALLBACK_FAILED');}
+   sourceFallbackReads++;
+  }
   if(source?.blockHeight!==String(blockHeight))
    throw Error('STAGE164_PINNED_SOURCE_RATIO_BLOCK_DRIFT');
   try{local=await clone.view(dep.method,{});}
@@ -83,7 +98,8 @@ export async function attestStage164PricingClosure({rpc,contracts,blockHeight,de
  }
  return {mode:'STAGE164_PINNED_RHEA_DERIVED_PRICE_CLOSURE',
   chain:'NEAR_SANDBOX',blockHeight:String(blockHeight),
-  clonedPricingDependencyCount:checks,
+  clonedPricingDependencyCount:checks,sourceFallbackReads,
+  allSourceReadsPinned:true,
   sourceAndSandboxDerivedPricesMatch:true,
   mutablePricesOrOracleRulesOverridden:false,
   actualLiquidationVerified:false,financingRepaidVerified:false,
