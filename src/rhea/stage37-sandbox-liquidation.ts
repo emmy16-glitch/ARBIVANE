@@ -53,18 +53,23 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   throw Error('STAGE37_REQUIRES_VALID_NONEXECUTABLE_STAGE35_REFERENCE_PROPOSAL');
  const repay=amount(e.repay.amountLendingInternalAtomic),seize=amount(e.seize.amountLendingInternalAtomic);
  const sameToken=e.repay.tokenId===e.seize.tokenId;
- // An authentic same-token route can settle the temporary Sandbox borrow
- // INSIDE the same Rhea execute_with_pyth call, then withdraw only the
- // remaining collateral. This is not a flash loan or mainnet authorisation.
- if(sameToken&&BigInt(seize)<=BigInt(repay))
+ // Source-backed successful Rhea liquidations borrow *slightly more* than
+ // Liquidate.in_assets to cover pool-share rounding. This 10-ppm cushion is
+ // ONLY disposable Sandbox financing; the actual borrower repayment and
+ // seized collateral remain exactly the independently sourced proposal.
+ // Require all extra borrowing to be repaid from the same-token seizure.
+ const repayUnits=BigInt(repay),seizeUnits=BigInt(seize);
+ const cushion=sameToken?(repayUnits+99999n)/100000n:0n;
+ const borrowedUnits=repayUnits+cushion;
+ if(borrowedUnits>U128||sameToken&&seizeUnits<=borrowedUnits)
   throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
- const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
+ const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:borrowedUnits.toString()}};
  const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
   in_assets:[{token_id:e.repay.tokenId,amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
-  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
-  {Withdraw:{token_id:e.seize.tokenId,amount:(BigInt(seize)-BigInt(repay)).toString()}}
+  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:borrowedUnits.toString()}},
+  {Withdraw:{token_id:e.seize.tokenId,amount:(seizeUnits-borrowedUnits).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
  ];
