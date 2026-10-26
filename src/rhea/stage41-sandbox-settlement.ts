@@ -122,7 +122,8 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const liquidationRepay=uint(plan.actions[1].Liquidate.in_assets[0].amount,'LIQUIDATION_REPAY');
  const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
- if(borrowed===0n||liquidationRepay!==borrowed||
+ const cushion=same?(liquidationRepay+99999n)/100000n:0n;
+ if(borrowed===0n||borrowed!==liquidationRepay+cushion||
   (same?(!selfRepay||selfRepay.token_id!==repay||
     uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
     liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
