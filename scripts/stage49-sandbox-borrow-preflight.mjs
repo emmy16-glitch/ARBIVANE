@@ -1,3 +1,4 @@
+import {attestStage125ActorBorrowCushion} from '../src/rhea/stage125-route-margin.ts';
 /** Stage49: compare a genuine Stage37 plan to pinned Rhea pool limits and
  * the disposable local liquidator's actually observed collateral.
  * This is a SANDBOX borrow preflight, not deployed borrowing parity.
@@ -53,7 +54,8 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
-  liquidation.in_assets[0]?.amount!==rawQty||
+  !attestStage125ActorBorrowCushion(plan,rawQty,liquidation.in_assets[0]?.amount,
+   liquidation.out_assets[0]?.amount)||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
