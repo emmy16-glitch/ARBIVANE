@@ -388,6 +388,8 @@ async function main(){
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
  const report=summarizeStage37SandboxOutcome(raw,{
   pinnedConfigMatches,pinnedBorrowerMatches,
+  temporalAccrualVerified:temporalProof?.verified===true&&
+   parityWitness.temporalAccrualVerified===true,
   importedContractCount:contracts.size,allStoredKeysAttested:false,
  });
  await writeFile('stage37-sandbox-execution.json',JSON.stringify(report,null,2)+'\n');
@@ -441,11 +443,13 @@ async function main(){
  // remains BLOCKED, and never produces a completed Stage55 phase artifact.
  const success=stage55.finish({receipt:verifiedReport,settlement});
  await recordStage55(success);
- console.log(JSON.stringify({...verifiedReport,settlementStatus:settlement.status,
+ const processResult={...verifiedReport,settlementStatus:settlement.status,
   borrowerMutationVerified:settlement.borrowerMutationVerified,
   assetTransferObserved:settlement.assetTransferObserved,
   stage55Status:success.status,
-  positiveNetProfitVerified:false},null,2));
+  positiveNetProfitVerified:false};
+ await writeFile('stage37-process-result.json',JSON.stringify(processResult,null,2)+'\n');
+ console.log(JSON.stringify(processResult,null,2));
 }
 main().catch(async err=>{
  if(cloneMonitor)await cloneMonitor.flush().catch(()=>{});
@@ -453,12 +457,14 @@ main().catch(async err=>{
  await recordStage55(failure).catch(()=>{});
  // Bounded, machine-readable error taxonomy only; untrusted RPC/SDK
  // exception strings may contain credentials or hostile provider content.
- console.log(JSON.stringify({mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
+ const processResult={mode:'ARBIVANE_STAGE37_SANDBOX_RESULT',chain:'NEAR_SANDBOX',
   status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF',attemptedTransaction:sandboxTransactionSubmitted,
   sandboxFundingAttempted,stage55Phase:failure.currentPhase,
   stage55ReasonCode:failure.observedFailureCode,
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
-  blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
+  blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']};
+ await writeFile('stage37-process-result.json',JSON.stringify(processResult,null,2)+'\n').catch(()=>{});
+ console.log(JSON.stringify(processResult,null,2));
  process.exitCode=2;
 }).finally(async()=>{
  if(worker){
