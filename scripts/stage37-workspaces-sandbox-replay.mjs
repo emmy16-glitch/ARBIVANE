@@ -432,6 +432,8 @@ async function main(){
   return {borrower,actor:balances[0],repayFt:balances[1],seizeFt:balances[2]};
  };
  const immediate=await snapshotAll();
+ await writeFile('stage131-immediate-state.json',
+  JSON.stringify(immediate,null,2)+'\n');
  let verifiedReport=report,post=immediate;
  if(report.status!=='SANDBOX_RECEIPT_FAILURE'){
   if(!worker?.provider||typeof worker.provider.block!=='function'||
