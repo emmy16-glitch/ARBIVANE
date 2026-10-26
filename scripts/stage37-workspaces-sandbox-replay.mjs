@@ -23,6 +23,7 @@ import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sa
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
+import {stage124PrepareShareSafeBorrow} from './stage124-supplied-shares-safe-borrow.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
@@ -333,8 +334,20 @@ async function main(){
  const actorPositionsForFunding=await lending.view('get_account_all_positions',{
   account_id:actor.accountId,
  });
+ // Stage124: source-approved repay and seize legs NEVER change. Only the
+ // disposable actor's financing loan receives a genuine share-rounding delta,
+ // derived from the just-read LOCAL lending pool, capped at 25% of the
+ // existing same-token gross collateral spread. Cannot fake borrower health.
+ const liveSandboxAssets=await lending.view('get_assets_paged',{});
+ if(plan.actions.length===4){
+  const prepared=stage124PrepareShareSafeBorrow(plan,liveSandboxAssets);
+  plan.actions=prepared.plan.actions;
+  plan.stage124ShareFunding=prepared.witness;
+  await writeFile('stage124-share-rounding-evidence.json',
+   JSON.stringify(prepared.witness,null,2)+'\n');
+ }
  const borrowCapacity=inspectStage49SandboxBorrow({
-  plan,assets:sandboxAssets,actorAccountId:actor.accountId,
+  plan,assets:liveSandboxAssets,actorAccountId:actor.accountId,
   actorPositions:actorPositionsForFunding,
  });
  // Source-pinned, active-Pyth price accounting of the REAL actor collateral:
