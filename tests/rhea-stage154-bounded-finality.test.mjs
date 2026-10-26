@@ -36,10 +36,10 @@ test('Stage154 only advances bounded Sandbox finality between same-hash reads',a
   source.indexOf("const final=await finalFtReceipt"));
  assert.match(scope,/STAGE152_ULTRA_SHORT_LOCAL_CLOCK==='true'/);
  assert.match(scope,/EXECUTION_ENABLED==='false'/);
- assert.match(scope,/provider\.fastForward\(h\+64\)/);
+ assert.match(scope,/stage134AdvanceFinalizedSandbox\(worker\.provider,before\)/);
  assert.match(scope,/provider\.block\(\{finality:'final'\}\)/);
- assert.match(scope,/Number\.isSafeInteger\(h\)/);
- assert.match(scope,/STAGE154_SANDBOX_FINALITY_ADVANCED/);
+ assert.match(scope,/STAGE155_SANDBOX_FINALITY_RECOVERED/);
+ assert.match(scope,/STAGE155_SANDBOX_FINALITY_RECOVERY_FAILED/);
  assert.match(scope,/originalTransactionHash:receiptHash/);
  assert.match(scope,/resolveStage124RheaCallbackReceipts/);
  assert.doesNotMatch(scope,/signer\.callRaw/);
