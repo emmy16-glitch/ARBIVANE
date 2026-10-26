@@ -40,7 +40,7 @@ function persistedShareAccounting(raw:unknown):string|null {
     if(typeof row.token_id!=='string'||tokens.has(row.token_id)||
      typeof row.balance!=='string'||!/^(0|[1-9][0-9]*)$/.test(row.balance)||
      typeof row.shares!=='string'||!/^(0|[1-9][0-9]*)$/.test(row.shares)||
-     typeof row.apr!=='string'||!/^[0-9]+(?:\\.[0-9]+)?$/.test(row.apr))
+     typeof row.apr!=='string'||!/^[0-9]+(?:\.[0-9]+)?$/.test(row.apr))
      return false;
     tokens.add(row.token_id);
     row.balance='ACTUAL_ACCRUED_BALANCE';row.apr='ACCRUED_APR';
