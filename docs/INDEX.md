@@ -18,6 +18,7 @@ This page is the starting point for understanding ARBIVANE **as it exists now**,
 | Which native providers have actually been checked on chain? | [Stage140: read-only provider discovery](STAGE140_NATIVE_PROVIDER_DISCOVERY.md) |
 | How are six documented NEAR contracts and LiNEAR balances strictly qualified? | [Stage141: extended lender qualification](STAGE141_LENDER_QUALIFICATION.md) |
 | How are flash loans separated from externally funded escrow without permission to spend? | [Stage142 financing adapter boundary](STAGE142_FINANCING_ADAPTER.md) |
+| What async financing recovery, partner accounting and production gates are implemented? | [Stages143–145 offline safeguards and unmet on-chain criteria](STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md) |
 | How do the new light-client and budget-checking prototypes work? | [Stage137 note](STAGE137_OUTCOME_MERKLE_AND_MAINNET_POLICY.md) |
 | What research and third-party code informed the design? | [Reuse](REUSE.md) |
 
