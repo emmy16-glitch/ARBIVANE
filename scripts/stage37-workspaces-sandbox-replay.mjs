@@ -8,6 +8,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
 import {ResilientNearReadOnlyRpc} from '../src/rhea/resilient-readonly-rpc.ts';
 import {cloneFailure} from './stage119-clone-failure.mjs';
+import {sourceBackedBorrowShareCushion} from './stage125-source-borrow-share-cushion.mjs';
 import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
@@ -72,6 +73,10 @@ async function main(){
   throw Error('SANDBOX_PROPOSAL_SOURCE_BLOCK_OR_CODE_CHANGED');
  // Reject the known real-world failure where the Borrow leg uses a disabled
  // asset. This pinned permission check is NOT proof of actual wallet liquidity.
+ // Preserve source-confirmed liquidation R/S while cushioning Sandbox actor-only
+ // Borrow/Repay for immutable-pool share rounding. Never patch borrower state.
+ const shareCushion=sourceBackedBorrowShareCushion(plan,assets.value);
+ await writeFile('stage125-actor-cushion.json',JSON.stringify(shareCushion,null,2)+'\n');
  const marketReadiness=inspectStage49RheaAssets(plan,assets.value,block);
  await writeFile('stage49-sandbox-route-preflight.json',
   JSON.stringify(marketReadiness,null,2)+'\n');
