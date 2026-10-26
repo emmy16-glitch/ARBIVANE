@@ -50,7 +50,7 @@ test('failed SDK initialization closes the native server and restores the scoped
  try {
   await assert.rejects(()=>initHistoricalSandbox({Server,SandboxServer:Server,Worker},
    sourceClock(header,header.height),{NEAR_WORKSPACES_NETWORK:'sandbox',EXECUTION_ENABLED:'false',
-    STAGE37_ALLOW_SANDBOX_MUTATION:'true',STAGE115_FAKETIME_LIBRARY:library}),/SDK_STARTUP_FAILED/);
+    STAGE37_ALLOW_SANDBOX_MUTATION:'true',STAGE118_CLOCK_LIBRARY:library}),/SDK_STARTUP_FAILED/);
   assert.equal(closed,1);assert.equal(Server.init,original);
   assert.equal(Server.binPath,'/test/near-sandbox');
   assert.equal(process.env.LD_PRELOAD,priorPreload);
