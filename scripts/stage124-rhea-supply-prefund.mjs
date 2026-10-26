@@ -101,7 +101,9 @@ export async function prefundStage124RheaSupply({
  const [funded,ftFunded]=await Promise.all([readPositions(),readFt()]);
  const debtAfter=debt(funded,tokenId);
  const suppliedAfter=supply(funded,tokenId);
- if(suppliedAfter<amount||debtAfter<amount||
+ // Share conversion may round a real FT deposit down by a tiny amount.
+ // 10 ppm is a hard, deterministic local cap, never synthetic liquidity.
+ if(suppliedAfter*1000000n<amount*999990n||debtAfter<amount||
   number(borrowFt,'BORROW_FT')-number(ftFunded,'FUNDED_FT')!==amount)
   throw Error('STAGE124_REPAY_SUPPLY_OR_CONSERVATION_FAILED');
  const borrowHash=borrowFinal.transaction?.hash??borrowRaw?.result?.transaction?.hash??borrowRaw?.transaction?.hash;
