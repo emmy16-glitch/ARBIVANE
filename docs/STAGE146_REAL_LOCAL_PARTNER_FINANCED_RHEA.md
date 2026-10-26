@@ -1,3 +1,9 @@
+## Stage147 — constrained historical local oracle test
+
+Run [40344009735](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735) and [original evidence](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735/artifacts/12659763226) show the real partner borrow, transfer and Rhea supply succeeded with FINAL Sandbox receipts. The next Rhea Liquidate transaction rejected the original imported Pyth quote: **publish_time is too stale**. No borrower liquidation or partner repayment completed.
+
+Stage147 allows the **explicitly gated local Sandbox** replay to advance its historical wall clock at **0.05x** during the extended funding and liquidation experiment, while retaining the original oracle price bytes, contract WASM and expiry rule. It is not realistic mainnet timing, does not prove current market quote freshness, and is not a lender repayment guarantee. The Stage93 execution mode remains normal speed. The uploaded historical-clock evidence must disclose this experiment. Mainnet spending and payouts remain disabled.
+
 # Stage146 — Actual NEAR Workspaces partner-to-liquidator funding experiment
 
 **26 October 2026. This is an attempted real *local NEAR Workspaces* transaction route, NOT an uncollateralized mainnet flash loan. Status is determined only by the genuine post-merge [Stage146 GitHub Actions workflow](../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml) and its real receipt artifact, never by tests alone.**
