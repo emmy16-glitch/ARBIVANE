@@ -21,6 +21,9 @@ try {
    borrowerAccountId:'9345b3ac35a96e9c9efc6effa5ed50e92ff59a5b31e7b4f2d6f19400c3232899'});
   console.log(JSON.stringify({mode:'STAGE119_NATIVE_WNEAR_IMPORT_NOT_LIQUIDATION',...wrapped.evidence}));
  }
+ const resumed=await replay.startReplayClock();
+ await worker.rootAccount.createSubAccount('resumed-clock',{initialBalance:10n**24n});
+ console.log(JSON.stringify({mode:'STAGE120_FORWARD_ONLY_EXECUTION_CLOCK',...resumed}));
 } catch(error) {
  // This regression uses fixed public RPCs and no wallet credentials. Redact
  // URLs and any injected credential values before retaining the exception.

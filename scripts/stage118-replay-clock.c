@@ -9,8 +9,22 @@
 #include <sys/time.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 static _Atomic uint64_t origin_ns;
+static _Atomic uint64_t execution_ns;
+static int reconstructing(void) {
+ const char *path=getenv("ARBIVANE_REPLAY_PHASE_FILE");
+ if(!path || !*path)return 0;
+ // No stdio/allocator/dlsym in jemalloc's initialization path. A missing or
+ // unreadable control defaults to normal speed, never a freshness bypass.
+ int fd=(int)syscall(SYS_openat,AT_FDCWD,path,O_RDONLY|O_CLOEXEC,0);
+ if(fd<0)return 0;
+ char phase='1';
+ long count=syscall(SYS_read,fd,&phase,1);
+ syscall(SYS_close,fd);
+ return count==1 && phase=='0';
+}
 static uint64_t ns(const struct timespec *t) {
  return (uint64_t)t->tv_sec*1000000000ULL+(uint64_t)t->tv_nsec;
 }
@@ -29,7 +43,21 @@ int clock_gettime(clockid_t id, struct timespec *out) {
  uint64_t now=ns(&mono),expected=0;
  atomic_compare_exchange_strong(&origin_ns,&expected,now);
  uint64_t origin=atomic_load(&origin_ns);
- uint64_t result=anchor+(now>=origin?now-origin:0);
+ int staging=reconstructing();
+ uint64_t transition=atomic_load(&execution_ns);
+ if(!staging && !transition){
+  expected=0;
+  atomic_compare_exchange_strong(&execution_ns,&expected,now);
+  transition=atomic_load(&execution_ns);
+ }
+ // Reconstruction is not elapsed market time. The chain still advances
+ // monotonically at 1/100 speed while authentic state is copied. Once the
+ // execution phase starts it can never return to reconstruction or rewind.
+ uint64_t elapsed;
+ if(transition)elapsed=(transition>=origin?(transition-origin)/100:0)+
+  (now>=transition?now-transition:0);
+ else elapsed=(now>=origin?now-origin:0)/100;
+ uint64_t result=anchor+elapsed;
  out->tv_sec=(time_t)(result/1000000000ULL);
  out->tv_nsec=(long)(result%1000000000ULL);
  return 0;

@@ -7,7 +7,8 @@ import {promisify} from 'node:util';
 
 // A historical replay must use the source chain's time, not the CI runner's
 // wall clock. Only the disposable near-sandbox process receives the adapter.
-// Its clock advances at normal speed; prices and freshness rules are untouched.
+// Reconstruction uses 1/100 speed, then execution resumes normal speed without
+// rewinding. No quote, freshness rule or copied contract state is changed.
 export function sourceClock(header, blockHeight) {
  if(header?.height!==blockHeight||!Number.isSafeInteger(blockHeight)||blockHeight<1||
   !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(header?.hash??'')||
@@ -44,6 +45,8 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
  if(env.NEAR_WORKSPACES_NETWORK!=='sandbox'||env.EXECUTION_ENABLED!=='false'||
   env.STAGE37_ALLOW_SANDBOX_MUTATION!=='true')throw Error('STAGE115_SANDBOX_ONLY');
  const dir=await mkdtemp(join(tmpdir(),'arbivane-clock-'));
+ const phaseFile=join(dir,'phase');
+ await writeFile(phaseFile,'0');
  const library=env.STAGE118_CLOCK_LIBRARY||join(dir,'replay-clock.so');
  if(!env.STAGE118_CLOCK_LIBRARY){
   try{await promisify(execFile)('cc',['-std=c11','-O2','-shared','-fPIC',
@@ -52,7 +55,7 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
  }
  await access(library);
  const Server=pkg.SandboxServer, originalInit=Server.init;
- let worker,serverRef,timer,expired=false;
+ let worker,serverRef,timer,expired=false,ready=false;
  try {
   Server.init=async function(config) {
    const server=await originalInit.call(this,config);
@@ -64,6 +67,7 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
    const binary=Server.binPath, wrapper=join(dir,'near-sandbox');
    await writeFile(wrapper,'#!/bin/sh\nexec env TZ=UTC LD_PRELOAD='+shell(library)+
     ' ARBIVANE_REPLAY_START_NS='+shell((BigInt(clock.startMs)*1000000n).toString())+
+    ' ARBIVANE_REPLAY_PHASE_FILE='+shell(phaseFile)+
     ' '+shell(binary)+' "$@"\n',{mode:0o700});
    const start=server.start;
    server.start=async function() {
@@ -85,8 +89,16 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
   worker=await Promise.race([pending,new Promise((resolve,reject)=>{
    timer=setTimeout(()=>{expired=true;reject(Error('STAGE117_SANDBOX_STARTUP_TIMEOUT'));},90000);
   })]);
-  const witness=attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header);
-  return {worker,witness};
+  const witness={...attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header),
+   clockRate:0.01,clockPhase:'AUTHENTIC_STATE_RECONSTRUCTION',reconstructionClockRate:0.01};
+  const tearDown=worker.tearDown.bind(worker);
+  worker.tearDown=async()=>{try{return await tearDown();}finally{await rm(dir,{recursive:true,force:true});}};
+  ready=true;
+  return {worker,witness,startReplayClock:async()=>{
+   await writeFile(phaseFile,'1');
+   return {...attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header),
+    clockPhase:'HISTORICAL_EXECUTION',reconstructionClockRate:0.01};
+  }};
  } catch(error) {
   if(worker)await worker.tearDown().catch(()=>{});
   else if(serverRef)await serverRef.close().catch(()=>{});
@@ -96,6 +108,6 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
   if(serverRef)await copyFile(join(serverRef.homeDir,'sandboxServer.log'),
    'stage115-native-startup.log').catch(()=>{});
   Server.init=originalInit;
-  await rm(dir,{recursive:true,force:true});
+  if(!ready)await rm(dir,{recursive:true,force:true});
  }
 }
