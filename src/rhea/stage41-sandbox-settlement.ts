@@ -138,10 +138,21 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   const liquidationRepay=uint(inLeg.amount??inLeg.max_amount,'LIQUIDATION_REPAY');
  const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
+ // Exact repayment leaves a one-share residual after genuine Borrow share
+ // rounding. Alternatively permit a BOUNDED Rhea max_amount covering at
+ // most 1 ppm actual internal debt rounding. The source Liquidate amount is
+ // still exact. Never accept unlimited repay or preexisting actor debt.
+ const selfLimit=(selfRepay?.amount===undefined)===(selfRepay?.max_amount===undefined)?
+  null:selfRepay?.amount??selfRepay?.max_amount;
+ const selfRepayValue=selfLimit==null?0n:uint(selfLimit,'ACTOR_REPAY');
+ const bound=borrowed+(borrowed+999999n)/1000000n;
+ const boundedSelfRepay=!!selfRepay&&selfRepay.token_id===repay&&
+  ((selfRepay.amount!==undefined&&selfRepayValue===borrowed)||
+   (selfRepay.max_amount!==undefined&&selfRepayValue>=borrowed&&
+    selfRepayValue<=bound&&selfRepayValue<liquidationSeize));
  if(borrowed===0n||liquidationRepay!==borrowed||
-  (same?(!selfRepay||selfRepay.token_id!==repay||
-    uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
-    liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
+  (same?(!boundedSelfRepay||liquidationSeize<=borrowed||
+    withdrawn!==liquidationSeize-borrowed):
     withdrawn!==liquidationSeize))
   throw Error('STAGE41_INVALID_ATOMIC_ROUTE_AMOUNTS');
  const preDebt=amountIn(scoped(e.borrowerBefore,e.positionId,'borrowed'),repay);
