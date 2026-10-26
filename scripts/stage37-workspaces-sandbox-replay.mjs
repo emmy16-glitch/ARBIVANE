@@ -361,7 +361,6 @@ async function main(){
  // Actual Borrow sends LiNEAR FT to the actor; it does not create Rhea
  // 'supplied' balance for Liquidate. Complete and attest a signed local
  // Borrow -> FT transfer to lending before the settlement transaction.
- await markStage55('SANDBOX_REPAY_SUPPLY_PREFUND');
  const supplyPrefund=await prefundStage124RheaSupply({
   actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
  });
