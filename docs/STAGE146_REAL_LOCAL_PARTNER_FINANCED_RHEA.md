@@ -2,6 +2,14 @@
 
 **26 October 2026. This is an attempted real *local NEAR Workspaces* transaction route, NOT an uncollateralized mainnet flash loan. Status is determined only by the genuine post-merge [Stage146 GitHub Actions workflow](../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml) and its real receipt artifact, never by tests alone.**
 
+## Native Rhea Liquidate JSON encoding correction
+
+Authentic post-merge [run #40342808946](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40342808946) independently verified a complete local Sandbox partner-to-liquidator token transfer and deposit: **1,858,490,264,605,800** LiNEAR atomic credited, **1,858,116,556,301,499** account-level Rhea supplied shares, **0** token wallet balance after deposit. Actual artifact [#12659183550](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40342808946/artifacts/12659183550).
+
+The first real separate liquidator `execute_with_pyth` attempt then returned a genuine contract parse failure: `unknown variant account_id; expected ... Liquidate ...`. This was NOT a liquidation, because Stage146 mistakenly submitted `actions:[{account_id,...},{Withdraw:...}]` instead of `actions:[{Liquidate:{account_id,...}},{Withdraw:...}]`. The new `stage146BuildPartnerFundedLiquidationActions` preserves the **original source-approved Liquidate inner fields** and wraps them in the required enum variant, with an explicit test checking exact ABI output. Re-run needed; do not claim successful liquidation or lender repayment until real final receipt/state checks pass.
+
+---
+
 ## Actual lender issue, executor transfer and Rhea supply — FINAL receipt proof
 
 Live Workspaces [run #40341498348](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40341498348) passed the authenticated historical import. The preserved [artifact #12659333146](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40341498348/artifacts/12659333146) independently establishes *FINAL* original signed receipt references for:
