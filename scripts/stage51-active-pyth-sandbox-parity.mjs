@@ -32,7 +32,19 @@ async function pinned(rpc,id,method,args,block,fallback){
 // IDs, feed identifiers, oracle values, secrets or Wasm panic messages.
 async function local(contract,method,args,viewClass){
  try{return await contract.view(method,args);}
- catch{
+ catch(error){
+  // Classify known runtime failures without publishing RPC URLs or panic data.
+  const message=String(error?.message??'');
+  const classes=[['STALE',/stale|price.*(?:old|expired)|No price.*age/i],
+   ['GAS',/GasExceeded|gas limit|Exceeded the prepaid gas/i],
+   ['PROHIBITED_VIEW',/ProhibitedInView|prohibited.*view/i],
+   ['MISSING_METHOD',/MethodNotFound|method.*not found/i],
+   ['DESERIALIZATION',/deserialize|deserialization/i],
+   ['CONTRACT_PANIC',/Smart contract panicked|GuestPanic/i]];
+  if(viewClass==='ORACLE_FRESH_QUOTE'){
+   const match=classes.find(([,pattern])=>pattern.test(message));
+   if(match)throw Error('STAGE111_SANDBOX_ORACLE_'+match[0]);
+  }
   const known=new Set(['LENDING_CONFIG','LENDING_PYTH_INFO',
    'ORACLE_FRESH_QUOTE','DERIVED_TOKEN_RATIO']);
   if(!known.has(viewClass))throw Error('STAGE51_SANDBOX_VIEW_UNAVAILABLE');
