@@ -20,7 +20,7 @@ export interface SandboxReplayPlan {
   {Borrow:{token_id:string;amount:string}},
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
-  {Repay:{token_id:string;amount:string}},
+  {Repay:{token_id:string;amount?:string;max_amount?:string}},
   {Withdraw:{token_id:string;amount?:string;max_amount?:string}}
  ];
  depositYocto:'1';gasUnits:'300000000000000';
@@ -70,8 +70,15 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
   in_assets:[{token_id:e.repay.tokenId,max_amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
+ // Rhea Borrow converts shares and can create a one-share residual debt
+ // after Repay(amount=borrowed). Cap genuine repayment 1 ppm above the
+ // approved temporary borrow, never touching source Liquidate limit/prices.
+ const roundingCap=BigInt(repay)+(BigInt(repay)+999999n)/1000000n;
+ if(sameToken&&roundingCap>=BigInt(seize))
+  throw Error('STAGE131_UNFUNDED_BORROW_REPAY_ROUNDING_HEADROOM');
  const actions:SandboxReplayPlan['actions']=sameToken?[
-  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
+  borrowAction,liquidationAction,
+  {Repay:{token_id:e.repay.tokenId,max_amount:roundingCap.toString()}},
   {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(seize)-BigInt(repay)).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
