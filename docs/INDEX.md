@@ -19,6 +19,7 @@ This page is the starting point for understanding ARBIVANE **as it exists now**,
 | How are six documented NEAR contracts and LiNEAR balances strictly qualified? | [Stage141: extended lender qualification](STAGE141_LENDER_QUALIFICATION.md) |
 | How are flash loans separated from externally funded escrow without permission to spend? | [Stage142 financing adapter boundary](STAGE142_FINANCING_ADAPTER.md) |
 | What async financing recovery, partner accounting and production gates are implemented? | [Stages143–145 offline safeguards and unmet on-chain criteria](STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md) |
+| What did the stalled 74-block 100-LiNEAR FINAL query prove, and how does Stage156 recover? | [Stage156 original finality failure and bounded Sandbox recovery](STAGE156_SANDBOX_FINALITY_RECOVERY.md) |
 | Why does the original 100-LiNEAR loan fail after exact receipt-based financing charges? | [Original 10/100-token financing admission and Stage153 postmortem](STAGE154_ORIGINAL_FINANCING_ECONOMICS.md) |
 | What did the 10- and 100-LiNEAR genuine Sandbox tests actually prove, and when can funding scale? | [Stage153 financing diagnosis and admission gate](STAGE153_SCALED_FINANCING_DIAGNOSIS.md) |
 | Where are the original funded Workspaces receipts? | [Stage146 genuine local partner-financed liquidation](STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md) |
