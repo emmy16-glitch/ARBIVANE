@@ -1,0 +1,30 @@
+name: Stage142 offline financing boundary
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage142-financing-intent.mjs'
+      - 'tests/rhea-stage142-financing-intent.test.mjs'
+      - '.github/workflows/rhea-stage142-financing-boundary.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage142-financing-intent.mjs'
+      - 'tests/rhea-stage142-financing-intent.test.mjs'
+      - '.github/workflows/rhea-stage142-financing-boundary.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe_financing_plans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/rhea-stage142-financing-intent.test.mjs

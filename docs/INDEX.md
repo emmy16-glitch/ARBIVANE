@@ -17,6 +17,7 @@ This page is the starting point for understanding ARBIVANE **as it exists now**,
 | Can liquidation be done with no capital or a real flash loan? | [Stage139: funding-source verification](STAGE139_FLASH_LIQUIDITY_FINANCING.md) |
 | Which native providers have actually been checked on chain? | [Stage140: read-only provider discovery](STAGE140_NATIVE_PROVIDER_DISCOVERY.md) |
 | How are six documented NEAR contracts and LiNEAR balances strictly qualified? | [Stage141: extended lender qualification](STAGE141_LENDER_QUALIFICATION.md) |
+| How are flash loans separated from externally funded escrow without permission to spend? | [Stage142 financing adapter boundary](STAGE142_FINANCING_ADAPTER.md) |
 | How do the new light-client and budget-checking prototypes work? | [Stage137 note](STAGE137_OUTCOME_MERKLE_AND_MAINNET_POLICY.md) |
 | What research and third-party code informed the design? | [Reuse](REUSE.md) |
 
