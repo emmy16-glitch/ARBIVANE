@@ -169,7 +169,7 @@ const sameAssetPlan=()=>plan({actions:[
   in_assets:[{token_id:repay,amount:'100'}],
   out_assets:[{token_id:repay,amount:'110'}]}},
  {Repay:{token_id:repay,amount:'100'}},
- {Withdraw:{token_id:repay,amount:'10'}}
+ {Withdraw:{token_id:repay,max_amount:'10'}}
 ]});
 test('Stage71 keeps four-action same-token route source-pinned and borrow repaid before surplus withdrawal',()=>{
  const r=inspectStage49RheaAssets(sameAssetPlan(),assets(),221433162);
@@ -183,8 +183,8 @@ test('Stage71 rejects forged or missing self-repay and anything withdrawing borr
  const bad=[
   p=>p.actions[2].Repay.amount='99',
   p=>p.actions[2].Repay.token_id=seize,
-  p=>p.actions[3].Withdraw.amount='110',
-  p=>p.actions[3].Withdraw.amount='0',
+  p=>p.actions[3].Withdraw.max_amount='110',
+  p=>p.actions[3].Withdraw.max_amount='0',
   p=>p.actions[1].Liquidate.out_assets[0].amount='100',
   p=>p.actions.splice(2,1),
  ];
