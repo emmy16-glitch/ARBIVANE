@@ -132,7 +132,7 @@ const failure=(r:ExecutionPythValuationReport,pid:string|null,pairs:number,block
 });
 export function sizeStage35SourceLiquidation(
  evidence:ExecutionPythValuationReport,assets:unknown,
- options:{borrowerAccountId:string;maxRepayBps:number;minimumPaperGrossUsdE27:string},
+ options:{borrowerAccountId:string;maxRepayBps:number;minimumPaperGrossUsdE27:string;requiredSameTokenId?:'linear-protocol.near'},
 ):SourceLiquidationSizing{
  if(!evidence||evidence.mode!=='RHEA_ACTIVE_EXECUTE_WITH_PYTH_VALUATION'||
  evidence.chain!=='NEAR_MAINNET'||evidence.borrowerAccountId!==options.borrowerAccountId||
@@ -145,14 +145,15 @@ export function sizeStage35SourceLiquidation(
  evidence.maySign!==false||evidence.mayBroadcast!==false||
  !Array.isArray(evidence.positions)||evidence.positions.length===0||
  evidence.positions.length!==evidence.candidatePositions||
- !Number.isSafeInteger(options.maxRepayBps)||options.maxRepayBps<5||options.maxRepayBps>200)
+ !Number.isSafeInteger(options.maxRepayBps)||options.maxRepayBps<5||options.maxRepayBps>200||
+ (options.requiredSameTokenId!==undefined&&options.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE');
  const minGross=usd(options.minimumPaperGrossUsdE27,'MINIMUM_PAPER_GROSS');
  const vol=actionablePools(assets);
  let best:{p:typeof evidence.positions[number];repay:Leg;seize:Leg;
   qtyIn:bigint;qtyOut:bigint;repaidUsd:bigint;seizedUsd:bigint;
   newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
- let considered=0;
+ let considered=0,matchingRoutePairs=0;
  let permittedPairs=0,liquidPairs=0,validRuleScenarios=0,positiveGrossScenarios=0;
  for(const p of evidence.positions){
   if(p.status!=='PAPER_AT_RISK_UNAPPROVED')continue;
@@ -172,6 +173,12 @@ export function sizeStage35SourceLiquidation(
    for(const collateral of legs.filter(x=>x.role==='collateral')){
     considered++;
     if(considered>256)throw Error('EXCESSIVE_LIQUIDATION_PAIRS');
+    // Stage162: restrict the *sizing search itself* to the independently
+    // exercised Sandbox route. Filtering only the top proposal afterwards
+    // can hide a smaller valid LiNEAR/LiNEAR pair within one borrower.
+    if(options.requiredSameTokenId&&
+      (debt.token!==options.requiredSameTokenId||collateral.token!==options.requiredSameTokenId))continue;
+    matchingRoutePairs++;
     // A high paper spread is worthless if Rhea has disabled Borrow or
     // Withdraw for either asset. Do not discard other valid pairs because
     // the highest reference-profit pair would fail the deployed preflight.
@@ -240,6 +247,8 @@ export function sizeStage35SourceLiquidation(
   }
  }
  if(!best)return failure(evidence,null,considered,[
+  options.requiredSameTokenId&&considered>0&&matchingRoutePairs===0?
+   'NO_MATCHING_SUPPORTED_SAME_TOKEN_ROUTE':
   permittedPairs===0?'NO_BORROW_WITHDRAW_PERMITTED_ASSET_PAIR':
   liquidPairs===0?'NO_SOURCE_POOL_BORROW_HEADROOM':
   validRuleScenarios===0?'FOUR_SOURCE_RULES_REJECTED_ALL_BOUNDED_REPAY_SIZES':
