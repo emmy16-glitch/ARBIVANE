@@ -1,0 +1,82 @@
+name: Stage143-145 async recovery, partner simulation and strict release gate
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage143-async-financing-journal.mjs'
+      - 'scripts/stage144-partner-financing-simulation.mjs'
+      - 'scripts/stage144-authentic-bridge-cli.mjs'
+      - 'scripts/stage145-production-qualification.mjs'
+      - 'tests/rhea-stage143-145-financing-recovery.test.mjs'
+      - '.github/workflows/rhea-stage143-145-recovery-readiness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage143-async-financing-journal.mjs'
+      - 'scripts/stage144-partner-financing-simulation.mjs'
+      - 'scripts/stage144-authentic-bridge-cli.mjs'
+      - 'scripts/stage145-production-qualification.mjs'
+      - 'tests/rhea-stage143-145-financing-recovery.test.mjs'
+      - '.github/workflows/rhea-stage143-145-recovery-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  adversarial_async_finance_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/rhea-stage143-145-financing-recovery.test.mjs
+  genuine_Rhea_vs_unfunded_partner_model:
+    if: github.event_name != 'pull_request'
+    needs: adversarial_async_finance_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download ORIGINAL successful Stage93 Rhea Sandbox financing records
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40317139342'
+          name: stage93-authentic-borrower-2579
+          path: original-stage93
+          github-token: ${{ github.token }}
+      - name: Check genuine collateral-backed Rhea evidence and refuse fake partner proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in stage49-sandbox-funding.json stage41-sandbox-balance-settlement.json stage38-positive-stage35-evidence.json; do test -s "original-stage93/$n"; done
+          node scripts/stage144-authentic-bridge-cli.mjs original-stage93 stage144-original-vs-financing.json
+          jq -e '
+            .mode == "STAGE144_ORIGINAL_RHEA_EVIDENCE_VS_PARTNER_SIMULATION"
+            and .authenticStage93RheaLiquidationObserved == true
+            and .authenticStage93FundingClass == "RHEA_OVER_COLLATERALIZED_BORROW"
+            and .authenticStage93DepositedSandboxCollateralYocto == "1000000000000000000000000"
+            and .stage144PartnerModelComplete == true
+            and .actualStage144PartnerFinancedWorkspacesLiquidation == false
+            and .partnerFundsActuallyTransferredToRhea == false
+            and .lenderPrincipalAndPremiumRepaidOnchain == false
+            and .netRealizableNearTradingProfitProven == false
+            and .mainnetBroadcastPermitted == false
+          ' stage144-original-vs-financing.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage143-145-real-rhea-versus-offline-partner-finance
+          path: stage144-original-vs-financing.json
+          if-no-files-found: error
+          retention-days: 90
