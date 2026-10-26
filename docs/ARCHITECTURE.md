@@ -1,70 +1,70 @@
-# Architecture: current implementation vs target
+# System architecture
 
-The project is designed as a **modular monorepo** that can run a single process during early development. Components communicate through typed, deterministic records rather than trusting one AI-driven script.
+**Current implementation, 26 October 2026.** ARBIVANE is a NEAR-first Rhea liquidation research and *local execution* system. It has deterministic TypeScript/Node components, public-chain read-only adapters, a NEAR Workspaces runner, independent cryptographic verification and GitHub Actions orchestration. It is **not** a deployed, owner-funded autonomous trading service.
 
-## Existing implementation
+## Execution pipeline
 
-```text
-src/domain/types.ts              Financial types and chain snapshot evidence
-src/domain/money.ts              Fixed-point integer calculations, rounding rules
-src/rhea/rpc.ts                  Finality-pinned, read-only NEAR JSON-RPC transport
-src/rhea/scanner.ts              Read-only, bounded Rhea protocol discovery
-src/risk/evaluate.ts             Deny-by-default execution policy evaluator
-src/competition/score.ts         Historical pressure with explicit uncertainty
-src/pipeline/lifecycle.ts        Legal transition graph + demo replay guard
-src/reconciliation/profit.ts     Require finality + realised inventory for token P&L
-src/settlement/intents.ts        Validation of *proposed* settlement parameters
-src/demo/run.ts                  Fixture: always non-executable
-```
+1. **Source discovery.** Public NEAR finalized RPC reads fetch Rhea asset metadata, indexed borrowers, positions, pool balances and prices at a consistent source block.
+2. **Candidate assessment.** Fixed-point BigInt math enforces health, protocol liquidation constraints, price precision/freshness, liquidity and conservative source-sized repayment bounds. Historical competitor pressure is advisory, not knowledge of current rivals.
+3. **Sandbox admission.** An eligible historical borrower is independently checked, and relevant Rhea lending, oracle and fungible token bytecode/state is imported into disposable NEAR Workspaces.
+4. **Actor provisioning.** The local actor is registered for required assets and funded with genuine *Sandbox* wNEAR collateral. It must have no preexisting borrowing shares.
+5. **Genuine local transaction.** One signed Rhea execute_with_pyth call performs Borrow → Liquidate → Repay → Withdraw with source-capped amounts. NEAR promises and callback receipts are part of the sequence.
+6. **Completion and persistence.** The original signed transaction is resolved to FINAL with authentic asynchronous callback definitions. Later finalized local state reads must show reduced borrower debt and collateral, an increase in seized FT and **zero** outstanding actor debt.
+7. **Independent proof.** Stage135 rechecks the original source plan, signed identity, callbacks, raw balance changes and artifact hashes. Stage136 independently Borsh-serializes the original TransactionV0 fields and verifies SHA-256/Ed25519.
+8. **Archived review.** GitHub Actions publishes source, receipts, state and final proof only after all gates succeed.
 
-## Target dependencies, not yet wired
+The public source chain is NEAR mainnet, but the execution is **only inside isolated Sandbox**. FINAL on a disposable Workspaces chain does **not** mean mainnet assets moved.
 
-```text
-         NEAR finalized RPC          Rhea lending + oracle
-                  \                    /
-                    discovery adapter
-                           |
-                 fresh protocol maths
-                           |
-                    candidate record
-                           |
-             competition/economic analysis
-                           |
-               deterministic risk checks <--- AI explanation (never a signer)
-                           |
-                  contract authorization <--- attested Shade identity
-                           |
-             NEAR-native Rhea executor (only if custody enforced)
-                           |
-                  final receipts + token balances
-                           |
-                   realized P&L ledger
-                           |
-             NEAR Intents separate settlement
-                           |
-                 verified user wallet receipt
-```
+## Code map
 
-## Deterministic policy has no privileged AI dependency
+| Module | Code location | Role |
+| --- | --- | --- |
+| Fixed-point types and financial math | src/domain/types.ts, src/domain/money.ts | Typed integer strings, rounding and costs |
+| NEAR RPC transport | src/rhea/rpc.ts, src/rhea/resilient-readonly-rpc.ts | Finalized source reads, fallback |
+| Account and position discovery | src/rhea/scanner.ts, src/rhea/paged-position-index.ts, src/rhea/market-debt-index.ts | Borrower/debt pagination and checkpoints |
+| Oracle, Rhea rules and sizing | src/rhea/execution-pyth-valuation.ts, src/rhea/source-math.ts, src/rhea/stage35-atomic-reference-sizing.ts | Source-validated pricing/health/amounts |
+| Policy and competition | src/risk/evaluate.ts, src/competition/score.ts | Deterministic rejection and historical pressure |
+| State import and canaries | scripts/stage46-paged-sandbox-clone.mjs, scripts/stage82-targeted-lending-clone.mjs, scripts/stage89-targeted-wnear-clone.mjs, scripts/stage91-targeted-linear-token.mjs | Rebuild required Rhea state locally |
+| Real local liquidation | scripts/stage37-workspaces-sandbox-replay.mjs | Signed atomic actions in Workspaces |
+| Receipts, finality, settlement | scripts/stage124-final-rhea-receipts.mjs, scripts/stage134-finality-fallback.mjs, src/rhea/stage41-sandbox-settlement.ts, src/rhea/stage48-finalized-sandbox-witness.ts | Verify outcomes and net state |
+| Signed proof | scripts/stage116-signed-sandbox-evidence.mjs, scripts/stage135-independent-proof.mjs, scripts/stage136-near-borsh-preimage.mjs | Authenticity and cross-file accounting |
+| Merkle and budget previews | scripts/stage137-near-outcome-merkle.mjs, scripts/stage138-mainnet-spending-admission.mjs | Read-only path consistency and spend-policy rejection |
+| Accounting / proposed settlement | src/reconciliation/profit.ts, src/settlement/intents.ts | Pure validation, **not** live swaps |
 
-A network model can help interpret historical evidence and describe candidates, but may not set spending caps, declare a protocol position liquidatable, or approve token movement. `evaluateCandidate` rejects wrong network, non-allowlisted contracts, fixture-only snapshots, unknown oracle freshness, expired candidates, funding gaps, missing contract custody, incomplete preflight and uncertain competition.
+These are modules inside the repository, not running services. A source file or GitHub Actions workflow alone does not imply a deployed application.
 
-The current `safeDefaultPolicy` disables all execution and has an empty contract allowlist. The sample evaluation that passes *with hypothetical fully verified inputs* is a unit test of policy logic, not a real credential or enforcement mechanism. There is no transaction signing or broadcast API here.
+## Finalized source data and amounts
 
-## Consistency and idempotency
+The scanner pages Rhea accounts and keeps each valuation and contract view pinned to the same source block. The source formulas handle borrower shares, token atomic amounts, market indices, isolated positions, active Pyth quotes, configured token decimals and extra decimal factors. Incomplete or stale quotes must fail closed.
 
-The scanner initially reads assets at RPC finality `final`, obtains a block number, then reads market counts, prices and account pages at that exact same `block_id`. Any mismatched response aborts. Downstream execution will need a fresh state read immediately before signing, even after passing the first snapshot.
+Source-gross spreads do not equal final liquidator wallet inventory. Changes in underlying displayed balances over a long local chain advance can reflect interest accrual rather than ownership change. Stage48 therefore checks authenticated asset/share ownership and exact FT balances across snapshots, not simplistic byte-for-byte equality of all accrual displays.
 
-The lifecycle strictly enforces `DISCOVERED -> REVALIDATING -> ANALYSED -> RISK_APPROVED -> POLICY_APPROVED -> SUBMITTED -> FINAL -> RECONCILED -> SETTLEMENT_PENDING -> SETTLED` plus rejection/failure states. Its in-memory idempotency helper is **demo-only**. Production needs a persistent store with a unique key per chain/protocol/target/candidate/intent and a transaction-outbox protocol; a process restart must not permit replay.
+The full-price and market-cap evidence must match the intended source block; mock results cannot authorize a real Sandbox attempt.
 
-## Financial units
+## Async execution and evidence
 
-All on-chain amounts are represented as decimal strings and evaluated as `bigint`. Profit estimates use integer **micro-USD** accounting (`USD E6`). Costs include repayment, network fees, swaps/route, financing, storage, race and inventory risk. Price conversion must explicitly apply token decimals and conservative rounding. `reconcileRealisedAtomic` computes a token-denominated result only when the final receipt exists and collateral has actually been sold; it is not a substitute for accounting all token transfers on chain.
+NEAR's cross-contract calls are asynchronous. A successful initial transaction or an emitted event is insufficient to prove successful Liquidate and Withdraw. Stage130 resolves the authentic receipt tree to a canonical FINAL response; Stage41 recomputes borrower debt/collateral changes and verifies actor FT gained, while requiring the actor's borrowed liability to return to zero. Stage55 records durable execution phases so a failure can be attributed to import, funding, oracle, receipts or final balance gates.
 
-## Why the original bot is not copied wholesale
+Stage136 reconstructs the original signed TransactionV0 preimage from signer ID, public key, nonce, receiver, actual local reference block hash and one FunctionCall action (args, gas and attached yoctoNEAR). The recomputed transaction hash and Ed25519 signature have been tested against a real archived successful transaction. The local reference block is not a validator-authenticated mainnet block.
 
-The older Rhea/Burrow bot mixes scanning, pricing, candidate selection, local file writes and execution. We use its `get_assets_paged`, `get_num_accounts`, `get_accounts_paged`, `get_price_data` interactions as **unverified API references** and do not port its financial formulas before source-backed rounding tests. From Morpho's framework we reuse *patterns*: discovery is not proof, revalidate on chain, simulate the exact call, keep pending lifecycle, and maintain structured logs. From Shade we will adopt an attested worker whose privilege is confined to a contract.
+The [Evidence ledger](STATUS_AND_EVIDENCE.md) links the actual successful Stage93 runs and precise observed units.
 
-## Never confuse approval with enforcement
+## Wallet and custody boundary
 
-A NEAR policy contract is meaningful only if the execution account and funds are **actually controlled by that contract**, or the protocol itself validates the policy. A worker that receives an `ALLOW` response then signs an unrestricted transaction from a separate Full Access key bypasses the policy. This is a design blocker, not a completed feature.
+There are **three distinct authority levels**:
+
+- The mainnet **reader** can query public chain state; it cannot send transfers.
+- The disposable **Sandbox actor** can sign on the isolated Workspaces chain with explicit Sandbox-only guards. It cannot spend real wallet balances.
+- The **future mainnet executor**, which does not exist today, would need owner-controlled keys, independently enforceable trading caps, authorization and durable transaction reconciliation.
+
+The generic SAFE_DEFAULT_POLICY has execution disabled and an empty contract allowlist. Stage138 evaluates proposed risk limits but **always refuses broadcasting**. An off-chain ALLOW string is not a substitute for contract-held custody or correctly scoped access keys.
+
+A future Rust policy treasury, Shade-attested worker and NEAR Intents route are design proposals, not deployed or audited components.
+
+## Production gaps
+
+The repository does not have a production wallet-connect UI, dashboard, funded mainnet signer, audited treasury, durable job/outbox database, deployed Shade/TEE runtime, autonomous trade agent, verified swap executor, realized profit transfer or validator-authenticated canonical outcome proof.
+
+Stage137 checks supplied outcome Merkle paths and lite-header hashes, but its head root is not independently authenticated with NEAR validator approvals. Imported local contract state has not been proved equivalent to the **entire** historic mainnet state trie.
+
+See [Protocol and economics](PROTOCOL_AND_ECONOMICS.md), [Security](SECURITY.md), [Roadmap](ROADMAP.md) and [Wallet and mainnet](WALLET_AND_MAINNET.md) for detail.
