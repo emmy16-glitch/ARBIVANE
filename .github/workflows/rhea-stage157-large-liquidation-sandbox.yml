@@ -37,12 +37,15 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 2
+      # 62 genuine historical LiNEAR debt findings across these four ranges
+      # (19 + 16 + 14 + 13), versus 10 in the previous four windows.
+      # Historic debt presence does NOT imply a current liquidation.
       matrix:
         include:
-          - {shard: 0, from: 0}
-          - {shard: 1, from: 1820}
-          - {shard: 2, from: 4050}
-          - {shard: 3, from: 6800}
+          - {shard: 0, from: 2537}
+          - {shard: 1, from: 4989}
+          - {shard: 2, from: 7671}
+          - {shard: 3, from: 2986}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:

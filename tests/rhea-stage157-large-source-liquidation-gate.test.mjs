@@ -8,9 +8,9 @@ function fixture({repay=2000n,gross=30n}={}){
   chain:'NEAR_MAINNET',status:'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE',
   borrowerAccountId:'genuine-archived-borrower.near',blockHeight:'221600111',
   referenceRulesPass:true,referenceAfterHealthBps:'10100',
-  repay:{tokenId:'wrap.near',referenceUsdE27:(repay*E).toString(),
+  repay:{tokenId:'linear-protocol.near',referenceUsdE27:(repay*E).toString(),
    amountLendingInternalAtomic:'12345600000000000000',fundsAvailabilityVerified:false},
-  seize:{tokenId:'wrap.near',amountLendingInternalAtomic:'12400000000000000000'},
+  seize:{tokenId:'linear-protocol.near',amountLendingInternalAtomic:'12400000000000000000'},
   paperGrossUsdE27:(gross*E).toString(),executionEnabled:false,maySign:false,
   mayBroadcast:false,mainnetWalletApproved:false,sandboxStateReplaySucceeded:false,
   contractRouteParityVerified:false,gasAndSwapNetProfitVerified:false
@@ -28,7 +28,7 @@ test('Stage157 only admits fresh, large reference-sized sources to local Sandbox
  const v=gate(fixture());
  assert.equal(v.canAttemptSandbox,true);
  assert.equal(v.status,'ELIGIBLE_FOR_SOURCE_PINNED_LOCAL_SANDBOX_REPLAY_ONLY');
- assert.equal(v.sourceRepayAsset,'wrap.near');
+ assert.equal(v.sourceRepayAsset,'linear-protocol.near');
  assert.equal(v.maySignMainnet,false);
  assert.equal(v.realizedNetEconomicProfitVerified,false);
  assert.equal(v.partnerFullyRepaidVerified,false);
@@ -48,7 +48,7 @@ test('Stage157 rejects unsigned/adulterated/stale reference matches',()=>{
   v=>{v.bestProposal.borrowerAccountId='wrong.near';},
   v=>{v.bestProposal.blockHeight='221600112';},
   v=>{v.bestProposal.referenceRulesPass=false;},
-  v=>{v.bestProposal.repay.tokenId='linear-protocol.near';},
+  v=>{v.bestProposal.repay.tokenId='wrap.near';},
   v=>{v.bestProposal.repay.fundsAvailabilityVerified=true;},
   v=>{v.bestProposal.gasAndSwapNetProfitVerified=true;},
   v=>{v.bestProposal.paperGrossUsdE27='1.5';},
@@ -57,6 +57,16 @@ test('Stage157 rejects unsigned/adulterated/stale reference matches',()=>{
  for(const corrupt of cases){
   const x=fixture();corrupt(x);assert.equal(gate(x).canAttemptSandbox,false);
  }
+});
+test('Stage158 rejects even large source gross when deployed NEP141 route is unsupported',()=>{
+ const x=fixture({repay:2000n,gross:40n});
+ x.bestProposal.repay.tokenId='wrap.near';
+ x.bestProposal.seize.tokenId='wrap.near';
+ const v=gate(x);
+ assert.equal(v.canAttemptSandbox,false);
+ assert.deepEqual(v.blockers,['STAGE157_UNSUPPORTED_DEPLOYED_LARGE_LIQUIDATION_ASSET_ROUTE']);
+ assert.equal(v.actualMainnetLoan,false);
+ assert.equal(v.mayBroadcastMainnet,false);
 });
 test('Stage157 hard minimums cannot be weakened by configuration',()=>{
  assert.throws(()=>gate(fixture(),{minRepayUsdE27:(999n*E).toString()}),
