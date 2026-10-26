@@ -30,7 +30,7 @@ function exactEq(a,b){return JSON.stringify(a)===JSON.stringify(b);}
  */
 function transientWasmImport(error){
  const m=String(error instanceof Error?error.message:'').slice(0,2000);
- return /rate limits exceeded|too many requests|NEAR RPC HTTP (?:429|5\\d\\d)|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|AbortError|TimeoutError|"code"\\s*:\\s*-(?:429|500|502|503|504)\\b/i.test(m)||
+ return /rate limits exceeded|too many requests|NEAR RPC HTTP (?:429|5\d\d)|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|AbortError|TimeoutError|"code"\s*:\s*-(?:429|500|502|503|504)\b/i.test(m)||
   /^(?:AbortError|TimeoutError)$/.test(error?.name??'')||
   [429,500,502,503,504,-429,-500,-502,-503,-504].includes(error?.code);
 }
