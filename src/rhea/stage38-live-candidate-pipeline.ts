@@ -73,6 +73,7 @@ export async function evaluateActualCandidate(
  return sizeStage35SourceLiquidation(valuation,assets.value,{
   borrowerAccountId:borrower,maxRepayBps:100,
   minimumPaperGrossUsdE27:o.minimumPaperGrossUsdE27,
+  requiredSameTokenId:o.requiredSameTokenId,
  });
 }
 export async function qualifyStage38Candidates(

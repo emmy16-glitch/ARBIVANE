@@ -4,6 +4,8 @@ import {FailoverNearReadOnlyRpc} from '../src/rhea/failover-readonly-rpc.ts';
 import {PacedNearReadOnlyRpc} from '../src/rhea/paced-readonly-rpc.ts';
 import {evaluateActualCandidate} from '../src/rhea/stage38-live-candidate-pipeline.ts';
 import {buildStage37SandboxPlan} from '../src/rhea/stage37-sandbox-liquidation.ts';
+import {classifyStage33Failure} from '../src/rhea/stage33-diagnostics.ts';
+import {stage162DescribeSource,stage162RejectionSummary} from './stage162-source-rejection-diagnostics.mjs';
 import {stage157SelectHistoricalLiNearBorrowers,stage157AdmitSourceLargerLiquidation} from './stage157-large-source-candidates.mjs';
 
 const env=process.env;
@@ -36,13 +38,17 @@ async function main(){
   expectedPythOracleCodeHash:env.RHEA_EXPECTED_ORACLE_CODE_HASH,
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
   minimumPaperGrossUsdE27:'1',
+  requiredSameTokenId:'linear-protocol.near',
  };
  const rows=[];let largest=null;
  for(const item of selected.candidates){
   let row={sourceFindingIndex:item.index,borrowerAccountId:item.accountId,
    historicalDebtAssetDiversity:item.previouslyRecordedDistinctDebtAssets,
    currentPositionRechecked:false,largeSourceLiquidationQualified:false,
-   reasons:[],sourceBlockHeight:null,repayLendingInternalAtomic:null};
+   reasons:[],sourceBlockHeight:null,repayLendingInternalAtomic:null,
+   sourceSizingStatus:null,sourceSizingBlockers:[],consideredPairs:null,
+   referenceRepayTokenId:null,referenceSeizeTokenId:null};
+  let phase='FRESH_SOURCE_READ';
   try{
    // Both original lending code and deployed active-Pyth quote are independently
    // re-read for this candidate. No archived risk/price is promoted.
@@ -50,18 +56,22 @@ async function main(){
    row.currentPositionRechecked=true;
    row.sourceBlockHeight=candidate.blockHeight??null;
    const admission=stage157AdmitSourceLargerLiquidation(candidate,item.accountId);
-   row.reasons.push(admission.reason);
+   const diagnosis=stage162DescribeSource(candidate,admission);
+   row={...row,...diagnosis};
+   row.reasons.push(diagnosis.reason);
    row.repayLendingInternalAtomic=candidate.repay?.amountLendingInternalAtomic??null;
    // Never mark a candidate qualified until the original deployed
    // Stage37 action/asset route also passes. A thrown ABI check stays BLOCKED.
    if(admission.qualified){
+    phase='SANDBOX_PLAN_VALIDATION';
     buildStage37SandboxPlan(candidate); // strict original deployed-route ABI.
     row.largeSourceLiquidationQualified=true;
     if(!largest||BigInt(candidate.repay.amountLendingInternalAtomic)>
         BigInt(largest.repay.amountLendingInternalAtomic))largest=candidate;
    }
   }catch(error){
-   row.reasons.push('CURRENT_SOURCE_RPC_OR_ORACLE_OR_RULES_BLOCKED');
+   row.reasons.push(phase==='SANDBOX_PLAN_VALIDATION'?
+    'SOURCE_SANDBOX_ROUTE_PLAN_REJECTED':classifyStage33Failure(error));
    row.observationErrorName=String(error?.name??'Error').slice(0,60);
    // Do not log RPC URLs, provider keys, credentials, or private data.
   }
@@ -88,6 +98,7 @@ async function main(){
   readyForConditionalSandbox:!!largest,
   sandboxSettlementVerified:false,realizedEconomicProfitVerified:false,
   mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
+  ...stage162RejectionSummary(rows),
   rows
  };
  await writeFile('stage157-large-discovery-report.json',JSON.stringify(report,null,2)+'\n',{mode:0o600});

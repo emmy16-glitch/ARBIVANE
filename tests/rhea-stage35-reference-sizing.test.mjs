@@ -233,3 +233,40 @@ test('Stage65 returns concrete denial reason without fabricating a liquidation',
  assert.equal(noReserve.executionEnabled,false);
  assert.equal(noReserve.mayBroadcast,false);
 });
+
+test('Stage162 only sizes executable LiNEAR/LiNEAR pairs when required by the caller',()=>{
+ const unrestricted=sizeStage35SourceLiquidation(report(),assets(),options);
+ assert.equal(unrestricted.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ const filtered=sizeStage35SourceLiquidation(report(),assets(),{
+  ...options,requiredSameTokenId:'linear-protocol.near'});
+ assert.equal(filtered.status,'NO_SAFE_SOURCE_SCENARIO');
+ assert.ok(filtered.blockers.includes('NO_MATCHING_SUPPORTED_SAME_TOKEN_ROUTE'));
+ assert.equal(filtered.repay,null);
+ assert.equal(filtered.consideredPairs,1);
+ assert.throws(()=>sizeStage35SourceLiquidation(report(),assets(),{
+  ...options,requiredSameTokenId:'wrap.near'}),/UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE/);
+});
+test('Stage162 can still size an authentic LiNEAR same-token source pair without changing source rules',()=>{
+ const p=report();
+ p.positions[0].legs=[
+  source('borrowed','linear-protocol.near','900000000',9000),
+  source('collateral','linear-protocol.near','1000000000',9000),
+ ];
+ p.positions[0].adjustedCollateralE27=(900n*E27).toString();
+ p.positions[0].adjustedDebtE27=(1000n*E27).toString();
+ p.positions[0].healthFactorBps='9000';
+ const a=[['linear-protocol.near',{
+  config:{volatility_ratio:9000,can_borrow:true,can_withdraw:true},
+  supplied:{balance:'3000000000',shares:'3000000000'},
+  borrowed:{balance:'900000000',shares:'900000000'}
+ }]];
+ const result=sizeStage35SourceLiquidation(p,a,{
+  ...options,requiredSameTokenId:'linear-protocol.near',
+  minimumPaperGrossUsdE27:'1'});
+ assert.equal(result.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(result.repay.tokenId,'linear-protocol.near');
+ assert.equal(result.seize.tokenId,'linear-protocol.near');
+ assert.equal(result.referenceRulesPass,true);
+ assert.equal(result.executionEnabled,false);
+ assert.equal(result.mayBroadcast,false);
+});
