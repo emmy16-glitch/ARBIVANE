@@ -228,6 +228,10 @@ jobs:
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
             stage115-historical-clock.json
+            stage116-raw-transaction.json
+            stage116-signed-transaction.json
+            stage116-before-state.json
+            stage116-after-state.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
             stage56-sandbox-attempt-evidence.json

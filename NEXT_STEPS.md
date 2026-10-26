@@ -1,5 +1,11 @@
 # Stage 111 handoff
 
+## Stage 116 execution checkpoint
+- Main `0ed2038`: PR #166 merged after CI `40290746331` passed. Actual Stage93 `40296205306` is in progress; inspect it before another full execution.
+- Direct pinned quote read at execution block `221659693` returns publish time `1793001238`, 29 seconds before source time. Configured age is 60 seconds, so import overhead can exhaust the remaining 31 seconds. No age limit or stored quote may be changed.
+- Branch `fix/stage116-replay-continuation` adds raw signed transaction/receipt preservation and genuine Ed25519 verification against the transaction hash, plus before/after state and finalized headers. It deliberately does not claim independent outcome Merkle verification. Local typecheck and 728 tests pass.
+- Next command: inspect `actions/runs/40296205306/jobs` and completed candidate logs/artifacts. Then fix the observed failure; never call a passing CI run a liquidation. Mainnet signing/spending remains disabled.
+
 ## Stage 115 historical clock checkpoint
 - Main `ea3e0bc` merges reviewed PR #165; its CI `40288933501` passed. Run `40288643664` failed before liquidation with `STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING`.
 - Artifact inspection distinguishes the earlier sweep block `221436207` (24 October) from the ACTUAL execution proposal block `221659693`, hash `9ZKKQv6bobLiBnqCYh7o3YFPaVn6xNtaa86u1a7VWSCn`, timestamp `1793001267416586578` (26 October 07:54:27 UTC). The null quote was observed at 07:55:35, about 68 seconds later. Do not confuse sweep time with execution snapshot time. Compare configured age and quote publish time in the next actual replay; age expiration is not yet proven by a stored quote. The new clock reads the proposal block, not a hardcoded sweep block.
