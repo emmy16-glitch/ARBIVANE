@@ -363,6 +363,8 @@ async function main(){
  // Borrow -> FT transfer to lending before the settlement transaction.
  const supplyPrefund=await prefundStage124RheaSupply({
   actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
+  onBorrowSnapshot:async snapshot=>writeFile('stage128-actor-borrow-balance-evidence.json',
+   JSON.stringify(snapshot,null,2)+'\n'),
  });
  await writeFile('stage124-rhea-supplied-prefund.json',
   JSON.stringify(supplyPrefund,null,2)+'\n');
