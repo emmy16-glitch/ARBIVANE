@@ -73,7 +73,7 @@ jobs:
       RHEA_STAGE32_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
       RHEA_STAGE32_MAX_FINDINGS: '80'
       RHEA_STAGE32_BATCH_SIZE: '20'
-      RHEA_STAGE32_CONCURRENCY: '2'
+      RHEA_STAGE32_CONCURRENCY: '1'
       RHEA_STAGE32_RESUME: 'false'
       RHEA_STAGE32_CHECKPOINT_PATH: stage32-reprice-checkpoint.json
       RHEA_STAGE32_REPORT_PATH: stage32-reprice-report.json
@@ -86,7 +86,10 @@ jobs:
       STAGE157_REQUIRED_ROUTE: linear-protocol.near
       STAGE157_STAGE38_EVIDENCE: stage38-qualification.json
       STAGE157_REPORT: stage157-large-source-admission.json
-      RHEA_RPC_SPACING_MS: '900'
+      # Stage163 reduces provider pressure across parallel jobs; no relaxed oracle rules.
+      RHEA_RPC_SPACING_MS: '1600'
+      RHEA_STAGE38_CONCURRENCY: '1'
+      RHEA_STAGE38_MAX_RECOVERY_ATTEMPTS: '40'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -131,7 +134,8 @@ jobs:
           node scripts/stage157-large-source-liquidation-gate.mjs > stage157-gate-summary.json
           jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false
             and .mayBroadcastMainnet == false and .realizedNetEconomicProfitVerified == false' stage157-large-source-admission.json
-          jq -c '{refreshed,positiveSourcePlans,rejectedByRequiredRoute,failedFreshReads}' \
+          jq -c '{refreshed,positiveSourcePlans,rejectedByRequiredRoute,failedFreshReads,\
+            recoveryDeferredFindings,recoveryBudgetExhausted,boundedRecoveryAttempts}' \
             stage38-qualification.json >> "$GITHUB_STEP_SUMMARY"
           jq -c '{status,canAttemptSandbox,sourceBorrower,referenceRepayUsdE27,
              referenceGrossUsdE27,blockers}' stage157-large-source-admission.json >> "$GITHUB_STEP_SUMMARY"
