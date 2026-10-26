@@ -15,6 +15,7 @@ on:
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage124-rhea-supply-prefund.mjs'
+      - 'scripts/stage124-rhea-supply-prefund.mjs'
       - 'scripts/stage115-historical-sandbox-clock.mjs'
       - 'scripts/stage118-replay-clock.c'
       - 'scripts/stage96-rhea-view-parity.mjs'
@@ -237,6 +238,11 @@ jobs:
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
             stage124-rhea-supplied-prefund.json
+            stage126-prefund-borrowRaw.json
+            stage126-prefund-borrowFinal.json
+            stage126-prefund-depositRaw.json
+            stage126-prefund-depositFinal.json
+            stage126-prefund-failure.json
             stage49-wnear-transfer-receipt.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
