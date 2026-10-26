@@ -5,6 +5,12 @@
 
 # Stage 111 handoff
 
+## Stage126 real prefunding-finality checkpoint
+- Main base `8d8d166` merged #182 authentic local Borrow -> real LiNEAR FT -> genuine ft_transfer_call supply, with original borrower, oracle freshness and full Stage41 debt/FT settlement gates. Actual Stage93 run `40309744691` FAILED `STAGE124_BORROW_UNVERIFIED_RECEIPTS` in `SANDBOX_BORROW_CAPACITY` before liquidation. In earlier authentic Sandbox runs Workspaces returned `final_execution_status=EXECUTED`; Stage124 mistakenly only admitted `FINAL/EXECUTED_OPTIMISTIC` for provisional status.
+- Branch `fix/stage126-executed-prefund-finality` admits `EXECUTED` solely as provisional, requires a LOCAL `txStatus(...,'FINAL')` response matching original signed hash and actor signer, no failed callback outcome or transaction identity drift. Unknown statuses and failed callbacks remain blocked. Persists raw borrow/supply transactions before validation and final local receipts after verification; uploads artifacts. No fabricated supply, changed borrower, price alteration, spoofed success or mainnet sign/spend.
+- Next: CI regression (including forged hash/signer and failed callback), merge only if green, inspect ONE auto Stage93. Genuine liquidation still NOT VERIFIED; need successful canonical Rhea receipts, debt decrease, collateral decrease and actor seized FT increase. Do not issue duplicate scans.
+
+
 ## Stage123 consolidated settlement checkpoint
 - Main `ca7efd1` (PR #173, 1-yocto Rhea ABI) was merged concurrently after successful CI. Previous authentic Stage93 `40305687819` executed signed transaction `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe` with deposit 0; Rhea rejected it. No liquidation or seized FT was verified.
 - Branch `fix/stage123-consolidated-settlement` preserves concurrent Stage122 machine-readable result and native stdout independently, fixes malformed trailing receipt-evidence newline, includes parseability regression, and records Stage37 process JSON in workflow artifact. It also respects source-attested bounded temporal accrual without claiming exact borrower parity: Stage37 classifier requires exact pinned config and either matching borrower or independent Stage104 verified temporal witness. Malformed/forged temporal claims block.
