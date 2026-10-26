@@ -1,4 +1,5 @@
 import {readFile,writeFile} from 'node:fs/promises';
+import {MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC} from './stage157-large-source-candidates.mjs';
 
 // Stage157: quantify original mainnet Rhea + active-Pyth reference sizing
 // BEFORE allowing a new isolated Workspaces attempt. These are NOT realized
@@ -65,18 +66,27 @@ export function stage157EvaluateLargeSourceLiquidation(qualification,options={})
   return {...base,sourceBorrower:p.borrowerAccountId,sourceBlockHeight:p.blockHeight,
    sourceRepayAsset:p.repay.tokenId,sourceSeizeAsset:p.seize.tokenId,
    blockers:['STAGE157_UNSUPPORTED_DEPLOYED_LARGE_LIQUIDATION_ASSET_ROUTE']};
- let gross,repay;
+ let gross,repay,repayInternal,seizeInternal;
  try{
   gross=decimal(p.paperGrossUsdE27,'GROSS');
   repay=decimal(p.repay.referenceUsdE27,'REPAY');
-  decimal(p.repay.amountLendingInternalAtomic,'REPAY_INTERNAL_UNITS');
-  decimal(p.seize.amountLendingInternalAtomic,'SEIZE_INTERNAL_UNITS');
+  repayInternal=decimal(p.repay.amountLendingInternalAtomic,'REPAY_INTERNAL_UNITS');
+  seizeInternal=decimal(p.seize.amountLendingInternalAtomic,'SEIZE_INTERNAL_UNITS');
  }catch(e){
   return {...base,blockers:[String(e.message).slice(0,120)]};
  }
  const observations={sourceBorrower:p.borrowerAccountId,sourceBlockHeight:p.blockHeight,
   sourceRepayAsset:p.repay.tokenId,sourceSeizeAsset:p.seize.tokenId,
   referenceRepayUsdE27:repay.toString(),referenceGrossUsdE27:gross.toString()};
+ // Positive quoted USD gross cannot justify a tiny or loss-making
+ // internal-asset route. The executable Rhea leg must itself be >=10x the
+ // previously proven small source and leave strictly positive same-token
+ // assets after principal repayment, before any financing cost.
+ if(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC||seizeInternal<=repayInternal)
+  return {...base,...observations,blockers:[
+   ...(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC?['STAGE159_LIQUIDATION_REPAY_NOT_TEN_TIMES_PREVIOUS_SOURCE']:[]),
+   ...(seizeInternal<=repayInternal?['STAGE159_NONPOSITIVE_INTERNAL_SAME_TOKEN_SPREAD']:[])
+  ]};
  if(repay<minRepay||gross<minGross)
   return {...base,...observations,blockers:[
    ...(repay<minRepay?['STAGE157_SOURCE_LIQUIDATION_REPAY_VALUE_BELOW_1000_USD']:[]),
