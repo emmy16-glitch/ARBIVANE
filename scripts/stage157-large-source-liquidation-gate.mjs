@@ -58,6 +58,13 @@ export function stage157EvaluateLargeSourceLiquidation(qualification,options={})
    x.paperGrossUsdE27===p.paperGrossUsdE27&&
    x.executionEligible===false&&x.netProfitVerified===false))
   return {...base,blockers:['STAGE157_SOURCE_REFERENCE_IDENTITY_OR_RULE_PARITY_FAILED']};
+ // Stage37 currently implements the original LiNEAR -> LiNEAR Rhea route.
+ // A larger WNEAR or other same-token *paper* opportunity must NOT be
+ // promoted to executable status until its deployed route is verified.
+ if(p.repay.tokenId!=='linear-protocol.near'||p.seize.tokenId!=='linear-protocol.near')
+  return {...base,sourceBorrower:p.borrowerAccountId,sourceBlockHeight:p.blockHeight,
+   sourceRepayAsset:p.repay.tokenId,sourceSeizeAsset:p.seize.tokenId,
+   blockers:['STAGE157_UNSUPPORTED_DEPLOYED_LARGE_LIQUIDATION_ASSET_ROUTE']};
  let gross,repay;
  try{
   gross=decimal(p.paperGrossUsdE27,'GROSS');
