@@ -50,10 +50,16 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  const liquidation=plan.actions[1]?.Liquidate;
  const withdraw=plan.actions.at(-1)?.Withdraw;
  const same=liquidation?.out_assets?.[0]?.token_id===token;
+ // Borrowing and the source-sized liquidation leg differ only by the
+ // exact, bounded 10-ppm rounding cushion in self-repay routes.
+ const liquidationRepay=amount(liquidation?.in_assets?.[0]?.amount,'SOURCE_LIQUIDATION_REPAY');
+ const borrowed=amount(rawQty,'BORROW_AMOUNT');
+ const buffer=same?(liquidationRepay+99999n)/100000n:0n;
+ if(borrowed!==liquidationRepay+buffer)
+  throw Error('STAGE49_PLAN_REPAY_ROUTE_MISMATCH');
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
-  liquidation.in_assets[0]?.amount!==rawQty||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
