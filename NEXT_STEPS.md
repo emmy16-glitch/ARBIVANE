@@ -1,5 +1,12 @@
 # Stage 111 handoff
 
+## Stage 115 historical clock checkpoint
+- Main `ea3e0bc` merges reviewed PR #165; its CI `40288933501` passed. Run `40288643664` failed before liquidation with `STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING`.
+- Source block `221436207`, hash `ENypY514thT4bf1MXBay7hi66AgpzFEdYnDNFrZE2iL8`, has timestamp `1792872381780605817` (24 October); the runner uses 26 October. Historical quotes therefore expire against the default local clock.
+- Working branch `fix/stage115-historical-clock` anchors Sandbox genesis and its process wall clock to the pinned source block, rounded forward to a whole second. Replay clock advances at rate 1. Monotonic timers and the Node/RPC client remain on real time. No stored prices, borrower state or freshness limits are changed.
+- `stage115-historical-clock.json` records source height/hash/time and observed local time. Existing oracle parity still rejects expired/missing/different quotes. Local native smoke is blocked by this container's hard file-descriptor limit (16384; nearcore requires 65535); actual execution must run on Actions.
+- Next command after green checks and merge: inspect the automatically triggered Stage93 run, download its artifacts and verify all receipts and debt/collateral/FT deltas. Do not dispatch a duplicate run. Liquidation is still NOT verified. Mainnet signing/spending remains disabled.
+
 - Latest main: `417ea51` (PR #161 merged; Stage 93 log diagnostics added). Mainnet signing/spending remains disabled.
 - Last inspected actual Stage 93 run: `40286666795`, failed. Candidate 2579 was fresh and source qualified. Stage 55 records `SANDBOX_PYTH_PARITY` and `STAGE109_SANDBOX_ORACLE_FRESH_QUOTE_VIEW_FAILED`; `localLiquidationCallInvoked=false`. No verified Sandbox liquidation.
 - Independently dispatched run `40286675745` was in progress at this checkpoint. Inspect its completed outcome before another dispatch.

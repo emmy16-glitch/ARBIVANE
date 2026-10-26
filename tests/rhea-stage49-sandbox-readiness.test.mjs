@@ -117,7 +117,7 @@ test('Stage49 registration is strictly before actor pre-balance and actual Rhea 
  assert.ok(s.indexOf('inspectStage49RheaAssets')>0);
  assert.ok(s.indexOf('registerStage49SandboxActor({actor,contracts,plan})')>0);
  assert.ok(s.indexOf('registerStage49SandboxActor({actor,contracts,plan})')<s.indexOf('const snapshot='));
- assert.ok(s.indexOf('inspectStage49RheaAssets(plan,assets.value,block)')<s.indexOf('Worker.init('));
+ assert.ok(s.indexOf('inspectStage49RheaAssets(plan,assets.value,block)')<s.indexOf('await initHistoricalSandbox('));
  assert.match(s,/initialBalance:3n\*10n\*\*24n/);
  assert.ok(s.includes('stage49-sandbox-registration.json'));
  assert.doesNotMatch(s,/broadcast_tx|signAndSend/);

@@ -14,6 +14,7 @@ on:
       - 'scripts/stage45-archival-state-rpc.mjs'
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage115-historical-sandbox-clock.mjs'
       - 'scripts/stage96-rhea-view-parity.mjs'
       - 'scripts/stage104-temporal-accrual-parity.mjs'
       - 'scripts/stage88-sandbox-clone-witness.mjs'
@@ -95,6 +96,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
+      - name: Install process-local historical Sandbox clock
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libfaketime
       - name: Retrieve immutable 7,801-debt borrower identity registry
         uses: actions/download-artifact@v4
         with:
@@ -224,6 +227,7 @@ jobs:
             stage49-sandbox-funding.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
+            stage115-historical-clock.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
             stage56-sandbox-attempt-evidence.json
