@@ -40,7 +40,9 @@ export function inspectStage50RepayReserve({
  if(!repay||!ID.test(repay.token_id)||!liquidation||
   liquidation.in_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==repay.token_id||
-  liquidation.in_assets[0]?.amount!==repay.amount)
+  ((liquidation.in_assets[0]?.amount===undefined)===
+    (liquidation.in_assets[0]?.max_amount===undefined))||
+   (liquidation.in_assets[0]?.amount??liquidation.in_assets[0]?.max_amount)!==repay.amount)
   throw Error('STAGE50_REPAY_ROUTE_MISMATCH');
  const requiredInternal=amount(repay.amount,'INVALID_REPAY_INTERNAL_UNITS');
  if(requiredInternal===0n)throw Error('STAGE50_ZERO_REPAY');

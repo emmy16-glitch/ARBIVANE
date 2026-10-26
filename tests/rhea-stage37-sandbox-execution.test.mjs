@@ -21,7 +21,8 @@ test('stage37 builds observed Pyth 3-action route for Sandbox only from vetted p
  assert.equal(p.chain,'NEAR_SANDBOX');assert.equal(p.method,'execute_with_pyth');
  assert.deepEqual(p.actions.map(a=>Object.keys(a)[0]),['Borrow','Liquidate','Withdraw']);
  assert.equal(p.actions[1].Liquidate.account_id,'example.near');
- assert.equal(p.actions[1].Liquidate.in_assets[0].amount,'100000000000000000000');
+ assert.equal(p.actions[1].Liquidate.in_assets[0].max_amount,'100000000000000000000');
+  assert.equal(p.actions[1].Liquidate.in_assets[0].amount,undefined);
  assert.equal(p.actions[2].Withdraw.amount,'110000000000000000000');
  assert.equal(p.depositYocto,'1');assert.equal(p.gasUnits,'300000000000000');
  assert.equal(p.executionEnabled,false);assert.equal(p.mayBroadcastMainnet,false);
@@ -167,6 +168,16 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
   String(BigInt(p.actions[3].Withdraw.amount)+BigInt(p.actions[2].Repay.amount)));
  assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
+});
+
+test('Stage124 bounded repay preserves source sizing without imposing unpayable exact supplied-share minimum',()=>{
+  const q=proposal();q.seize.tokenId=q.repay.tokenId;
+  const p=buildStage37SandboxPlan(q);
+  assert.deepEqual(p.actions[1].Liquidate.in_assets,[{token_id:q.repay.tokenId,max_amount:q.repay.amountLendingInternalAtomic}]);
+  assert.equal(p.actions[0].Borrow.amount,q.repay.amountLendingInternalAtomic);
+  assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+  assert.equal(p.actions[3].Withdraw.amount,'10000000000000000000');
+  assert.equal(p.depositYocto,'1');assert.equal(p.maySignMainnet,false);
 });
 
 test('Stage71 cannot withdraw same-token balance with no surplus or borrow not fully repaid',()=>{

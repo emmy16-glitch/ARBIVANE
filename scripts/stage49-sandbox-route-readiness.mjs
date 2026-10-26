@@ -54,7 +54,10 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
  // The three actions MUST be one self-consistent route in Rhea's INTERNAL
  // lending units. This still does not prove raw FT-token units or solvency.
  const borrowedUnits=u128(borrow.amount,'INVALID_BORROW_UNITS');
- const repaidUnits=u128(liquidate.in_assets[0].amount,'INVALID_REPAY_UNITS');
+ const input=liquidate.in_assets[0];
+  if((input.amount===undefined)===(input.max_amount===undefined))
+   throw Error('STAGE49_AMBIGUOUS_REPAY_LIMIT');
+  const repaidUnits=u128(input.amount??input.max_amount,'INVALID_REPAY_UNITS');
  const seizedUnits=u128(liquidate.out_assets[0].amount,'INVALID_SEIZE_UNITS');
  const withdrawnUnits=u128(withdraw.amount,'INVALID_WITHDRAW_UNITS');
  const selfRepay=same?actions[2]?.Repay:null;

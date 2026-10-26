@@ -119,7 +119,10 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  // Same-token Sandbox liquidation must repay the temporary borrow before
  // withdrawing surplus. Successful callbacks alone cannot authorize profit.
  const borrowed=uint(plan.actions[0].Borrow.amount,'SELF_BORROW');
- const liquidationRepay=uint(plan.actions[1].Liquidate.in_assets[0].amount,'LIQUIDATION_REPAY');
+ const inLeg=plan.actions[1].Liquidate.in_assets[0];
+  if((inLeg.amount===undefined)===(inLeg.max_amount===undefined))
+   throw Error('STAGE41_AMBIGUOUS_LIQUIDATION_REPAY_LIMIT');
+  const liquidationRepay=uint(inLeg.amount??inLeg.max_amount,'LIQUIDATION_REPAY');
  const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
  if(borrowed===0n||liquidationRepay!==borrowed||

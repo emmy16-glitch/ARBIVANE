@@ -53,7 +53,9 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
-  liquidation.in_assets[0]?.amount!==rawQty||
+  ((liquidation.in_assets[0]?.amount===undefined)===
+    (liquidation.in_assets[0]?.max_amount===undefined))||
+   (liquidation.in_assets[0]?.amount??liquidation.in_assets[0]?.max_amount)!==rawQty||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||

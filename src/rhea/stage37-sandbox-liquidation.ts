@@ -13,12 +13,12 @@ export interface SandboxReplayPlan {
  lendingContract:'contract.main.burrow.near';method:'execute_with_pyth';
  actions:[
   {Borrow:{token_id:string;amount:string}},
-  {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount:string}>;
+  {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
   {Withdraw:{token_id:string;amount:string}}
  ] | [
   {Borrow:{token_id:string;amount:string}},
-  {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount:string}>;
+  {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
   {Repay:{token_id:string;amount:string}},
   {Withdraw:{token_id:string;amount:string}}
@@ -59,8 +59,13 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
  if(sameToken&&BigInt(seize)<=BigInt(repay))
   throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
  const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
- const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
-  in_assets:[{token_id:e.repay.tokenId,amount:repay}],
+ // Rhea's supplied-share conversion can truncate a Borrow of precisely N
+  // units slightly below N. In the liquidation repayment leg, `amount:N`
+  // is an exact minimum and reverts. `max_amount:N` is an immutable cap:
+  // the real contract uses at most its available supplied balance and never
+  // repays more than source-approved N; Rhea still enforces all risk rules.
+  const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
+  in_assets:[{token_id:e.repay.tokenId,max_amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
   borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
@@ -138,6 +143,10 @@ export function summarizeStage37SandboxOutcome(
  }
  const failed=[...statuses.values()].filter(st=>Object.prototype.hasOwnProperty.call(st,'Failure')).length;
  const receiptDefs=result.receipts;
+ // Preserve definitive failed receipt evidence even if SDK does not include
+ // callback receipt definitions. Success still requires full callback proof.
+ if(failed>0&&(!Array.isArray(receiptDefs)||receiptDefs.length===0))
+  throw Error('SANDBOX_FAILED_ASYNC_RECEIPT_WITHOUT_CALLBACK_ATTESTATION');
  if(!Array.isArray(receiptDefs)||receiptDefs.length===0)
   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
  const callbacks=new Set<string>();
