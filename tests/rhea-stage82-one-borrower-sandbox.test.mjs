@@ -116,7 +116,7 @@ test('Stage82 authentic fastlane invokes same real liquidation and settlement ga
  assert.ok(runner.includes('sourceCodeHash:plan.sourceCodeHash')===false);
  assert.ok(runner.indexOf('SANDBOX_REQUIRED_VIEWS_DISAGREE_WITH_MAINNET')<
   runner.indexOf("actor.callRaw(lending,plan.method"));
- assert.ok(runner.includes('summarizeStage37SandboxOutcome(raw'));
+ assert.ok(runner.includes('summarizeStage37SandboxOutcome(finalized'));
  assert.ok(runner.includes('attestStage41SandboxSettlement({'));
  assert.ok(runner.includes('attestStage48FinalizedSandboxReplay({'));
  assert.ok(runner.includes('mayBroadcastMainnet:false'));

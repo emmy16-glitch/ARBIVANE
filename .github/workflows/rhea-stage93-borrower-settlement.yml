@@ -15,6 +15,7 @@ on:
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage124-rhea-supply-prefund.mjs'
+      - 'scripts/stage124-final-rhea-receipts.mjs'
       - 'scripts/stage115-historical-sandbox-clock.mjs'
       - 'scripts/stage118-replay-clock.c'
       - 'scripts/stage96-rhea-view-parity.mjs'
@@ -249,6 +250,8 @@ jobs:
             stage115-native-startup.log
             stage119-clone-failure.json
             stage116-raw-transaction.json
+            stage129-final-rhea-receipts.json
+            stage129-finalized-transaction.json
             stage116-signed-transaction.json
             stage116-before-state.json
             stage116-after-state.json
