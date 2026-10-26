@@ -104,11 +104,26 @@ export async function prefundStage124RheaSupply({
   JSON.stringify(borrowFinal,null,2)+'\n');
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
- if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
-  throw Error('STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT');
+ const receivedFt=number(borrowFt,'BORROW_FT');
+ // Real Rhea Borrow may deliver marginally fewer FT atoms than lending
+ // internal units because of token/share conversion. Never mint missing FT,
+ // adjust source debt, or accept more than 10 ppm shortage. Deposit only
+ // the actual independently observed FT inventory and enforce conservation.
+ const withinSourceBound=receivedFt>0n&&receivedFt<=amount&&
+  receivedFt*1000000n>=amount*999990n;
+ await writeFile('stage128-authentic-borrow-ft-conservation.json',JSON.stringify({
+  mode:'STAGE128_REAL_SANDBOX_BORROW_FT_OBSERVATION',chain:'NEAR_SANDBOX',
+  sourceRequiredBorrowInternal:amount.toString(),
+  observedActorBorrowDebtInternal:borrowedDebt.toString(),
+  actualActorLiNearFtAtomic:receivedFt.toString(),
+  withinSourceBound,sourceLiquidationAmountChanged:false,
+  mainnetExecutionEnabled:false,
+ },null,2)+'\n');
+ if(borrowedDebt<amount||!withinSourceBound)
+  throw Error('STAGE128_BORROW_FT_OR_DEBT_BEYOND_ROUNDING_BOUND');
  // Standard Rhea FT deposit credits 'supplied', unlike OnlyIncreaseCollateral.
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
-  receiver_id:lending.accountId,amount:amount.toString(),msg:'',
+  receiver_id:lending.accountId,amount:receivedFt.toString(),msg:'',
  },{gas:200000000000000n,attachedDeposit:1n});
  await writeFile('stage124-raw-supply-transaction.json',
   JSON.stringify(depositRaw?.result??depositRaw,null,2)+'\n');
@@ -121,7 +136,7 @@ export async function prefundStage124RheaSupply({
  // Share conversion may round a real FT deposit down by a tiny amount.
  // 10 ppm is a hard, deterministic local cap, never synthetic liquidity.
  if(suppliedAfter*1000000n<amount*999990n||debtAfter<amount||
-  number(borrowFt,'BORROW_FT')-number(ftFunded,'FUNDED_FT')!==amount)
+  receivedFt-number(ftFunded,'FUNDED_FT')!==receivedFt)
   throw Error('STAGE124_REPAY_SUPPLY_OR_CONSERVATION_FAILED');
  const borrowHash=borrowFinal.transaction?.hash??borrowRaw?.result?.transaction?.hash??borrowRaw?.transaction?.hash;
  const supplyHash=depositFinal.transaction?.hash??depositRaw?.result?.transaction?.hash??depositRaw?.transaction?.hash;
