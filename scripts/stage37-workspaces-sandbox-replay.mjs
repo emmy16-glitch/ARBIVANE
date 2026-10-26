@@ -6,6 +6,8 @@
  */
 import {readFile,writeFile} from 'node:fs/promises';
 import {NearReadOnlyRpc} from '../src/rhea/rpc.ts';
+import {ResilientNearReadOnlyRpc} from '../src/rhea/resilient-readonly-rpc.ts';
+import {cloneFailure} from './stage119-clone-failure.mjs';
 import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
 import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
@@ -36,6 +38,12 @@ const stage55Path='stage55-sandbox-phase-evidence.json';
 async function recordStage55(value){
  await writeFile(stage55Path,JSON.stringify(value,null,2)+'\n');
 }
+async function recordCloneFailure(contractId,sourceBlockHeight,error){
+ const failure=cloneFailure(error);
+ await writeFile('stage119-clone-failure.json',JSON.stringify({
+  contractId,sourceBlockHeight,...failure},null,2)+'\n');
+ return failure.code;
+}
 async function markStage55(phase){await recordStage55(stage55.enter(phase));}
 async function main(){
  await markStage55('SOURCE_ADMISSION');
@@ -48,7 +56,7 @@ async function main(){
  const proposal=JSON.parse(await readFile(e.STAGE37_STAGE35_EVIDENCE_PATH,'utf8'));
  const plan=buildStage37SandboxPlan(proposal);
  const block=Number(plan.mainnetSourceBlockHeight);
- const rpc=new NearReadOnlyRpc(e.NEAR_RPC_URL);
+ const rpc=new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(e.NEAR_RPC_URL));
  await markStage55('PINNED_SOURCE_VIEWS');
  const [onchainLending,onchainOracle,config,borrower,assets]=await Promise.all([
   rpc.viewAccount(plan.lendingContract,block),
@@ -121,9 +129,10 @@ async function main(){
    await cloneMonitor.update({contractId:plan.lendingContract,status:'COMPLETE',
     evidence:targeted.evidence});
   }catch(error){
+   const code=await recordCloneFailure(plan.lendingContract,block,error);
    await cloneMonitor.update({contractId:plan.lendingContract,status:'BLOCKED',
-    failureCode:stage88FailureCode(error)});
-   throw error;
+    failureCode:code});
+   throw Error(code);
   }
   contracts.set(plan.lendingContract,targeted.contract);
   cloneEvidence.push(targeted.evidence);
@@ -142,9 +151,10 @@ async function main(){
     await cloneMonitor.update({contractId:'wrap.near',status:'COMPLETE',
      evidence:wrapped.evidence});
    }catch(error){
+    const code=await recordCloneFailure('wrap.near',block,error);
     await cloneMonitor.update({contractId:'wrap.near',status:'BLOCKED',
-     failureCode:stage88FailureCode(error)});
-    throw error;
+     failureCode:code});
+    throw Error(code);
    }
    contracts.set('wrap.near',wrapped.contract);
    cloneEvidence.push(wrapped.evidence);
@@ -169,9 +179,10 @@ async function main(){
     await cloneMonitor.update({contractId:'linear-protocol.near',status:'COMPLETE',
      evidence:linear.evidence});
    }catch(error){
+    const code=await recordCloneFailure('linear-protocol.near',block,error);
     await cloneMonitor.update({contractId:'linear-protocol.near',status:'BLOCKED',
-     failureCode:stage88FailureCode(error)});
-    throw error;
+     failureCode:code});
+    throw Error(code);
    }
    contracts.set('linear-protocol.near',linear.contract);
    cloneEvidence.push(linear.evidence);

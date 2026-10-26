@@ -11,7 +11,8 @@ test('Stage87 independently runs only one authenticated source-qualified borrowe
  assert.ok(s.includes('name: Rhea Stage87 focused authentic single-borrower Sandbox execution'));
  assert.ok(s.includes('group: arbivane-stage87-single-borrower'));
  assert.ok(earlier.includes('group: arbivane-stage69-fastlane'));
- assert.ok(s.includes('      - \'.github/workflows/rhea-stage87-one-borrower-execution.yml\''));
+ assert.ok(s.includes("workflow_dispatch:"));
+ assert.ok(!s.includes("\n  push:"));
  assert.ok(s.includes('| unique_by(.start) | .[:1] | {include:.}'));
  assert.ok(s.includes('max-parallel: 1'));
  assert.ok(s.includes('timeout-minutes: 105'));

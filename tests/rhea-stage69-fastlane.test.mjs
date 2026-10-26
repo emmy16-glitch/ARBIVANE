@@ -54,7 +54,8 @@ test('Stage69 genuine Workspaces execution remains keyless and never fabricates 
 test('Stage76 protects ongoing source-pinned fast-lane clones against later code pushes',()=>{
  assert.ok(text.includes("cancel-in-progress: false"));
  assert.ok(text.includes("group: arbivane-stage69-fastlane"));
- assert.ok(text.includes("- '.github/workflows/rhea-stage69-fastlane.yml'"));
+ assert.ok(text.includes("workflow_dispatch:"));
+ assert.ok(!text.includes("\n  push:"));
  assert.ok(text.includes("EXECUTION_ENABLED: 'false'"));
  assert.ok(text.includes('actualRheaSettlementVerified'));
  assert.ok(!text.includes('MAINNET_PRIVATE_KEY'));
@@ -101,8 +102,10 @@ test('Stage74 accepts only a later-finalized persistent optimistic Sandbox recei
 });
 
 
-test('Stage75 pins cloned state batching changes to an authentic new fast-lane run',()=>{
- assert.ok(text.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
+const automatic=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
+
+test('Stage75 batching changes launch the single automatic Stage93 lane',()=>{
+ assert.ok(automatic.includes("- 'scripts/stage46-paged-sandbox-clone.mjs'"));
  assert.ok(text.includes("cancel-in-progress: false"));
  assert.ok(text.includes('stage46-sandbox-clone-evidence.json'));
  assert.ok(text.includes('stage55-sandbox-phase-evidence.json'));
@@ -111,10 +114,10 @@ test('Stage75 pins cloned state batching changes to an authentic new fast-lane r
 });
 
 
-test('Stage76 changes launch another authenticated fast lane without cancelling expensive real imports',()=>{
+test('Stage76 recovery remains manual while Stage93 owns automatic execution',()=>{
  assert.ok(text.includes("cancel-in-progress: false"));
- assert.ok(text.includes("- 'scripts/stage76-bounded-clone-queue.mjs'"));
- assert.ok(text.includes("- 'scripts/stage37-workspaces-sandbox-replay.mjs'"));
+ assert.ok(automatic.includes("- 'scripts/stage76-bounded-clone-queue.mjs'"));
+ assert.ok(automatic.includes("- 'scripts/stage37-workspaces-sandbox-replay.mjs'"));
  assert.ok(text.includes("stage46-sandbox-clone-evidence.json"));
  assert.ok(text.includes("actualRheaSettlementVerified"));
  assert.ok(text.includes("localLiquidationCallInvoked == true"));
