@@ -11,6 +11,7 @@ on:
       - 'src/rhea/stage38-live-candidate-cli.ts'
       - 'tests/rhea-stage38-live-candidate-pipeline.test.mjs'
       - 'scripts/stage164-source-pricing-closure.mjs'
+      - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
@@ -26,6 +27,7 @@ on:
       - 'src/rhea/stage38-live-candidate-cli.ts'
       - 'tests/rhea-stage38-live-candidate-pipeline.test.mjs'
       - 'scripts/stage164-source-pricing-closure.mjs'
+      - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
@@ -198,4 +200,5 @@ jobs:
             stage49-sandbox-funding.json
             stage51-active-pyth-sandbox-parity.json
             stage164-derived-price-parity.json
+            stage166-pinned-pricing-read-diagnostics.json
             stage88-sandbox-clone-witness.json
