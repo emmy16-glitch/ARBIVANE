@@ -24,7 +24,7 @@ import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
-import {prefundStage124RheaSupply} from './stage124-rhea-supply-prefund.mjs';
+import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
@@ -358,14 +358,14 @@ async function main(){
   throw Error('STAGE49_'+borrowCapacity.status);
  if(!boundedCapacity.actorCoveredByConservativeReference)
   throw Error('STAGE52_ACTOR_REFERENCE_COLLATERAL_INSUFFICIENT');
- // Actual Borrow sends LiNEAR FT to the actor; it does not create Rhea
- // 'supplied' balance for Liquidate. Complete and attest a signed local
- // Borrow -> FT transfer to lending before the settlement transaction.
- const supplyPrefund=await prefundStage124RheaSupply({
-  actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
- });
- await writeFile('stage124-rhea-supplied-prefund.json',
-  JSON.stringify(supplyPrefund,null,2)+'\n');
+ // Verified Stage93 40310497704: standalone Borrow succeeded with FINAL
+ // receipt but did not prove an external NEP-141 wallet FT balance.
+ // Protocol Borrow alone credits Rhea accounting, as independently shown by
+ // the earlier authentic in-call Borrow/Liquidate/Repay receipt chain
+ // 40309174523. A separate FT transfer would invent an available source.
+ // Execute the COMPLETE source-qualified same-call actions, preserving the
+ // capped Liquidate.in_assets and capped Withdraw.max_amount policy.
+ // No prefinancing transaction and no synthetic balance adjustment.
  const snapshot=()=>Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   repayToken.view('ft_balance_of',{account_id:actor.accountId}),
@@ -381,9 +381,9 @@ async function main(){
  try{
   sandboxTransactionSubmitted=true;
   await recordStage55(stage55.transactionSubmitted());
-  // Borrow already settled in the separately attested prefinance receipt.
-  // Re-borrowing inside this call would double the actor's debt.
-  raw=await actor.callRaw(lending,plan.method,{actions:plan.actions.slice(1)},{
+  // The authentic Rhea action chain must atomically borrow, liquidate,
+  // repay the actor loan and withdraw only bounded realized collateral.
+  raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
    gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
  }catch(error){
@@ -397,7 +397,16 @@ async function main(){
  const signedEvidence=signedSandboxEvidence(raw,{signerId:actor.accountId,
   receiverId:plan.lendingContract});
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
- const report=summarizeStage37SandboxOutcome(raw,{
+ // Workspaces may return EXECUTED without receipt definitions even when
+ // its status is genuine. Authenticate the SAME signed transaction through
+ // the local provider's FINAL detailed receipt RPC, never synthesize receipts.
+ const finalized=await resolveStage124RheaCallbackReceipts({
+  raw,provider:worker.provider,signerAccountId:actor.accountId,
+  evidencePath:'stage129-final-rhea-receipts.json',writeFile,
+ });
+ await writeFile('stage129-finalized-transaction.json',
+  JSON.stringify(finalized.result,null,2)+'\n');
+ const report=summarizeStage37SandboxOutcome(finalized,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   temporalAccrualVerified:temporalProof?.verified===true&&
    parityWitness.temporalAccrualVerified===true,
@@ -443,7 +452,6 @@ async function main(){
  await markStage55('SANDBOX_BALANCE_SETTLEMENT');
  const settlement=attestStage41SandboxSettlement({
   plan,positionId:proposal.positionId,receipt:verifiedReport,
-  prefinancing:supplyPrefund,
   borrowerBefore:sandboxBorrower,borrowerAfter:post.borrower,
   actorBefore,actorAfter:post.actor,
   actorRepayFtBefore:repayFtBefore,actorRepayFtAfter:post.repayFt,
