@@ -103,10 +103,16 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const repay=plan.actions[0]?.Borrow?.token_id;
  const seize=plan.actions.length===4?
   plan.actions[3].Withdraw.token_id:plan.actions[2].Withdraw.token_id;
- const withdrawAmount=plan.actions.length===4?
-  plan.actions[3].Withdraw.amount:plan.actions[2].Withdraw.amount;
+ const withdrawLeg=plan.actions.length===4?
+  plan.actions[3].Withdraw:plan.actions[2].Withdraw;
+ if((withdrawLeg.amount===undefined)===(withdrawLeg.max_amount===undefined))
+  throw Error('STAGE125_AMBIGUOUS_WITHDRAW_AMOUNT_MODE');
+ const withdrawAmount=withdrawLeg.amount??withdrawLeg.max_amount;
  const selfRepay=plan.actions.length===4?plan.actions[2].Repay:undefined;
  const same=repay===seize;
+ if((same&&withdrawLeg.max_amount===undefined)||
+  (!same&&withdrawLeg.amount===undefined))
+  throw Error('STAGE125_UNSAFE_WITHDRAW_AMOUNT_MODE');
  if(typeof repay!=='string'||typeof seize!=='string'||!TOKEN.test(repay)||
   !TOKEN.test(seize)||
   (same?plan.actions.length!==4:plan.actions.length!==3)||
