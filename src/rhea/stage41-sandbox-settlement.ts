@@ -81,6 +81,16 @@ export interface SandboxSettlementEvidence {
 }
 export interface SandboxSettlementInput {
  plan:SandboxReplayPlan;
+ /** Stage124: independently finalized Sandbox Borrow and FT supply receipts. */
+ prefinancing?:{
+  mode:string;chain:string;actorAccountId:string;repayTokenId:string;
+  borrowAmountInternal:string;suppliedInternal:string;
+  actorBorrowDebtAfterSupplyInternal:string;priorActorBorrowDebtInternal:string;
+  actualBorrowFtCredited:boolean;actualFtReturnedToSupply:boolean;
+  borrowFinalReceiptVerified:boolean;supplyFinalReceiptVerified:boolean;
+  borrowTransactionHash:string;supplyTransactionHash:string;
+  mainnetExecutionEnabled:boolean;maySignMainnet:boolean;mayBroadcastMainnet:boolean;
+ };
  positionId:string;
  receipt:SandboxResult;
  borrowerBefore:unknown;borrowerAfter:unknown;
@@ -153,14 +163,38 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   finalOrLaterPersisted&&receipt.attemptedTransaction===true&&
   receipt.failedReceiptCount===0&&receipt.receiptCount>0;
  const actorFtReceived=ftSeizeAfter>ftSeizeBefore;
+ const funding=e.prefinancing;
+ const financed=!!funding&&
+  funding.mode==='STAGE124_AUTHENTIC_BORROW_TO_SUPPLIED_FT_PREFUND'&&
+  funding.chain==='NEAR_SANDBOX'&&
+  funding.actorAccountId===obj(e.actorBefore,'ACTOR').account_id&&
+  funding.repayTokenId===repay&&
+  funding.borrowAmountInternal===borrowed.toString()&&
+  typeof funding.suppliedInternal==='string'&&UINT.test(funding.suppliedInternal)&&
+  BigInt(funding.suppliedInternal)>=borrowed&&
+  funding.priorActorBorrowDebtInternal==='0'&&
+  funding.actorBorrowDebtAfterSupplyInternal===actorDebtBefore.toString()&&
+  actorDebtBefore>=borrowed&&
+  funding.actualBorrowFtCredited===true&&funding.actualFtReturnedToSupply===true&&
+  funding.borrowFinalReceiptVerified===true&&funding.supplyFinalReceiptVerified===true&&
+  typeof funding.borrowTransactionHash==='string'&&
+  /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(funding.borrowTransactionHash)&&
+  typeof funding.supplyTransactionHash==='string'&&
+  /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(funding.supplyTransactionHash)&&
+  funding.borrowTransactionHash!==funding.supplyTransactionHash&&
+  funding.mainnetExecutionEnabled===false&&funding.maySignMainnet===false&&
+  funding.mayBroadcastMainnet===false;
+ // A positive pre-liquidation debt is accepted ONLY with bounded, genuine
+ // Sandbox prefinance receipts, and must be zero after atomic Repay.
+ const priorDebtBlocked=actorDebtBefore>0n&&!financed;
  const status:SandboxSettlementEvidence['status']=!validReceipt?'BLOCKED_RECEIPT_OR_CALLBACK':
   !(debtDecreased&&collateralDecreased)?'BLOCKED_BORROWER_DELTAS':
-  actorDebtBefore>0n?'BLOCKED_ACTOR_PRIOR_LIABILITY':
+  priorDebtBlocked?'BLOCKED_ACTOR_PRIOR_LIABILITY':
   actorDebtAfter>0n?'BLOCKED_ACTOR_HAS_LIABILITY':
   !actorFtReceived?'BLOCKED_NO_FT_SEIZURE':'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD';
  const blockers=[...(validReceipt?[]:['SANDBOX_TRANSACTION_OR_ASYNC_CALLBACK_NOT_SUCCESSFUL']),
   ...(!(debtDecreased&&collateralDecreased)?['BORROWER_DEBT_AND_COLLATERAL_MOVEMENT_NOT_BOTH_OBSERVED']:[]),
-  ...(actorDebtBefore>0n?['REPLAY_ACTOR_ALREADY_HAS_OUTSTANDING_DEBT']:[]),
+  ...(priorDebtBlocked?['REPLAY_ACTOR_ALREADY_HAS_OUTSTANDING_DEBT']:[]),
   ...(actorDebtAfter>0n?['REPLAY_ACTOR_STILL_HAS_OUTSTANDING_DEBT']:[]),
   ...(!actorFtReceived?['NO_SANDBOX_ACTOR_FT_COLLATERAL_TRANSFER_OBSERVED']:[]),
   ...(repay===seize?['SHARED_TOKEN_ACTOR_FT_INCREASE_IS_NET_BALANCE_NOT_GROSS_SEIZURE']:[]),
