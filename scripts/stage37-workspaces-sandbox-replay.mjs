@@ -393,13 +393,21 @@ async function main(){
  });
  await writeFile('stage124-borrow-receipts.json',
   JSON.stringify(preloanReport,null,2)+'\n');
- if(preloanReport.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
+ if(!['ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF',
+  'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE'].includes(preloanReport.status)||
   preloanReport.failedReceiptCount!==0||
   !preloanReport.callbackReceiptCount||
   preloanReport.failedCallbackReceiptCount!==0)
   throw Error('STAGE124_GENUINE_PREBORROW_RECEIPTS_NOT_SUCCESSFUL');
- // Persistence after a real later finalized Sandbox block is mandatory.
+ // Workspaces can report optimistic execution; confirm the state persists at
+ // a later locally FINALIZED height before trusting any credited supply.
+ const borrowFinalBefore=await worker.provider.block({finality:'final'});
  await worker.provider.fastForward(10000);
+ const borrowFinalAfter=await worker.provider.block({finality:'final'});
+ if(!Number.isSafeInteger(borrowFinalBefore?.header?.height)||
+  !Number.isSafeInteger(borrowFinalAfter?.header?.height)||
+  borrowFinalAfter.header.height<borrowFinalBefore.header.height+2)
+  throw Error('STAGE124_PREBORROW_FINALIZED_PERSISTENCE_UNVERIFIED');
  const actorAfterBorrow=await lending.view('get_account_all_positions',{
   account_id:actor.accountId,
  });
@@ -409,7 +417,8 @@ async function main(){
   before:actorBefore,after:actorAfterBorrow,route,
  });
  await writeFile('stage124-repay-supply-proof.json',
-  JSON.stringify(suppliedProof,null,2)+'\n');
+  JSON.stringify({...suppliedProof,finalizedBlockBefore:borrowFinalBefore.header.height,
+   finalizedBlockAfter:borrowFinalAfter.header.height},null,2)+'\n');
  await markStage55('SANDBOX_LIQUIDATION_TRANSACTION');
  let raw;
  try{
