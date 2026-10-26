@@ -28,6 +28,7 @@ import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-b
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
+import {stage124SameTokenRoute,stage124AttestSuppliedBorrow} from './stage124-same-token-prefund.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -367,12 +368,54 @@ async function main(){
   borrower:sandboxBorrower,actor:actorBefore,repayFt:repayFtBefore,seizeFt:seizeFtBefore,
   block:await worker.provider.block({finality:'final'}),
  },null,2)+'\n');
+ // Rhea Liquidate consumes the caller's supplied (not merely borrowed)
+ // repayment asset. The prior combined same-token call failed with
+ // "Not enough supplied balance" at the first Liquidate operation. Execute
+ // a genuine, independently receipted Sandbox borrow first, then attest the
+ // credited supplied balance before the liquidation/repay/withdraw sequence.
+ // Never seed or alter token/borrower balances to make this condition pass.
+ const route=stage124SameTokenRoute(plan);
+ let preloan;
+ try{
+  preloan=await actor.callRaw(lending,plan.method,{actions:route.borrowActions},{
+   gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
+  });
+ }catch{
+  throw Error('STAGE124_GENUINE_PREBORROW_TRANSACTION_REJECTED');
+ }
+ await writeFile('stage124-raw-borrow-transaction.json',
+  JSON.stringify(preloan?.result??preloan,null,2)+'\n');
+ const preloanReport=summarizeStage37SandboxOutcome(preloan,{
+  pinnedConfigMatches,pinnedBorrowerMatches,
+  temporalAccrualVerified:temporalProof?.verified===true&&
+   parityWitness.temporalAccrualVerified===true,
+  importedContractCount:contracts.size,allStoredKeysAttested:false,
+ });
+ await writeFile('stage124-borrow-receipts.json',
+  JSON.stringify(preloanReport,null,2)+'\n');
+ if(preloanReport.status!=='ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'||
+  preloanReport.failedReceiptCount!==0||
+  !preloanReport.callbackReceiptCount||
+  preloanReport.failedCallbackReceiptCount!==0)
+  throw Error('STAGE124_GENUINE_PREBORROW_RECEIPTS_NOT_SUCCESSFUL');
+ // Persistence after a real later finalized Sandbox block is mandatory.
+ await worker.provider.fastForward(10000);
+ const actorAfterBorrow=await lending.view('get_account_all_positions',{
+  account_id:actor.accountId,
+ });
+ await writeFile('stage124-post-borrow-position.json',
+  JSON.stringify(actorAfterBorrow,null,2)+'\n');
+ const suppliedProof=stage124AttestSuppliedBorrow({
+  before:actorBefore,after:actorAfterBorrow,route,
+ });
+ await writeFile('stage124-repay-supply-proof.json',
+  JSON.stringify(suppliedProof,null,2)+'\n');
  await markStage55('SANDBOX_LIQUIDATION_TRANSACTION');
  let raw;
  try{
   sandboxTransactionSubmitted=true;
   await recordStage55(stage55.transactionSubmitted());
-  raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
+  raw=await actor.callRaw(lending,plan.method,{actions:route.liquidationActions},{
    gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
  }catch(error){
