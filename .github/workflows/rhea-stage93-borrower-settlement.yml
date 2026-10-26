@@ -141,6 +141,9 @@ jobs:
           EXECUTION_ENABLED: 'false'
           NEAR_NETWORK: mainnet
           NEAR_WORKSPACES_NETWORK: sandbox
+          # Workspaces 5 defaults to nearcore 2.6.2; use the pinned current
+          # runtime to execute authentically imported modern Wasm contracts.
+          SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
           NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
           NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
           RHEA_LENDING_CONTRACT: contract.main.burrow.near
