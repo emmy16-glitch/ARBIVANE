@@ -65,8 +65,10 @@ export async function stage124FinalizeSandboxTransaction(raw,provider,actorId,la
  return v;
 }
 export async function prefundStage124RheaSupply({
- actor,lending,repayToken,plan,repayReserve,provider
+ actor,lending,repayToken,plan,repayReserve,provider,onBorrowSnapshot
 }){
+ if(onBorrowSnapshot!==undefined&&typeof onBorrowSnapshot!=='function')
+  throw Error('STAGE128_INVALID_READONLY_BALANCE_EVIDENCE_WRITER');
  if(plan?.chain!=='NEAR_SANDBOX'||plan?.maySignMainnet!==false||
   plan?.executionEnabled!==false||plan?.mayBroadcastMainnet!==false||
   plan?.method!=='execute_with_pyth'||plan.actions?.length!==4||
@@ -104,7 +106,24 @@ export async function prefundStage124RheaSupply({
   JSON.stringify(borrowFinal,null,2)+'\n');
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
- if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
+ const borrowedSupplied=supply(borrowState,tokenId);
+ const observedFt=number(borrowFt,'BORROW_FT');
+ // Stage128 never invents liquidity: preserve the independent, actual post-
+ // Borrow Rhea supplied balance AND NEP-141 wallet balance before deciding
+ // whether the real loan paid FT externally or credited supplied shares.
+ if(onBorrowSnapshot)await onBorrowSnapshot({
+  mode:'STAGE128_ACTUAL_SANDBOX_BORROW_ACCOUNTING_SNAPSHOT',chain:'NEAR_SANDBOX',
+  borrowerStateModified:false,mainnetExecutionEnabled:false,
+  actorAccountId:actor.accountId,repayTokenId:tokenId,
+  finalizedBorrowTransactionHash:borrowFinal.transaction?.hash??null,
+  sourceApprovedBorrowInternal:amount.toString(),
+  observedActorBorrowDebtInternal:borrowedDebt.toString(),
+  observedActorRheaSuppliedInternal:borrowedSupplied.toString(),
+  observedActorExternalFtAtomic:observedFt.toString(),
+  eligibleForExternalFtPrefund:borrowedDebt>=amount&&observedFt>=amount,
+  protocolAccountingPathConfirmed:false,
+ });
+ if(borrowedDebt<amount||observedFt<amount)
   throw Error('STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT');
  // Standard Rhea FT deposit credits 'supplied', unlike OnlyIncreaseCollateral.
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
