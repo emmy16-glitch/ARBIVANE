@@ -5,6 +5,12 @@
  */
 const UINT=/^(0|[1-9][0-9]{0,38})$/;
 const ID=/^[a-z0-9._-]{2,64}$/;
+/** Report only a bounded, known error class; never persist RPC credentials. */
+export function stage126PrefundFailureCode(error){
+ const code=error instanceof Error?error.message:'';
+ return /^STAGE124_[A-Z0-9_]{3,96}$/.test(code)?code:
+  'STAGE126_PREFUND_UNCLASSIFIED_REJECTION';
+}
 function number(v,label){
  if(typeof v!=='string'||!UINT.test(v))throw Error('STAGE124_INVALID_'+label);
  return BigInt(v);
@@ -58,8 +64,10 @@ async function finalized(raw,provider,actorId,label){
  return v;
 }
 export async function prefundStage124RheaSupply({
- actor,lending,repayToken,plan,repayReserve,provider
+ actor,lending,repayToken,plan,repayReserve,provider,onEvidence
 }){
+ if(onEvidence!==undefined&&typeof onEvidence!=='function')
+  throw Error('STAGE124_INVALID_EVIDENCE_WRITER');
  if(plan?.chain!=='NEAR_SANDBOX'||plan?.maySignMainnet!==false||
   plan?.executionEnabled!==false||plan?.mayBroadcastMainnet!==false||
   plan?.method!=='execute_with_pyth'||plan.actions?.length!==4||
@@ -88,7 +96,10 @@ export async function prefundStage124RheaSupply({
  const borrowRaw=await actor.callRaw(lending,plan.method,{
   actions:[plan.actions[0]],
  },{gas:300000000000000n,attachedDeposit:1n});
+ // Persist authentic outcome before validating it; failed children are evidence.
+ if(onEvidence)await onEvidence('borrowRaw',borrowRaw?.result??borrowRaw);
  const borrowFinal=await finalized(borrowRaw,provider,actor.accountId,'BORROW');
+ if(onEvidence)await onEvidence('borrowFinal',borrowFinal);
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
  if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
@@ -97,7 +108,9 @@ export async function prefundStage124RheaSupply({
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
   receiver_id:lending.accountId,amount:amount.toString(),msg:'',
  },{gas:200000000000000n,attachedDeposit:1n});
+ if(onEvidence)await onEvidence('depositRaw',depositRaw?.result??depositRaw);
  const depositFinal=await finalized(depositRaw,provider,actor.accountId,'SUPPLY');
+ if(onEvidence)await onEvidence('depositFinal',depositFinal);
  const [funded,ftFunded]=await Promise.all([readPositions(),readFt()]);
  const debtAfter=debt(funded,tokenId);
  const suppliedAfter=supply(funded,tokenId);
