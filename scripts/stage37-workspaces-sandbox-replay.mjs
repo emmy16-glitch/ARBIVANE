@@ -423,6 +423,10 @@ async function main(){
   return {borrower,actor:balances[0],repayFt:balances[1],seizeFt:balances[2]};
  };
  const immediate=await snapshotAll();
+ // Persist BOTH genuine views so interest accrual cannot obscure whether
+ // the supplied/debt/collateral SHARES and actual FT balances persisted.
+ await writeFile('stage131-immediate-finalized-state.json',
+  JSON.stringify(immediate,null,2)+'\n');
  let verifiedReport=report,post=immediate;
  if(report.status!=='SANDBOX_RECEIPT_FAILURE'){
   if(!worker?.provider||typeof worker.provider.block!=='function'||
