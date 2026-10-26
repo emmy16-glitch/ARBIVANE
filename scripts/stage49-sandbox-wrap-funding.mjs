@@ -84,7 +84,7 @@ async function saveFundingReceipt(path,initial,final,classification){
   initial:fundingReceiptSummary(initial),
   final:final?fundingReceiptSummary(final):null,
   actualLiquidationAttempted:false,mainnetExecutionEnabled:false,
- },null,2)+'\\n');
+ },null,2)+'\n');
 }
 export async function settleFundingTransferReceipt({
  raw,provider,actorAccountId,evidencePath=null
