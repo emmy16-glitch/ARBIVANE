@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/stage164-source-pricing-closure.mjs'
+      - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
@@ -186,6 +187,7 @@ jobs:
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
             stage164-derived-price-parity.json
+            stage166-pinned-pricing-read-diagnostics.json
             stage88-sandbox-clone-witness.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
