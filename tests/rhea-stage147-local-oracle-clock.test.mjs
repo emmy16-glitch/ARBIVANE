@@ -57,6 +57,11 @@ test('Stage147 is explicitly isolated to original Sandbox runner and recorded as
  assert.match(historical,/env\.STAGE147_LOCAL_CLOCK_COMPRESSION/);
  assert.match(historical,/timingPerformanceOnRealMainnetNotProven/);
  assert.match(runner,/localPartnerTimeCompression:e\.STAGE147_LOCAL_CLOCK_COMPRESSION/);
+ assert.match(runner,/const stage149ReplayClockWitness=await historical\.startReplayClock/);
+ assert.match(runner,/clockPhase:stage149ReplayClockWitness\.clockPhase/);
+ assert.match(runner,/clockRate:stage149ReplayClockWitness\.clockRate/);
+ assert.match(runner,/timingPerformanceOnRealMainnetNotProven/);
+ assert.doesNotMatch(runner,/clockPhase:'HISTORICAL_EXECUTION',reconstructionClockRate:0\.01/);
  assert.match(workflow,/STAGE147_LOCAL_CLOCK_COMPRESSION: 'true'/);
  assert.match(workflow,/NEAR_WORKSPACES_NETWORK: sandbox/);
  assert.match(workflow,/EXECUTION_ENABLED: 'false'/);
