@@ -116,6 +116,7 @@ async function main(){
  const priceClosure=selectStage164PricingClosure({
   baseIds:selectPinnedActivePythSandboxDependencies(config.value,plan),
   priceInfos:priceInfos.value,
+  borrowerPositions:borrower.value,
  });
  const ids=priceClosure.ids;
  cloneMonitor=createStage88CloneWitness({contractIds:ids,sourceBlockHeight:block});

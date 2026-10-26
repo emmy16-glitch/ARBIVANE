@@ -1,3 +1,5 @@
+**Superseded scope note (Stage165):** The initial Stage164 global-market extra-call selection exceeded the 6-contract Sandbox limit for a Stage93 borrower and caused a real regression. [Stage165](STAGE165_BORROWER_SCOPED_PRICE_DEPENDENCIES.md) narrows the imported pricing contracts to the pinned borrower's debt/collateral tokens plus execution assets. All pinned-code/source-price parity requirements remain.
+
 # Stage164 — Rhea derived-price dependency closure for real local Sandbox execution
 
 ## Original evidence, 26 October 2026

@@ -60,6 +60,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage163](docs/STAGE163_FAIR_RPC_RECOVERY.md) addresses a verified source-discovery issue: the 80-account shard with 11 paper at-risk LiNEAR borrowers recorded 11 RPC timeout/rate-limit blocks. The old recovery budget could retry only its first four accounts. Stage163 spreads retries across all blocked borrowers before second retries, raises the explicit large-shard budget to 40, reduces RPC concurrency, and reports deferred reads without treating them as liquidation failures or successes. **A provider outage remains a blocker, not permission to bypass Rhea rules.** No mainnet spending is enabled.
 
+## Stage165 — borrower-scoped source pricing dependencies in Sandbox
+
+[Stage165](docs/STAGE165_BORROWER_SCOPED_PRICE_DEPENDENCIES.md) corrects a Stage164 regression: scanning all market-wide Rhea derived-price tokens exceeded the six-contract Sandbox clone limit and blocked a previously successful Stage93 replay. The dependency closure now selects **only authentic pinned borrower debt/collateral tokens plus execution assets**, importing `meta-pool.near` when the particular borrower actually needs `get_st_near_price`. Missing prices and contracts continue to fail closed; no mainnet spending or profit claim.
+
 ## Stage164 — source-pinned collateral price dependencies in Sandbox
 
 [Stage164](docs/STAGE164_DERIVED_PRICE_CLONE_CLOSURE.md) addresses the first genuine new-source LiNEAR attempt that reached Rhea's Sandbox callback: [run #40382961811](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40382961811) failed because **`meta-pool.near` was not cloned**, and the deployed Rhea contract invoked `get_st_near_price` when pricing collateral. Its prior LiNEAR oracle parity and actor funding checks passed, but no liquidation/repayment completed. The new clone closure imports all recognized source-declared derived pricing dependencies, compares each pinned source price with its original-code Sandbox clone, and refuses execution when any dependency is missing or mismatched. No fake contracts, prices, transaction approval or mainnet spending.
