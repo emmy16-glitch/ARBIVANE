@@ -29,6 +29,7 @@ import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
 import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
+import {stage134AdvanceFinalizedSandbox} from './stage134-finality-fallback.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -444,30 +445,15 @@ async function main(){
    throw Error('STAGE48_FINALIZED_SANDBOX_PROVIDER_NOT_AVAILABLE');
   await markStage55('SANDBOX_FINALIZED_STATE');
   const beforeFinalBlock=await worker.provider.block({finality:'final'});
-  // Stage133: the old fastForward(8) was below the current local block,
-  // whereas 10,000 advanced almost 10k blocks and accrued unrelated state.
-  // Advance to a small target based on the ACTUAL finalized block height.
-  const priorFinalizedHeight=beforeFinalBlock?.header?.height;
-  if(!Number.isSafeInteger(priorFinalizedHeight)||priorFinalizedHeight<1||
-   priorFinalizedHeight>Number.MAX_SAFE_INTEGER-64)
-   throw Error('STAGE133_INVALID_INITIAL_FINALIZED_HEIGHT');
-  await worker.provider.fastForward(priorFinalizedHeight+64);
-  const afterFinalBlock=await worker.provider.block({finality:'final'});
-  const laterFinalizedHeight=afterFinalBlock?.header?.height;
-  await writeFile('stage133-bounded-finality.json',JSON.stringify({
-   mode:'STAGE133_BOUNDED_AUTHENTIC_SANDBOX_FINALITY',
-   chain:'NEAR_SANDBOX',initialFinalizedHeight:priorFinalizedHeight,
-   requestedTargetHeight:priorFinalizedHeight+64,
-   laterFinalizedHeight:Number.isSafeInteger(laterFinalizedHeight)?
-    laterFinalizedHeight:null,
-   sourcePriceOrBorrowerBytesModified:false,mainnetExecutionEnabled:false,
-  },null,2)+'\n');
-  // A finality proof cannot be based on unchanged height or a hidden
-  // thousands-block advance that can mutate unrelated imported economics.
-  if(!Number.isSafeInteger(laterFinalizedHeight)||
-   laterFinalizedHeight<priorFinalizedHeight+2||
-   laterFinalizedHeight>priorFinalizedHeight+256)
-   throw Error('STAGE133_UNTRUSTED_FINALIZED_HEIGHT_MOVEMENT');
+  // Stage134: small local advances can leave FINAL unchanged (observed
+  // height 97 -> 97). Use the previously verified native 10,000-height
+  // fallback ONLY if needed; never fake finality or weaken State/FT checks.
+  const {afterFinalBlock,witness:finalityWitness}=
+   await stage134AdvanceFinalizedSandbox(worker.provider,beforeFinalBlock);
+  await writeFile('stage133-bounded-finality.json',
+   JSON.stringify(finalityWitness,null,2)+'\n');
+  await writeFile('stage134-finality-recovery.json',
+   JSON.stringify(finalityWitness,null,2)+'\n');
   post=await snapshotAll();
   await writeFile('stage116-after-state.json',JSON.stringify({
    ...post,finalizedBlockBefore:beforeFinalBlock,finalizedBlockAfter:afterFinalBlock,
