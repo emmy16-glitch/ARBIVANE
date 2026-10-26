@@ -5,6 +5,7 @@ on:
       - 'scripts/stage115-historical-sandbox-clock.mjs'
       - 'scripts/stage117-native-clock-smoke.mjs'
       - 'scripts/stage118-replay-clock.c'
+      - 'scripts/stage89-targeted-wnear-clone.mjs'
       - '.github/workflows/rhea-historical-clock-smoke.yml'
 permissions:
   contents: read
@@ -17,13 +18,15 @@ jobs:
       NEAR_WORKSPACES_NETWORK: sandbox
       EXECUTION_ENABLED: 'false'
       STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
+      STAGE119_WNEAR_NATIVE_REGRESSION: 'true'
+      NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
       - run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
-      - run: timeout --kill-after=10s 120s node scripts/stage117-native-clock-smoke.mjs
+      - run: timeout --kill-after=10s 120s node --experimental-strip-types scripts/stage117-native-clock-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
