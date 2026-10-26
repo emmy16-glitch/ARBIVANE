@@ -50,16 +50,20 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  const liquidation=plan.actions[1]?.Liquidate;
  const withdraw=plan.actions.at(-1)?.Withdraw;
  const same=liquidation?.out_assets?.[0]?.token_id===token;
+ const liquidateQty=liquidation?.in_assets?.[0]?.amount;
+ const buffer=same&&typeof liquidateQty==='string'&&UINT.test(liquidateQty)?
+  BigInt(liquidateQty)/10000n+2n:null;
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
-  liquidation.in_assets[0]?.amount!==rawQty||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
-  (same?(plan.actions.length!==4||
+  (same?(plan.actions.length!==4||buffer===null||
    plan.actions[2]?.Repay?.token_id!==token||
    plan.actions[2].Repay.amount!==rawQty||
-   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==BigInt(withdraw.amount??'0')):
-   plan.actions.length!==3)||
+   BigInt(rawQty??'0')!==BigInt(liquidateQty)+buffer||
+   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(liquidateQty)<=4n*buffer||
+   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(liquidateQty)-2n*buffer!==BigInt(withdraw.amount??'0')):
+   (plan.actions.length!==3||liquidateQty!==rawQty))||
   liquidation.account_id!==plan.borrowerAccountId)
   throw Error('STAGE49_PLAN_REPAY_ROUTE_MISMATCH');
  const qty=amount(rawQty,'BORROW_AMOUNT');
