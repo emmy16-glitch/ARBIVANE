@@ -36,6 +36,10 @@ The [complete Stage153 financing diagnosis and scale gate](docs/STAGE153_SCALED_
 
 **None of this is mainnet financing.** The Sandbox partner's collateral is disposable test NEAR; it is *not* a committed third-party investor, a permissionless flash loan, mainnet economic profit or money that can be withdrawn. Mainnet keys, wallet spending and owner payouts remain disabled.
 
+## Stage157 — genuinely larger source liquidation search (Sandbox only)
+
+The next experiment screens **new independently attested Rhea borrowers** rather than inflating the loan size against the historically tiny source liquidation. [Stage157](docs/STAGE157_LARGE_SOURCE_LIQUIDATION.md) queries fresh Rhea/Pyth source positions for 320 archived debt-index accounts across four windows and requires **at least $1,000 reference repay value and $10 gross reference spread** before even attempting original-code local Sandbox replay. Passing the sizing gate is **not** evidence of realized net profit, flash liquidity, external lender agreement or actual final settlement. No eligible source means **no transaction**. A fresh source still requires proof of spendable liquidity, original FINAL callbacks and all outstanding financing debt closed to zero. Mainnet spending stays disabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |
