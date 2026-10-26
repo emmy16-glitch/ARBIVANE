@@ -1,0 +1,79 @@
+name: Stage154 authenticated 10-vs-100 local financing solvency gate
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage154-capital-admission.mjs'
+      - 'tests/rhea-stage154-capital-admission.test.mjs'
+      - '.github/workflows/rhea-stage154-capital-admission.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage154-capital-admission.mjs'
+      - 'tests/rhea-stage154-capital-admission.test.mjs'
+      - '.github/workflows/rhea-stage154-capital-admission.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  strict_offline_admission:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/rhea-stage154-capital-admission.test.mjs
+  original_ten_vs_hundred_economic_receipts:
+    if: github.event_name != 'pull_request'
+    needs: strict_offline_admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: '40353279895'
+          name: stage146-real-local-partner-to-rhea-financing-attempt
+          path: proven-ten-token
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: '40354682373'
+          name: stage151-100-linear-local-partner-financing-original-receipts
+          path: failed-hundred-token
+          github-token: ${{ github.token }}
+      - name: Compare original onchain evidence and fail closed on funding mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s proven-ten-token/stage146-actual-partner-evidence.json
+          test -s failed-hundred-token/stage146-actual-partner-evidence.json
+          node scripts/stage154-capital-admission.mjs proven-ten-token/stage146-actual-partner-evidence.json failed-hundred-token/stage146-actual-partner-evidence.json stage154-historical-same-borrower-economics.json
+          jq -e '
+            .mode == "STAGE154_EMPIRICAL_SAME_BORROWER_CAPITAL_ADMISSION"
+            and .status == "BLOCK_100_LINEAR_FINANCING_FOR_THIS_ORIGINAL_SMALL_BORROWER"
+            and .observedInsolventUnpaidFinancingDebtAtomic == "24899422835948"
+            and .observedSolventActorResidualAtomic == "620478795205"
+            and .evenDoubleSmallBorrowerProceedsInsufficient == true
+            and .observedSameBorrowerLargeLoanFundingAllowed == false
+            and .realisticMainnetFinancingAvailabilityVerified == false
+            and .maySignMainnet == false
+            and .mayBroadcastMainnet == false
+          ' stage154-historical-same-borrower-economics.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage154-original-ten-vs-hundred-solvency-proof
+          path: stage154-historical-same-borrower-economics.json
+          retention-days: 90
+          if-no-files-found: error
