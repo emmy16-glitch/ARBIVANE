@@ -4,6 +4,31 @@
 
 The owner has no capital, so the only previously verified local Rhea liquidation used **1 NEAR of locally created wNEAR collateral in the disposable Sandbox**. The new stages must never present that capital source as a permissionless external flash loan.
 
+## Verified GitHub execution (26 October 2026)
+
+**PR [#217](https://github.com/emmy16-glitch/ARBIVANE/pull/217) merged** to main at commit `09d657d8e01e417e80fc205cd483ed9a19961044`. Its pull-request checks for the adversarial lifecycle tests and full repository safety/type checks both passed.
+
+The genuine post-merge [run #40337081020](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40337081020) **passed both jobs**, including a real download and independent audit of the original successful Stage93 Rhea settlement and source funding evidence. The uploaded [artifact #12656484494](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40337081020/artifacts/12656484494) was independently downloaded and inspected.
+
+The original JSON proves exactly:
+- `authenticStage93RheaLiquidationObserved: true`
+- `authenticStage93FundingClass: RHEA_OVER_COLLATERALIZED_BORROW`
+- `authenticStage93DepositedSandboxCollateralYocto: 1000000000000000000000000` (disposable 1 NEAR equivalent Sandbox seed)
+- `authenticStage93NetSeizedFtAtomic: 2531190098868`
+- `stage144PartnerModelComplete: true` (**only synthetic accounting**)
+- `modelSimulationNetAtomic: 97000` (**invented local token-atomic scenario, not monetizable proceeds**)
+- `partnerFundsActuallyTransferredToRhea: false`
+- `actualStage144PartnerFinancedWorkspacesLiquidation: false`
+- `lenderPrincipalAndPremiumRepaidOnchain: false`
+- `netRealizableNearTradingProfitProven: false`
+- `ownerMainnetProfitPaid: false`
+- `mainnetBroadcastPermitted: false`
+- `productionStatus: BLOCKED_NO_VERIFIED_EXTERNAL_FINANCING_OR_SPEND_AUTHORIZATION`
+
+**Consequently Stages143 and 145 implement robust local checks but Stage144's *external-financed on-chain acceptance* remains outstanding.** Passing CI alone does not upgrade that claim.
+
+---
+
 ## Stage143 — asynchronous financing recovery
 
 `scripts/stage143-async-financing-journal.mjs` implements a deterministic, hash-chained, append-only **simulation** of the NEAR promise financing lifecycle:
