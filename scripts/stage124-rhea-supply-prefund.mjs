@@ -64,6 +64,28 @@ export async function stage124FinalizeSandboxTransaction(raw,provider,actorId,la
   throw error();
  return v;
 }
+/** Preserve exact observation of genuine local Borrow before any further
+ * transaction. A deficit is evidence, not authorization to change funding.
+ */
+export function stage127ObservedBorrowFunding({requiredInternal,actualDebt,actualFt,hash}){
+ const required=number(requiredInternal,'REQUIRED_REPAY_INTERNAL');
+ const debt=number(actualDebt,'ACTOR_DEBT_INTERNAL');
+ const ft=number(actualFt,'ACTOR_FT_ATOMIC');
+ if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(hash??''))
+  throw Error('STAGE127_MISSING_SIGNED_BORROW_HASH');
+ return {
+  mode:'STAGE127_ACTUAL_SIGNED_SANDBOX_BORROW_BALANCE_WITNESS',
+  chain:'NEAR_SANDBOX',borrowTransactionId:hash,
+  requiredInternal:required.toString(),
+  actualActorDebtInternal:debt.toString(),
+  actualActorFtAtomic:ft.toString(),
+  debtShortfallInternal:(required>debt?required-debt:0n).toString(),
+  ftShortfallAtomic:(required>ft?required-ft:0n).toString(),
+  debtAtLeastRequired:debt>=required,ftAtLeastRequired:ft>=required,
+  verifiedFundingForNextOperation:debt>=required&&ft>=required,
+  mainnetExecutionEnabled:false,borrowerMutationNotAuthorized:true,
+ };
+}
 export async function prefundStage124RheaSupply({
  actor,lending,repayToken,plan,repayReserve,provider
 }){
@@ -104,7 +126,16 @@ export async function prefundStage124RheaSupply({
   JSON.stringify(borrowFinal,null,2)+'\n');
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
- if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
+ const witness=stage127ObservedBorrowFunding({
+  requiredInternal:amount.toString(),
+  actualDebt:borrowedDebt.toString(),
+  actualFt:borrowFt,
+  hash:borrowFinal.transaction?.hash,
+ });
+ // Persist real post-Borrow state even when no funded Liquidate is allowed.
+ await writeFile('stage127-actor-borrow-balance-witness.json',
+  JSON.stringify(witness,null,2)+'\n');
+ if(!witness.verifiedFundingForNextOperation)
   throw Error('STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT');
  // Standard Rhea FT deposit credits 'supplied', unlike OnlyIncreaseCollateral.
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
