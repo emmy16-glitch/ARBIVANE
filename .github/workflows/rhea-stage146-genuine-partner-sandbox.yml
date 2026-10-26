@@ -45,6 +45,10 @@ jobs:
       SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
       NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
       NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+      # Stage101 must retry all pinned LiNEAR views on an independent archival
+      # provider; use the owner-configured high-limit read-only endpoint if
+      # available, exactly as in the previously successful Stage93 workflow.
+      STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
       RHEA_RPC_SPACING_MS: '900'
       STAGE37_STAGE35_EVIDENCE_PATH: stage38-positive-stage35-evidence.json
     steps:
