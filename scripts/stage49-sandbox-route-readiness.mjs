@@ -61,10 +61,16 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
  if(same&&(!selfRepay||selfRepay.token_id!==repay))
   throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
  const selfRepayUnits=same?u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
+ const buffer=repaidUnits/10000n+2n;
+ // Same-token execution borrows slightly more solely to cover Rhea's
+ // share rounding; that actor-only surplus is fully repaid. Source-sized
+ // Liquidate in/out legs are unchanged, and withdrawal leaves a dust cushion.
  if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
-  borrowedUnits!==repaidUnits||
-  (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=borrowedUnits||
-    withdrawnUnits!==seizedUnits-borrowedUnits):seizedUnits!==withdrawnUnits))
+  (same?(borrowedUnits!==repaidUnits+buffer||
+    selfRepayUnits!==borrowedUnits||
+    seizedUnits-repaidUnits<=4n*buffer||
+    withdrawnUnits!==seizedUnits-repaidUnits-2n*buffer):
+   (borrowedUnits!==repaidUnits||seizedUnits!==withdrawnUnits)))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
  const market=assetMap(assets);
  const debt=market.get(repay),collateral=market.get(seize);
