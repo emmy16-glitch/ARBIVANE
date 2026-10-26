@@ -14,3 +14,9 @@
 - Actual run `40288079004` proves the oracle view now executes: prior deserialization rejection is gone. Current failure is `STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT`, before any liquidation call.
 - Next command: `gh api repos/emmy16-glitch/ARBIVANE/actions/runs/40288079004/logs > /tmp/stage113.zip`.
 - Next fix: distinguish a null expired local quote from a changed non-null quote. Source quote freshness and Sandbox clock must remain enforced. Investigate authentic historical clock configuration or fresh authenticated oracle updates; do not raise the age bound or modify stored prices.
+
+## Stage 114 actual execution
+- `6b13988` adds a null-quote failure distinction; 9 existing Pyth tests pass.
+- Run `40288643664` completed with `STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING`. Local oracle returns null while the pinned source returns a price. No liquidation call occurred.
+- Next implementation must resolve time coherence of authentic oracle data (historical Sandbox time or authenticated fresh oracle state with requalification), not just add diagnostics. Do not widen age bounds or replace oracle values.
+- Exact inspection command: `gh api repos/emmy16-glitch/ARBIVANE/actions/runs/40288643664/logs > /tmp/stage114.zip`.
