@@ -13,6 +13,8 @@ The owner cannot supply trading principal or collateral. Stage139 isolates the r
 
 See [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md). Stage140 extends it with read-only finalized Rhea/Ref deployed WASM and SHA256/method-export inspection, without falsely certifying a flash lender. See [Stage140](STAGE140_NATIVE_PROVIDER_DISCOVERY.md). Stage141 extends the read-only discovery to **six documented deployed contract accounts** and checks LiNEAR metadata and candidate-held balance without calling it borrowable reserve. See [Stage141](STAGE141_LENDER_QUALIFICATION.md). No loan is activated.
 
+Stages142–145 now have **offline defensive implementations**, including a financing-intent adapter, event-sourced simulated repayment recovery, partner accounting simulation, an original Stage93 proof comparison and ten deny-by-default live-release gates. **No real partner-backed Rhea Workspaces transaction, funded lender, genuine profit or mainnet signing was produced by these stages**. See [Stages143–145](STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
+
 ## Delivered
 
 | Capability | Implementation | Verified evidence |
