@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
-import {attestStage48FinalizedSandboxReplay} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
+import {attestStage48FinalizedSandboxReplay,stage131FinancialPersistence} from '../src/rhea/stage48-finalized-sandbox-witness.ts';
 
 const HASH='4'.repeat(43);
 const callback={receipt_id:HASH,receipt:{Action:{actions:[{
@@ -82,4 +82,44 @@ test('runner uses real NEAR Sandbox finalized advancement, no unguarded promotio
  assert.match(script,/afterFinalBlock:post/);
  assert.match(script,/NEAR_WORKSPACES_NETWORK!=='sandbox'/);
  assert.doesNotMatch(script,/broadcast_tx|signAndSend/);
+});
+
+test('Stage131 accepts only tiny passive interest with untouched borrowed/collateral shares and FT',()=>{
+ const legs=(token,balance,shares)=>[{token_id:token,balance,shares}];
+ const account=(id,debt,collateral,supplied='100000')=>({
+  account_id:id,is_locked:false,has_non_farmed_assets:false,
+  supplied:legs('wrap.near',supplied,'100000'),
+  positions:{REGULAR:{
+   borrowed:legs('linear-protocol.near',debt,'50000'),
+   collateral:legs('linear-protocol.near',collateral,'80000'),
+  }},
+ });
+ const initial={borrower:account('borrower.near','50000','80000'),
+  actor:account('actor.near','10000','80000'),
+  repayFt:'0',seizeFt:'2500'};
+ const later={borrower:account('borrower.near','50001','80001','100001'),
+  actor:account('actor.near','10001','80001','100001'),
+  repayFt:'0',seizeFt:'2500'};
+ assert.equal(stage131FinancialPersistence(initial,later),true);
+ const wrong=[
+  {...later,seizeFt:'2501'},
+  {...later,borrower:account('changed.near','50001','80001','100001')},
+  {...later,borrower:account('borrower.near','60000','80001','100001')},
+  {...later,borrower:{...later.borrower,positions:{REGULAR:{
+   ...later.borrower.positions.REGULAR,
+   borrowed:legs('linear-protocol.near','50001','49999'),
+  }}}},
+  {...later,actor:{...later.actor,supplied:legs('wrap.near','100001','100001')}},
+  {...later,actor:{...later.actor,positions:{}} },
+ ];
+ for(const item of wrong)assert.equal(stage131FinancialPersistence(initial,item),false);
+});
+test('Stage131 does not treat unrelated large interest/share changes as finalized persistence',()=>{
+ const simple=(supplied,shares)=>({account_id:'source.near',
+  supplied:[{token_id:'wrap.near',balance:supplied,shares}],
+  positions:{REGULAR:{borrowed:[],collateral:[]}}});
+ const initial={borrower:simple('188126388156541479289943','178016397868040044653913'),
+  actor:simple('1000','1000'),repayFt:'0',seizeFt:'2500'};
+ const drifted={...initial,borrower:simple('628525254359286833369346','594747250834223961107895')};
+ assert.equal(stage131FinancialPersistence(initial,drifted),false);
 });
