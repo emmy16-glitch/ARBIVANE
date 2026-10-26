@@ -430,11 +430,22 @@ async function main(){
    throw Error('STAGE48_FINALIZED_SANDBOX_PROVIDER_NOT_AVAILABLE');
   await markStage55('SANDBOX_FINALIZED_STATE');
   const beforeFinalBlock=await worker.provider.block({finality:'final'});
-  // Stage44's actual NEAR Sandbox proof showed fastForward(8) was not
-  // enough to advance finalized height; Workspaces uses 10,000.
-  await worker.provider.fastForward(10000);
+  // Stage131: fastForward(8) was below the already reached local height,
+  // while fastForward(10000) advanced ~9900 blocks, accruing unrelated pool
+  // interest/farm state. Advance only a bounded number beyond ACTUAL height.
+  const previousFinalHeight=beforeFinalBlock?.header?.height;
+  if(!Number.isSafeInteger(previousFinalHeight)||previousFinalHeight<1||
+   previousFinalHeight>Number.MAX_SAFE_INTEGER-64)
+   throw Error('STAGE131_INVALID_SANDBOX_FINALIZED_HEIGHT');
+  await worker.provider.fastForward(previousFinalHeight+64);
   const afterFinalBlock=await worker.provider.block({finality:'final'});
   post=await snapshotAll();
+  await writeFile('stage131-immediate-after-state.json',
+   JSON.stringify(immediate,null,2)+'\n');
+  if(!Number.isSafeInteger(afterFinalBlock?.header?.height)||
+   afterFinalBlock.header.height<previousFinalHeight+2||
+   afterFinalBlock.header.height>previousFinalHeight+256)
+   throw Error('STAGE131_SANDBOX_FINALIZED_HEIGHT_OUT_OF_BOUNDS');
   await writeFile('stage116-after-state.json',JSON.stringify({
    ...post,finalizedBlockBefore:beforeFinalBlock,finalizedBlockAfter:afterFinalBlock,
   },null,2)+'\n');
