@@ -270,3 +270,42 @@ test('Stage94 stops retrying if a formerly stale quote changes to unrelated inva
  assert.equal(result.sandboxPlanReady,false);
  assert.ok(result.rows.every(x=>x.reasonCode==='PYTH_FEED_OR_ASSET_METADATA'));
 });
+
+// Stage159: the gross-dollar leader is not necessarily supported by the
+// Stage37 LiNEAR/LiNEAR execution route. Preserve both source observations.
+test('Stage159 selects smaller eligible LiNEAR proposal over larger unsupported WNEAR proposal',async()=>{
+ const same=(id,token,gross)=>{const p=ok(id);return {...p,
+  repay:{...p.repay,tokenId:token},seize:{...p.seize,tokenId:token},
+  paperGrossUsdE27:(BigInt(gross)*10n**27n).toString()};};
+ const result=await qualifyStage38Candidates({},source(),stage32(),
+  {...options,requiredSameTokenId:'linear-protocol.near'},
+  async id=>id==='borrower335.near'?
+   same(id,'wrap.near',1000):same(id,'linear-protocol.near',30));
+ assert.equal(result.bestProposal?.borrowerAccountId,'borrower338.near');
+ assert.equal(result.sandboxPlanReady,true);
+ assert.equal(result.positiveSourcePlans,1);
+ assert.equal(result.rejectedByRequiredRoute,1);
+ assert.equal(result.refreshed,2);
+ assert.ok(result.rows.every(x=>x.status==='FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'));
+ assert.equal(result.maySignMainnet,false);
+});
+test('Stage159 never authorizes Sandbox when every positive proposal is unsupported',async()=>{
+ const result=await qualifyStage38Candidates({},source(),stage32(),
+  {...options,requiredSameTokenId:'linear-protocol.near'},async id=>{
+   const p=ok(id);return {...p,repay:{...p.repay,tokenId:'wrap.near'},
+    seize:{...p.seize,tokenId:'wrap.near'}};
+  });
+ assert.equal(result.bestProposal,null);
+ assert.equal(result.status,'NO_EXECUTABLE_SOURCE_REFERENCE');
+ assert.equal(result.sandboxPlanReady,false);
+ assert.equal(result.positiveSourcePlans,0);
+ assert.equal(result.rejectedByRequiredRoute,2);
+ assert.equal(result.failedFreshReads,0);
+ assert.equal(result.mayBroadcastMainnet,false);
+});
+test('Stage159 unsupported route configurations fail before any source calls',async()=>{
+ await assert.rejects(()=>qualifyStage38Candidates({},source(),stage32(),
+  {...options,requiredSameTokenId:'wrap.near'},async()=>{
+   throw Error('MUST_NOT_QUERY_ANY_SOURCE');
+  }),/INVALID_STAGE38_CANDIDATE_OPTIONS/);
+});
