@@ -5,10 +5,13 @@
 const UINT=/^[1-9][0-9]{0,38}$/;
 export function attestStage125ActorBorrowCushion(
  plan:{sourceBackedBorrowCushionInternal?:string},
- borrow:string,repay:string,seize:string,
+ borrow:string,repay:string,seize:string,sameToken:boolean=true,
 ):boolean{
  if(!UINT.test(borrow)||!UINT.test(repay)||!UINT.test(seize))return false;
  const b=BigInt(borrow),r=BigInt(repay),s=BigInt(seize);
+ if(!sameToken)return b===r&&
+  (plan.sourceBackedBorrowCushionInternal===undefined||
+   plan.sourceBackedBorrowCushionInternal==='0');
  if(s<=r||b<r)return false;
  const extra=b-r;
  if(extra===0n)return plan.sourceBackedBorrowCushionInternal===undefined||
