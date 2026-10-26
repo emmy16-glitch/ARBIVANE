@@ -28,6 +28,8 @@ Stage142 implements an **offline** flash-versus-partner financing intent. Stages
 
 The [complete Stage153 financing diagnosis and scale gate](docs/STAGE153_SCALED_FINANCING_DIAGNOSIS.md) covers genuine transaction proof, next-run prerequisites and all known financial/production limitations. The historical borrower is still the same small debtor. Borrowing 100, 200 or 1,000 LiNEAR does not automatically increase the value that can be liquidated, while fees and accrued interest grow.
 
+**Original signed-receipt economics audit:** [Stage154 source-sized financing admission](docs/STAGE154_ORIGINAL_FINANCING_ECONOMICS.md) independently downloads the archived genuine 10- and 100-test-LiNEAR contract receipt sets, checks principal movement, original transaction hashes, Rhea liquidation/withdrawal events and outstanding debt. The completed 10-token cycle retained a small **unsold test-token** balance; the 100-token cycle was **economically short by 22,367,968,412,531 atomic LiNEAR** before mainnet costs. This is a funding-size rejection for the currently pinned borrower, not a fixable receipt-counting discrepancy. The separate Stage154 bounded-finality experiment remains a mechanics test, and does not invalidate the financial loss. New principal above 100 is blocked until a genuinely larger eligible borrower and conservative positive net economics are independently proved.
+
 **None of this is mainnet financing.** The Sandbox partner's collateral is disposable test NEAR; it is *not* a committed third-party investor, a permissionless flash loan, mainnet economic profit or money that can be withdrawn. Mainnet keys, wallet spending and owner payouts remain disabled.
 
 ## What works today
