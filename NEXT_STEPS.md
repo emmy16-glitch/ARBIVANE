@@ -1,5 +1,11 @@
 # Stage 111 handoff
 
+## Stage121 real collateral funding receipt checkpoint
+- Main `66c9af8` merged PR #169 after 732 tests/native clock passed. Actual Stage93 run `40304412267` FAILED after passing authentic Pyth parity and actor registration. Its code `STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT` occurs before any liquidation transaction. Artifact `12642176466` records Rhea's genuine `increase_collateral` event plus a wNEAR transfer, so the top-level provisional receipt interpretation may be the culprit; do not infer finalized resolver success from emitted logs.
+- This branch `fix/stage121-wnear-final-receipt` checks the Workspaces `callRaw` receipt, resolves an incomplete async `SuccessReceiptId` through LOCAL Sandbox `txStatus(hash, actor, 'FINAL')` without resending the transaction, and still requires successful callbacks plus real actor/collateral/vault deltas. It records redacted status classes and hashes as `stage49-wnear-transfer-receipt.json` even on failure. No mainnet signing/spending, invented prices, tampered positions, or relaxed economic gates.
+- Next: inspect PR CI. Merge only after green tests, then inspect the single automatically triggered Stage93 run and preserved artifact. If funding clears, debug the next real refusal with its full evidence. Liquidation still NOT verified.
+
+
 ## Stage 120 current blocker and implementation
 - Main `4461d72` merges PR #168 after CI/native wNEAR checks passed. Actual Stage93 `40301745945` FAILED at Pyth parity with `STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING`; no liquidation call. All authentic dependencies now import successfully.
 - Artifact `12641335340`: source block `221671156`, hash `7VAcnxN9zKk8YKTrbNJkj6hjc7n6VHPGfUpk4g9XZoh2`, timestamp `1793007824419919432`; local timestamp at parity `1793007896098270687`. Reconstruction consumed about 71.7 seconds, exceeding the unchanged 60-second oracle age limit even for a quote published at the source snapshot.
