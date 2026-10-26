@@ -53,9 +53,11 @@ async function main(){
    const admission=stage157AdmitSourceLargerLiquidation(candidate,item.accountId);
    row.reasons.push(admission.reason);
    row.repayLendingInternalAtomic=candidate.repay?.amountLendingInternalAtomic??null;
-   row.largeSourceLiquidationQualified=admission.qualified;
+   // Never mark a candidate qualified until the original deployed
+   // Stage37 action/asset route also passes. A thrown ABI check stays BLOCKED.
    if(admission.qualified){
     buildStage37SandboxPlan(candidate); // strict original deployed-route ABI.
+    row.largeSourceLiquidationQualified=true;
     if(!largest||BigInt(candidate.repay.amountLendingInternalAtomic)>
         BigInt(largest.repay.amountLendingInternalAtomic))largest=candidate;
    }
