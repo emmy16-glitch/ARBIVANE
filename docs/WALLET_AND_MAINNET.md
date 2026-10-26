@@ -4,6 +4,12 @@
 
 The project owner must control the eventual wallet. A GitHub connection, local Sandbox signer or project collaborator is **not** that wallet.
 
+## Owner's selected public wallet accounts
+
+The owner has proposed `okunlola_labs.near` as the personal owner/profit destination and `sillywiki4201.near` as a **future** restricted execution account. The addresses are public identifiers; they have **not** been cryptographically bound to an ARBIVANE signing account, and no spending authorization exists.
+
+**The owner has no starting funds for collateral.** The new Stage139 milestone investigates truly collateral-free liquidity and a verified gas sponsor. Do **not** deposit money into either account or share keys merely because the earlier Sandbox replay passed. That replay used 1 NEAR of disposable **local** collateral, not a flash loan. Read [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md).
+
 ## 1. Create or choose your own NEAR wallet
 
 Start at the [NEAR wallet ecosystem directory](https://wallet.near.org/). **Important:** `wallet.near.org` is now a wallet **directory**, not the old hosted NEAR wallet account interface. For a straightforward browser/extension NEAR wallet, [Meteor Wallet](https://wallet.meteorwallet.app/) is a supported option. Its [account-creation guide](https://help.meteorwallet.app/en/articles/2-how-to-create-your-free-named-wallet-in-60-seconds) explains the steps. Rhea's own [wallet setup guide](https://guide.rhea.finance/getting-started/near-account) also lists supported wallet options.

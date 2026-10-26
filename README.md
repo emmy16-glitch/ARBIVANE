@@ -6,6 +6,12 @@ ARBIVANE studies lending positions on NEAR, identifies candidate liquidations, c
 
 **Current state — 26 October 2026:** The project has executed and independently verified real Rhea liquidation transactions **inside NEAR Sandbox**. The latest successful Stage93 verification is [run #40320594342](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40320594342). It has **not** executed a funded mainnet liquidation, sold seized collateral for realized net profit, connected an owner's wallet or enabled production signing.
 
+## Capital-free funding is the next engineering objective
+
+The owner has **no starting capital**. ARBIVANE is investigating genuine native NEAR flash liquidity or another independently verifiable, zero-collateral financing route. The successful Rhea Sandbox transaction was **not** a flash loan: it deposited **1 NEAR of disposable Sandbox wNEAR collateral** before Rhea `Borrow`. That was not the owner's money, but it would be a real capital requirement on mainnet.
+
+Stage139 now audits the original successful funding receipts and refuses to mark collateral-backed borrowing as uncollateralized financing. The project has **not yet independently verified a live LiNEAR flash lender**, its safe asynchronous repayment model, or a gas sponsor. **Do not fund your wallet or enable mainnet signing to solve an unverified financing route.** See [Stage139 financing investigation](docs/STAGE139_FLASH_LIQUIDITY_FINANCING.md).
+
 ## What works today
 
 | Area | Verified capability | Boundary |

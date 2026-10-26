@@ -2,6 +2,10 @@
 
 **As of 26 October 2026.** This is the authoritative, current execution ledger for ARBIVANE. The `NEXT_STEPS.md` file preserves engineering chronology, including unsuccessful intermediate runs.
 
+## Funding-source correction
+
+The archived genuine Stage93 #40317139342 `stage49-sandbox-funding.json` reports `wrappedNativeSandboxYocto=1000000000000000000000000`: the disposable local actor wrapped and deposited **1 NEAR of Sandbox capital** into Rhea. After that collateralized Borrow, liquidation and full debt repayment, the actor gained LiNEAR. This was **not a flash loan** and it was not executed with the owner's own funds. The Stage139 verifier now cross-checks this historical funding with source plan and actual settlement. Capital-free execution remains **unverified**. See [Stage139](STAGE139_FLASH_LIQUIDITY_FINANCING.md).
+
 ## Current stage
 
 The project has passed complete Rhea liquidations in a **local NEAR Sandbox**, with real imported lending/token/oracle contracts, authentic signed transaction receipts and independently checked end-state balances. It is **not** a verified profitable mainnet trading system.

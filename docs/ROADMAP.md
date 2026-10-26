@@ -2,6 +2,17 @@
 
 **Status as of 26 October 2026.** Engineering began 23 October 2026. This plan distinguishes completed code, independently observed local contract execution and future **owner-funded** execution. It replaces the previous Stage 1/2 and proposed two-week sprint list as the primary roadmap; historical Stage documents remain in the repository for provenance.
 
+## Priority milestone — independently prove genuinely collateral-free financing
+
+The owner cannot supply trading principal or collateral. Stage139 isolates the real funding issue from the successful Sandbox liquidation: authentic Stage93 funding included **1 NEAR of locally minted wrapped-NEAR collateral**, so its zero final debt does **not** establish a flash loan.
+
+- **Implemented:** original-run collateral-classification verifier, zero-collateral forgery tests and read-only candidate financing/economics gate.
+- **Not achieved:** identified deployed lender offering the necessary uncollateralized LiNEAR asset, auditable NEAR asynchronous repayment/recovery, usable loan proceeds within Rhea, external loan repayment, gas sponsorship or capital-free local settlement.
+- **Next:** independently identify and attest a deployed native liquidity provider; if compatible, extend Workspaces to include real provider/token state and prove the end-to-end issue → liquidate → repay principal+fee → reconcile flow, including failed callbacks. If none qualifies, record a clear `NO_COMPATIBLE_NEAR_FLASH_LOAN_SOURCE` blocker rather than fabricating liquidity.
+- **Until then:** mainnet signing and spending remain disabled. Public owner wallet `okunlola_labs.near` and proposed restricted `sillywiki4201.near` do not need to be funded for research.
+
+See [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md).
+
 ## Delivered
 
 | Capability | Implementation | Verified evidence |

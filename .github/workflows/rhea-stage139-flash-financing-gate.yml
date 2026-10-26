@@ -1,0 +1,70 @@
+name: Stage139 authentic funding source and flash liquidity research
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage139-flash-liquidity-admission.mjs'
+      - 'scripts/stage139-flash-financing-cli.mjs'
+      - 'tests/rhea-stage139-flash-liquidity.test.mjs'
+      - '.github/workflows/rhea-stage139-flash-financing-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage139-flash-liquidity-admission.mjs'
+      - 'scripts/stage139-flash-financing-cli.mjs'
+      - 'tests/rhea-stage139-flash-liquidity.test.mjs'
+      - '.github/workflows/rhea-stage139-flash-financing-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  authentic_collateral_and_unverified_provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject imaginary flash-liquidity and unbounded financing
+        run: node --test tests/rhea-stage139-flash-liquidity.test.mjs
+      - name: Fetch genuine successful Stage93 original funding receipts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40317139342'
+          name: stage93-authentic-borrower-2579
+          path: source-stage93
+          github-token: ${{ github.token }}
+      - name: Independently classify real Stage93 collateral as non-flash
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in stage49-sandbox-funding.json stage41-sandbox-balance-settlement.json stage38-positive-stage35-evidence.json; do
+            test -s "source-stage93/$f"
+          done
+          node scripts/stage139-flash-financing-cli.mjs original-stage93 source-stage93 review
+          jq -e '.mode == "STAGE139_AUTHENTIC_SANDBOX_FUNDING_CLASSIFICATION" and .financingClass == "RHEA_OVER_COLLATERALIZED_BORROW" and .observedDepositedNativeSandboxYocto == "1000000000000000000000000" and .noCollateralFlashLoanDemonstrated == false and .localSeizedFtIncreaseAtomic == "2531190098868" and .mainnetSigningEnabled == false' review/stage139-original-capital-classification.json
+      - name: Tampering must not promote collateral-funded Rhea to capital free
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir tampered
+          cp source-stage93/stage49-sandbox-funding.json tampered/
+          cp source-stage93/stage41-sandbox-balance-settlement.json tampered/
+          cp source-stage93/stage38-positive-stage35-evidence.json tampered/
+          node -e "const fs=require('node:fs');let p='tampered/stage49-sandbox-funding.json';let x=JSON.parse(fs.readFileSync(p));x.collateralFunding.wrappedNativeSandboxYocto='0';fs.writeFileSync(p,JSON.stringify(x));"
+          if node scripts/stage139-flash-financing-cli.mjs original-stage93 tampered forged; then
+            echo 'FORGED_NO_COLLATERAL_INCORRECTLY_PASSED' >&2
+            exit 1
+          fi
+      - name: Upload independently checked capital-source result
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage139-authentic-collateral-vs-flash-research
+          path: review/stage139-original-capital-classification.json
+          retention-days: 90
+          if-no-files-found: error
