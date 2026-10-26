@@ -1,3 +1,4 @@
+import {attestStage125ActorBorrowCushion} from '../src/rhea/stage125-route-margin.ts';
 /** Stage52: conservative actor borrow-capacity reference using actually deposited
  * WNEAR collateral, checked against pinned ACTIVE Pyth lending views.
  * This is a fail-closed SANDBOX admission rule, not deployed borrow or PNL proof.
