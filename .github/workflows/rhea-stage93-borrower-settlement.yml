@@ -183,6 +183,14 @@ jobs:
             else
               sandbox_exit=$?
             fi
+            # Workspaces lifecycle diagnostics share stdout. Preserve those logs,
+            # but consume ONLY the canonical, separately persisted JSON result.
+            cp stage69-sandbox-actual.json stage69-sandbox-runner.log
+            if ! test -s stage37-process-result.json; then
+              echo 'STAGE123_CANONICAL_SANDBOX_RESULT_MISSING' >&2
+              exit 1
+            fi
+            cp stage37-process-result.json stage69-sandbox-actual.json
             attempt_exit=0
             EXECUTION_ENABLED=false NEAR_NETWORK=mainnet node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
               stage69-sandbox-actual.json stage55-sandbox-phase-evidence.json \
@@ -216,6 +224,8 @@ jobs:
             stage69-qualification-summary.json
             stage38-positive-stage35-evidence.json
             stage69-sandbox-actual.json
+            stage69-sandbox-runner.log
+            stage37-process-result.json
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
             stage46-sandbox-clone-evidence.json
