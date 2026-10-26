@@ -216,7 +216,8 @@ async function main(){
  // Copying a historical snapshot must not consume the market's quote window.
  // Resume normal, forward-only chain time before source parity and all actions.
  const stage149ReplayClockWitness=await historical.startReplayClock({
-  localPartnerTimeCompression:e.STAGE147_LOCAL_CLOCK_COMPRESSION==='true'
+  localPartnerTimeCompression:e.STAGE147_LOCAL_CLOCK_COMPRESSION==='true',
+  ultraShortLocalFinancingWindow:e.STAGE152_ULTRA_SHORT_LOCAL_CLOCK==='true'
  });
  await writeFile('stage115-historical-clock.json',
   JSON.stringify(stage149ReplayClockWitness,null,2)+'\n');
@@ -302,7 +303,14 @@ async function main(){
    nominalTimeCompressionRatio:stage149ReplayClockWitness.nominalTimeCompressionRatio,
    oracleQuoteAndFreshnessRulesUnmodified:true,
    timingPerformanceOnRealMainnetNotProven:
-    stage149ReplayClockWitness.localTimeCompressionEnabled===true},null,2)+'\n');
+    stage149ReplayClockWitness.localTimeCompressionEnabled===true,
+   stage152AssumesNonRealizableNearZeroFinancingTime:
+    stage149ReplayClockWitness.stage152AssumesNonRealizableNearZeroFinancingTime,
+   syntheticTimeMayUnderstateBorrowInterest:
+    stage149ReplayClockWitness.syntheticTimeMayUnderstateBorrowInterest,
+   originalStage151HundredTokenEconomicFailureRetained:
+    stage149ReplayClockWitness.originalStage151HundredTokenEconomicFailureRetained,
+   realisticEconomicsAndMainnetViabilityVerified:false},null,2)+'\n');
  const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block,
   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
    'https://archival-rpc.mainnet.near.org',
