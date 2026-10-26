@@ -1,3 +1,9 @@
+## Stage142 offline financing intent adapter — 26 October 2026
+
+- Added `scripts/stage142-financing-intent.mjs` with two mutually exclusive financing modes: `EXTERNAL_FLASH_LOAN` vs `AUTHORIZED_PARTNER_ESCROW`; a canonical SHA256 fingerprint (not a signature), strict U128 NEP-141 atomic accounting, max five-minute quote, zero owner contribution, no fake escrow, explicit sponsor/debt blockers and absolute mainnet broadcast refusal.
+- New adversarial unit suite and isolated GitHub Actions job. **A quote, wallet identity, funded-looking amount or indicative profit never becomes permission to execute.**
+- Next: Stage143 deterministic async lifecycle with event integrity, duplicate callback blocking and frozen debt when settlement fails; Stage144 simulation/actual original Rhea receipt comparison; Stage145 fail-closed real production readiness gate. No lender/partner or mainnet spend exists.
+
 ## Stage141 LIVE on-chain six-contract outcome (26 October 2026)
 
 - PR [#215](https://github.com/emmy16-glitch/ARBIVANE/pull/215) merged at `60f14cc94e577f47838a32eaa6a23dc254713c88`; source and dedicated adversarial tests + repository safety/type CI all passed.
