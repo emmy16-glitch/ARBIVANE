@@ -27,10 +27,10 @@ function debt(account,tokenId){
 function supply(account,tokenId){
  return rows(account?.supplied,'SUPPLIED',tokenId);
 }
-async function finalized(raw,provider,actorId,label){
+export async function finalizeStage124FundingReceipt(raw,provider,actorId,label){
  let v=raw?.result??raw;
  const error=()=>Error('STAGE124_'+label+'_UNVERIFIED_RECEIPTS');
- if(!v||!['FINAL','EXECUTED_OPTIMISTIC'].includes(v.final_execution_status)||
+ if(!v||!['FINAL','EXECUTED','EXECUTED_OPTIMISTIC'].includes(v.final_execution_status)||
   !Array.isArray(v.receipts_outcome)||v.receipts_outcome.length===0)
   throw error();
  if((v.status&&Object.hasOwn(v.status,'Failure'))||
@@ -38,7 +38,9 @@ async function finalized(raw,provider,actorId,label){
   throw error();
  if(v.final_execution_status!=='FINAL'||!Object.hasOwn(v.status??{},'SuccessValue')){
   const hash=v.transaction?.hash;
-  if(typeof hash!=='string'||!provider||typeof provider.txStatus!=='function')
+  if(typeof hash!=='string'||!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(hash)||
+   v.transaction?.signer_id!==actorId||
+   !provider||typeof provider.txStatus!=='function')
    throw error();
   let timer;
   try{
@@ -47,6 +49,8 @@ async function finalized(raw,provider,actorId,label){
     new Promise((_,reject)=>{timer=setTimeout(()=>reject(error()),15000);}),
    ]);
   }finally{clearTimeout(timer);}
+  if(v.transaction?.hash!==hash||v.transaction?.signer_id!==actorId)
+   throw error();
  }
  if(v.final_execution_status!=='FINAL'||!Object.hasOwn(v.status??{},'SuccessValue')||
   !Array.isArray(v.receipts_outcome)||v.receipts_outcome.length===0||
@@ -88,7 +92,7 @@ export async function prefundStage124RheaSupply({
  const borrowRaw=await actor.callRaw(lending,plan.method,{
   actions:[plan.actions[0]],
  },{gas:300000000000000n,attachedDeposit:1n});
- const borrowFinal=await finalized(borrowRaw,provider,actor.accountId,'BORROW');
+ const borrowFinal=await finalizeStage124FundingReceipt(borrowRaw,provider,actor.accountId,'BORROW');
  const [borrowState,borrowFt]=await Promise.all([readPositions(),readFt()]);
  const borrowedDebt=debt(borrowState,tokenId);
  if(borrowedDebt<amount||number(borrowFt,'BORROW_FT')<amount)
@@ -97,7 +101,7 @@ export async function prefundStage124RheaSupply({
  const depositRaw=await actor.callRaw(repayToken,'ft_transfer_call',{
   receiver_id:lending.accountId,amount:amount.toString(),msg:'',
  },{gas:200000000000000n,attachedDeposit:1n});
- const depositFinal=await finalized(depositRaw,provider,actor.accountId,'SUPPLY');
+ const depositFinal=await finalizeStage124FundingReceipt(depositRaw,provider,actor.accountId,'SUPPLY');
  const [funded,ftFunded]=await Promise.all([readPositions(),readFt()]);
  const debtAfter=debt(funded,tokenId);
  const suppliedAfter=supply(funded,tokenId);
