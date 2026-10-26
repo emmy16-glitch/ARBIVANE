@@ -12,6 +12,7 @@ on:
       - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
       - 'scripts/stage157-large-source-candidates.mjs'
       - 'scripts/stage157-large-source-discovery-cli.mjs'
+      - 'scripts/stage161-source-report-gate.jq'
       - 'tests/rhea-stage157-larger-source.test.mjs'
 permissions:
   contents: read
@@ -29,6 +30,20 @@ jobs:
         with:
           node-version: '22.16.0'
       - run: node --check scripts/stage157-large-source-candidates.mjs && node --check scripts/stage157-large-source-discovery-cli.mjs && node --test tests/rhea-stage157-larger-source.test.mjs tests/rhea-stage134-finality-fallback.test.mjs
+      - name: Validate discovery-report jq gate before any source rechecks
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -e -f scripts/stage161-source-report-gate.jq <<'JSON' >/dev/null
+          {"mode":"STAGE157_GENUINE_LARGER_LIQUIDATION_DISCOVERY","mainnetExecutionEnabled":false,"maySignMainnet":false,"mayBroadcastMainnet":false,"realizedEconomicProfitVerified":false,"reviewed":0,"minimumRepayLendingInternalAtomic":"0","arbitraryTransactionSizeFloorEnabled":false}
+          JSON
+          if jq -e -f scripts/stage161-source-report-gate.jq <<'JSON' >/dev/null
+          {"mode":"STAGE157_GENUINE_LARGER_LIQUIDATION_DISCOVERY","mainnetExecutionEnabled":true,"maySignMainnet":false,"mayBroadcastMainnet":false,"realizedEconomicProfitVerified":false,"reviewed":0,"minimumRepayLendingInternalAtomic":"0","arbitraryTransactionSizeFloorEnabled":false}
+          JSON
+          then
+            echo 'Invalid mainnet-enabled source report was accepted' >&2
+            exit 1
+          fi
   independently_reprice_large_historical_liNear_debt:
     needs: safety_regressions
     strategy:
@@ -82,13 +97,7 @@ jobs:
           set -euo pipefail
           node --experimental-strip-types scripts/stage157-large-source-discovery-cli.mjs \
             > stage157-stdout.json 2> stage157-progress.log
-          jq -e '.mode == "STAGE157_GENUINE_LARGER_LIQUIDATION_DISCOVERY"
-            and .mainnetExecutionEnabled == false
-            and .maySignMainnet == false and .mayBroadcastMainnet == false
-            and .realizedEconomicProfitVerified == false and
-            .reviewed <= 12 and
-            .minimumRepayLendingInternalAtomic == "0" and
-            .arbitraryTransactionSizeFloorEnabled == false \
+          jq -e -f scripts/stage161-source-report-gate.jq \
             stage157-large-discovery-report.json >/dev/null
           jq -c '{batch,shard,status,reviewed,qualifiedLargerSourceAccounts,
             bestSourceRepayLendingInternalAtomic}' stage157-large-discovery-report.json >> "$GITHUB_STEP_SUMMARY"
