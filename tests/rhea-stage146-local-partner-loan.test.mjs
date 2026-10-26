@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {stage146AttemptRealPartnerFundedLocalRhea}
+import {stage146AttemptRealPartnerFundedLocalRhea,stage146FindLegShares}
  from '../scripts/stage146-real-workspaces-partner-lender.mjs';
 
 const originalKeys=[
@@ -112,4 +112,25 @@ test('Stage146 resolves finalized Rhea promise callback BEFORE interpreting Work
  assert.ok(start>0&&end>start,'Rhea FINAL receipt resolver must precede approval');
  assert.match(s,/worker\.provider\.txStatusReceipts\(hash,signerAccountId,'FINAL'\)/);
  assert.match(s,/finalFtReceiptsVerified:true/);
+});
+
+test('Stage146 matches exact get_account_all_positions layout from genuine Stage93 Rhea snapshots',()=>{
+ const snapshot={
+  account_id:'stage146-liquidator.test.near',
+  supplied:[{token_id:'linear-protocol.near',
+   shares:'1858490264605799',balance:'1858490264605800'}],
+  positions:{REGULAR:{
+   borrowed:[{token_id:'wrap.near',shares:'6',balance:'6'}],
+   collateral:[{token_id:'linear-protocol.near',shares:'9',balance:'9'}]
+  }}
+ };
+ assert.equal(stage146FindLegShares(snapshot,'supplied','linear-protocol.near'),1858490264605799n);
+ assert.equal(stage146FindLegShares(snapshot,'borrowed','wrap.near'),6n);
+ assert.equal(stage146FindLegShares(snapshot,'collateral','linear-protocol.near'),9n);
+ assert.equal(stage146FindLegShares(snapshot,'borrowed','linear-protocol.near'),0n);
+ assert.equal(stage146FindLegShares(snapshot,'supplied','wrap.near'),0n);
+ assert.throws(()=>stage146FindLegShares({...snapshot,supplied:null},'supplied','linear-protocol.near'),
+  /STAGE146_BAD_ACCOUNT_SUPPLIED_LEGS/);
+ assert.throws(()=>stage146FindLegShares(snapshot,'invented','linear-protocol.near'),
+  /STAGE146_UNKNOWN_POSITION_LEG_KIND/);
 });
