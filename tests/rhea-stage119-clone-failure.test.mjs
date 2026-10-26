@@ -10,6 +10,8 @@ test('clone evidence names transient HTTP failures without persisting provider c
  assert.equal(f.code,'STAGE119_CLONE_RUNTIME_TYPE_ERROR');
  assert.ok(!s.includes('secret-value'));assert.ok(!s.includes('https://'));
  assert.match(f.message,/SDK failed/);
+ const envelope=Error('{"jsonrpc":"2.0","error":{"code":-429,"message":"Rate limits exceeded"}}');
+ assert.equal(cloneFailure(envelope,{}).code,'STAGE119_CLONE_SOURCE_SDK_RPC_RATE_LIMIT');
 });
 test('contract and state verification errors retain exact fail-closed taxonomy',()=>{
  assert.equal(cloneFailure(Error('STAGE89_SOURCE_AND_SANDBOX_WNEAR_VIEW_MISMATCH'),{}).code,
