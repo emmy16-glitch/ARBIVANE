@@ -1,3 +1,4 @@
+import {attestStage131SameTokenSelfRepay} from '../src/rhea/stage131-self-repay-cap.ts';
 /** Stage49: compare a genuine Stage37 plan to pinned Rhea pool limits and
  * the disposable local liquidator's actually observed collateral.
  * This is a SANDBOX borrow preflight, not deployed borrowing parity.
@@ -60,7 +61,8 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   ((withdraw.amount===undefined)===(withdraw.max_amount===undefined))||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
-   plan.actions[2].Repay.amount!==rawQty||
+   !attestStage131SameTokenSelfRepay(rawQty,
+    liquidation.out_assets[0].amount,plan.actions[2].Repay)||
    BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==
    BigInt(withdraw.amount??withdraw.max_amount??'0')):
    plan.actions.length!==3)||
