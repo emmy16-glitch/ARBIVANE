@@ -2,6 +2,27 @@
 
 **26 October 2026.** Implementation is **read-only research and evidence validation**, not a financing adapter or live flash loan. ARBIVANE owner has no initial capital. The previously proven Stage93 local Rhea liquidation deposited 1 NEAR of disposable Sandbox wrapped-NEAR collateral to get ordinary Rhea borrowing capacity; that is not a loan free of collateral.
 
+## Authenticated LIVE six-contract inspection — 26 October 2026
+
+**Original GitHub Actions run:** [40334510592](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40334510592). Both isolated unit tests and `authenticated_six_contract_mainnet_readonly_survey` **succeeded**. The resulting artifact [12655597651](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40334510592/artifacts/12655597651), `stage141-native-loan-qualification.json`, was downloaded and independently inspected; the table is transcribed from those actual provider responses, **not simulated test data**.
+
+| Authenticated account | Finalized block | Verified deployed Wasm SHA256 as NEAR base58 code hash | Recognized flash exports |
+| --- | ---: | --- | --- |
+| `contract.main.burrow.near` | 221697242 | `6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa` | **None** |
+| `v2.ref-finance.near` | 221697260 | `25eNFdfK76NUEZn4cDgq1xQYKjxKCuzgXmPB3SHBRW4Y` | **None** |
+| `dclv2.ref-labs.near` | 221697277 | `8FYiayAinMQr5aTLmYuPYNReqeLeLmrz3ceUXgdsuHgE` | **None** |
+| `linear-protocol.near` | 221697289 | `5LiDVDd1gh7ofVNbiA9VXrWwkv2m8tw46jZqYeuoC3SG` | **None** |
+| `intents.near` | 221697300 | `BtA1BEFNS619KkvXFsgcpQ21Tb5yMm32aaUkn7xNothk` | **None** |
+| `dex.intear.near` | 221697320 | `5JUhDgnrWbBDcSqJtfivQX4XPXEjzm5reVMjs8A1GJvk` | **None** |
+
+All six source-documented NEAR accounts had authentic deployed Wasm matching their finalized-block account code hash; all returned `NO_FLASH_LOAN_ENTRYPOINT_EXPORTED` for the scanner's exact standard flash-name patterns. **This excludes the methods searched on those deployed versions; it does not prove the absence of other, differently named/custom or separate contract-based uncollateralized lending facilities anywhere on NEAR.**
+
+The genuine `linear-protocol.near` token `ft_metadata` view at block **221697289** reported `spec: ft-1.0.0`, `symbol: LINEAR`, `name: LiNEAR`, and **24 decimals**. Because none of the six accounts exposed a candidate native flash method, Stage141 correctly **did not** attempt an FT balance query for a hypothetical loan provider and reported no loanable liquidity or fake borrowing capacity.
+
+**Verified outcome:** `fundingStatus=NO_VERIFIED_UNCOLLATERALIZED_NATIVE_LINEAR_LOAN_SOURCE`, `qualifyingUncollateralizedProviders=[]`, `lenderConnectedForBorrowing=false`, and `maySignMainnet=mayBroadcastMainnet=false`. There is **no compatible lender connected, no actual loan issued and no owner profit**.
+
+---
+
 ## What was built
 
 The Stage140 deployed-WASM inspector examined two on-chain accounts. Stage141 independently extends it to **six accounts whose identities are attested by published protocol documentation**:
