@@ -2,6 +2,23 @@
 
 **26 October 2026. Status: public-source assessment plus executable read-only on-chain discovery. No lender selected, no live flash loan signed or repaid.**
 
+## Authenticated live NEAR on-chain findings (26 October 2026)
+
+The actual pushed-mainnet read-only GitHub Actions run **[40329051976](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40329051976)** uploaded artifact **[12653091807](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40329051976/artifacts/12653091807)**. Its raw `stage140-native-provider-discovery.json` was independently inspected after download.
+
+| NEAR mainnet contract | Finalized block inspected | SHA256 verified deployed Wasm code hash | Relevant flash-loan exports |
+| --- | ---: | --- | --- |
+| `contract.main.burrow.near` | **221693345** | `6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa` | **None** |
+| `v2.ref-finance.near` | **221693355** | `25eNFdfK76NUEZn4cDgq1xQYKjxKCuzgXmPB3SHBRW4Y` | **None** |
+
+Both accounts returned a valid `view_account` code hash and the corresponding `view_code` payload at the **same finalized block per account**. The calculated SHA256 of each fetched Wasm matched the on-chain code hash. `WebAssembly.Module.exports` found no standard `flash_loan`, `flashloan`, `flash_borrow`, `flash_liquidate`, `flash_liquidation`, or `request_flash_loan` function on either inspected deployment.
+
+**Actual result: `NO_FLASH_LOAN_ENTRYPOINT_EXPORTED` for both watched contracts.** `hasVerifiedUncollateralizedLiNEARProvider=false`, `providerConnectedForExecution=false` and all mainnet signing/broadcast flags are false. This disproves a usable flash-loan entry method on **these inspected deployed accounts at these block heights**, not that *every* contract on NEAR lacks one.
+
+The public 2023 Ref/Burrow flash-loan roadmap was therefore **not evidence of a shipped compatible entrypoint on the inspected October 2026 deployed code**. Do not point ARBIVANE's loan adapter at either account and assume capital-free execution. Next work requires discovering a different genuinely deployed NEAR-native uncollateralized LiNEAR lender or an explicitly funded/sponsored provider whose economic and asynchronous repayment terms can be independently verified.
+
+---
+
 ## Summary
 
 ARBIVANE's proven Stage93 liquidation required **1 NEAR worth of collateral issued locally by the Workspaces Sandbox**. The owner does not have funds to post collateral or pay liquidation principal. The financing objective is therefore to prove *uncollateralized, temporary NEAR-native liquidity* usable for a genuine Rhea liquidation and fully repaid with all costs covered. Do not call Rhea's existing collateralized Borrow a flash loan.
