@@ -207,7 +207,7 @@ test('Stage60 caps re-attempts and does not promote permanent 429 failures',asyn
  assert.equal(calls,6);
  assert.equal(result.boundedRecoveryAttempts,4);
  assert.equal(result.recoveredRateLimitedFindings,0);
- assert.deepEqual(delays,[1500,3000,1500,3000]);
+ assert.deepEqual(delays,[1500,1500,3000,3000]);
  assert.equal(result.positiveSourcePlans,0);
  assert.equal(result.sandboxPlanReady,false);
  assert.equal(result.mayBroadcastMainnet,false);
@@ -243,7 +243,7 @@ test('Stage94 permanently stale or low-confidence Pyth is never promoted to Sand
   const result=await qualifyStage38Candidates({},source(),stage32(),options,
    async()=>{calls++;throw Error(failure);},async ms=>delays.push(ms));
   assert.equal(calls,6);
-  assert.deepEqual(delays,[4000,8000,4000,8000]);
+  assert.deepEqual(delays,[4000,4000,8000,8000]);
   assert.equal(result.failedFreshReads,2);
   assert.equal(result.positiveSourcePlans,0);
   assert.equal(result.recoveredPriceFreshnessFindings,0);
@@ -309,4 +309,65 @@ test('Stage159 unsupported route configurations fail before any source calls',as
   {...options,requiredSameTokenId:'wrap.near'},async()=>{
    throw Error('MUST_NOT_QUERY_ANY_SOURCE');
   }),/INVALID_STAGE38_CANDIDATE_OPTIONS/);
+});
+
+
+test('Stage163 fairly retries eleven current at-risk borrowers instead of starving the last seven',async()=>{
+ const cp=stage32();
+ cp.items=cp.items.map((item,i)=>({...item,classification:i<11?
+  'PAPER_AT_RISK_UNAPPROVED':'PAPER_HEALTHY_UNAPPROVED'}));
+ cp.paperAtRisk=11;cp.paperHealthy=69;
+ const attempts=new Map();
+ const v=await qualifyStage38Candidates({},source(),cp,
+  {...options,concurrency:1,maxRecoveryAttempts:40},async id=>{
+   const n=(attempts.get(id)??0)+1;attempts.set(id,n);
+   if(n===1)throw new NearRpcHttpError(429,'0');
+   return {...ok(id),status:'NO_SAFE_SOURCE_SCENARIO',referenceRulesPass:false,
+    repay:null,seize:null};
+  },async()=>{});
+ assert.equal(v.boundedRecoveryAttempts,11);
+ assert.equal(v.recoveredRateLimitedFindings,11);
+ assert.equal(v.failedFreshReads,0);
+ assert.equal(v.recoveryDeferredFindings,0);
+ assert.equal(v.recoveryBudgetExhausted,false);
+ assert.equal(v.positiveSourcePlans,0);
+ assert.equal(v.mayBroadcastMainnet,false);
+ assert.deepEqual([...attempts.values()],Array(11).fill(2));
+});
+test('Stage163 tiny global recovery budget serves different borrowers fairly',async()=>{
+ const cp=stage32();
+ cp.items=cp.items.map((row,i)=>({...row,classification:i<11?
+  'PAPER_AT_RISK_UNAPPROVED':'PAPER_HEALTHY_UNAPPROVED'}));
+ cp.paperAtRisk=11;cp.paperHealthy=69;
+ const calls=new Map();
+ const v=await qualifyStage38Candidates({},source(),cp,
+  {...options,concurrency:1,maxRecoveryAttempts:2},async id=>{
+   const n=(calls.get(id)??0)+1;calls.set(id,n);
+   throw new NearRpcHttpError(429,'0');
+  },async()=>{});
+ assert.equal(v.boundedRecoveryAttempts,2);
+ assert.equal(v.failedFreshReads,11);
+ assert.equal(v.recoveryDeferredFindings,11);
+ assert.equal(v.recoveryBudgetExhausted,true);
+ assert.equal(calls.get('borrower332.near'),2);
+ assert.equal(calls.get('borrower333.near'),2);
+ assert.equal(calls.get('borrower334.near'),1);
+ assert.equal(v.bestProposal,null);
+});
+test('Stage163 never overrides a provider cooling period or retries forged error evidence',async()=>{
+ const v=await qualifyStage38Candidates({},source(),stage32(),
+  {...options,maxRecoveryAttempts:40},async()=>{throw new NearRpcHttpError(429,'90');},
+  async()=>{throw Error('should not violate Retry-After');});
+ assert.equal(v.boundedRecoveryAttempts,0);
+ assert.equal(v.recoveryDeferredFindings,2);
+ assert.equal(v.recoveryBudgetExhausted,false);
+ assert.equal(v.canAttemptSandbox,undefined);
+ assert.equal(v.sandboxPlanReady,false);
+});
+test('Stage163 rejects unbounded or invalid shard retry configurations',async()=>{
+ for(const maxRecoveryAttempts of [-1,161,NaN,1.25]){
+  await assert.rejects(()=>qualifyStage38Candidates({},source(),stage32(),
+   {...options,maxRecoveryAttempts},async()=>{throw Error('must not query source');}),
+   /INVALID_STAGE38_CANDIDATE_OPTIONS/);
+ }
 });
