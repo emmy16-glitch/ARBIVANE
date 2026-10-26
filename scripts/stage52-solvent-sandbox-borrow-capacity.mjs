@@ -1,3 +1,4 @@
+import {stage124ValidateShareSafeBorrow} from './stage124-supplied-shares-safe-borrow.mjs';
 /** Stage52: conservative actor borrow-capacity reference using actually deposited
  * WNEAR collateral, checked against pinned ACTIVE Pyth lending views.
  * This is a fail-closed SANDBOX admission rule, not deployed borrow or PNL proof.
@@ -64,7 +65,8 @@ async function mirror(contract,method,args){
  catch{throw Error('STAGE52_CLONED_PRICE_VIEW_UNAVAILABLE');}
 }
 export async function attestStage52BorrowCollateralCapacity({
- rpc,contracts,plan,proposal,actorPositions,pinnedAssets,blockHeight
+ rpc,contracts,plan,proposal,actorPositions,pinnedAssets,blockHeight,
+ shareProofAssets=null
 }){
  if(!rpc||typeof rpc.view!=='function'||!contracts||
   typeof contracts.get!=='function'||!plan||
@@ -79,8 +81,18 @@ export async function attestStage52BorrowCollateralCapacity({
   proposal.blockHeight!==String(blockHeight)||
   !ID.test(plan.actions?.[0]?.Borrow?.token_id)||
   proposal.repay?.tokenId!==plan.actions[0].Borrow.token_id||
-  proposal.repay?.amountLendingInternalAtomic!==plan.actions[0].Borrow.amount)
+  proposal.repay?.amountLendingInternalAtomic!==plan.actions?.[1]?.Liquidate?.in_assets?.[0]?.amount)
   throw Error('STAGE52_UNTRUSTED_SOURCE_SIZED_SANDBOX_ROUTE');
+ // A larger disposable Sandbox Borrow is allowed ONLY when the source-sized
+ // liquidation repayment stays fixed and a fresh local pool witness recomputes
+ // its exact bounded share-rounding requirement. Otherwise preserve equality.
+ const debtInternal=positive(proposal.repay.amountLendingInternalAtomic,'SOURCE_REPAY_AMOUNT');
+ const borrowInternal=positive(plan.actions[0].Borrow.amount,'LOCAL_BORROW_AMOUNT');
+ if(borrowInternal!==debtInternal){
+  if(!shareProofAssets)throw Error('STAGE52_MISSING_LOCAL_POOL_SHARE_PROOF');
+  stage124ValidateShareSafeBorrow(plan,shareProofAssets);
+ }else if(plan.stage124ShareFunding!==undefined)
+  throw Error('STAGE52_FORGED_ZERO_DELTA_SHARE_PROOF');
  const lender=contracts.get(plan.lendingContract);
  const oracle=contracts.get('aggregate-oracle.near');
  const wrapped=contracts.get('wrap.near');
@@ -147,7 +159,10 @@ export async function attestStage52BorrowCollateralCapacity({
  const collateralUsd=sourceFromBalancePrice(units,price.multiplier,
   price.decimals,extra);
  const adjustedCollateral=sourceMulRatio(collateralUsd,wRatio);
- const rawDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ const sourceDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ // Scale pinned source-priced debt UP for the actor's actual loan quantity;
+ // never price the extra shares as free collateral or silently keep old debt.
+ const rawDebtUsd=(sourceDebtUsd*borrowInternal+debtInternal-1n)/debtInternal;
  const adjustedBorrow=sourceDivRatio(rawDebtUsd,dRatio);
  // Conservative headroom for intermediate Borrow before liquidation
  // (25% extra adjusted collateral), not a deployed contract guarantee.
@@ -160,6 +175,9 @@ export async function attestStage52BorrowCollateralCapacity({
   collateralAdjustedUsdE27:adjustedCollateral.toString(),
   borrowReferenceUsdE27:rawDebtUsd.toString(),
   borrowAdjustedUsdE27:adjustedBorrow.toString(),
+  realLocalBorrowInternal:borrowInternal.toString(),
+  sourceQualifiedLiquidationRepayInternal:debtInternal.toString(),
+  extraBorrowShareProofVerified:borrowInternal!==debtInternal,
   minimumCollateralBufferBps:12500,
   actorCoveredByConservativeReference:safelyCovered,
   status:safelyCovered?'REFERENCE_BORROW_BUFFER_PASS_NOT_EXECUTION_PROOF':
