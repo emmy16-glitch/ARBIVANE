@@ -113,8 +113,11 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const repay=plan.actions[0]?.Borrow?.token_id;
  const seize=plan.actions.length===4?
   plan.actions[3].Withdraw.token_id:plan.actions[2].Withdraw.token_id;
- const withdrawAmount=plan.actions.length===4?
-  plan.actions[3].Withdraw.amount:plan.actions[2].Withdraw.amount;
+ const withdrawLeg=plan.actions.length===4?
+  plan.actions[3].Withdraw:plan.actions[2].Withdraw;
+ if((withdrawLeg.amount===undefined)===(withdrawLeg.max_amount===undefined))
+  throw Error('STAGE41_AMBIGUOUS_WITHDRAW_LIMIT');
+ const withdrawAmount=withdrawLeg.amount??withdrawLeg.max_amount;
  const selfRepay=plan.actions.length===4?plan.actions[2].Repay:undefined;
  const same=repay===seize;
  if(typeof repay!=='string'||typeof seize!=='string'||!TOKEN.test(repay)||

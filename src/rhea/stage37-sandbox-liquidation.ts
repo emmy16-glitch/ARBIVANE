@@ -15,13 +15,13 @@ export interface SandboxReplayPlan {
   {Borrow:{token_id:string;amount:string}},
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
-  {Withdraw:{token_id:string;amount:string}}
+  {Withdraw:{token_id:string;amount?:string;max_amount?:string}}
  ] | [
   {Borrow:{token_id:string;amount:string}},
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
   {Repay:{token_id:string;amount:string}},
-  {Withdraw:{token_id:string;amount:string}}
+  {Withdraw:{token_id:string;amount?:string;max_amount?:string}}
  ];
  depositYocto:'1';gasUnits:'300000000000000';
  sourceCodeHash:string;sourceOracleHash:string;
@@ -56,6 +56,9 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
  // An authentic same-token route can settle the temporary Sandbox borrow
  // INSIDE the same Rhea execute_with_pyth call, then withdraw only the
  // remaining collateral. This is not a flash loan or mainnet authorisation.
+  // Use a bounded maximum, not a minimum, for same-token withdrawal: Rhea
+  // can round deposited/returned supplied shares down by a few units.
+  // Never withdraw more than the independent source-sized seize/repay spread.
  if(sameToken&&BigInt(seize)<=BigInt(repay))
   throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
  const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
@@ -69,7 +72,7 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
   borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
-  {Withdraw:{token_id:e.seize.tokenId,amount:(BigInt(seize)-BigInt(repay)).toString()}}
+  {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(seize)-BigInt(repay)).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
  ];

@@ -179,6 +179,15 @@ test('Stage71 keeps four-action same-token route source-pinned and borrow repaid
  assert.equal(r.seizedCanWithdraw,true);
  assert.equal(r.mayBroadcastMainnet,false);
 });
+test('Stage125 permits capped local same-token withdrawal and rejects dual or inflated caps',()=>{
+ const p=sameAssetPlan();
+ delete p.actions[3].Withdraw.amount;p.actions[3].Withdraw.max_amount='10';
+ assert.equal(inspectStage49RheaAssets(p,assets(),221433162).repayAndSeizeShareToken,true);
+ const dual=structuredClone(p);dual.actions[3].Withdraw.amount='10';
+ assert.throws(()=>inspectStage49RheaAssets(dual,assets(),221433162),/STAGE49_/);
+ const inflated=structuredClone(p);inflated.actions[3].Withdraw.max_amount='11';
+ assert.throws(()=>inspectStage49RheaAssets(inflated,assets(),221433162),/STAGE49_/);
+});
 test('Stage71 rejects forged or missing self-repay and anything withdrawing borrowed funds',()=>{
  const bad=[
   p=>p.actions[2].Repay.amount='99',
