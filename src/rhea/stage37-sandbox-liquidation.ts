@@ -23,7 +23,7 @@ export interface SandboxReplayPlan {
   {Repay:{token_id:string;amount:string}},
   {Withdraw:{token_id:string;amount:string}}
  ];
- depositYocto:'0';gasUnits:'300000000000000';
+ depositYocto:'1';gasUnits:'300000000000000';
  sourceCodeHash:string;sourceOracleHash:string;
  sourceMathOnly:true;realContractReplayVerified:false;fullImportedStateVerified:false;
  realWalletAuthorized:false;executionEnabled:false;maySignMainnet:false;mayBroadcastMainnet:false;
@@ -72,7 +72,7 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   mainnetSourceBlockHeight:e.blockHeight,borrowerAccountId:e.borrowerAccountId,
   lendingContract:'contract.main.burrow.near',method:'execute_with_pyth',
   actions,
-  depositYocto:'0',gasUnits:'300000000000000',
+  depositYocto:'1',gasUnits:'300000000000000',
   sourceCodeHash:e.lendingCodeHash,sourceOracleHash:e.pythOracleCodeHash,
   sourceMathOnly:true,realContractReplayVerified:false,fullImportedStateVerified:false,
   realWalletAuthorized:false,executionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false};
@@ -95,12 +95,14 @@ export interface SandboxResult {
 /** Canonical NEAR Workspaces callRaw result, including all async receipts. */
 export function summarizeStage37SandboxOutcome(
  raw:unknown,inspection:{pinnedConfigMatches:boolean;pinnedBorrowerMatches:boolean;
-  importedContractCount:number;allStoredKeysAttested:boolean},
+  importedContractCount:number;allStoredKeysAttested:boolean;
+  temporalAccrualVerified?:boolean},
 ):SandboxResult{
  const base={mode:'ARBIVANE_STAGE37_SANDBOX_RESULT' as const,chain:'NEAR_SANDBOX' as const,
   realMainnetExecuted:false as const,realProfitVerified:false as const,
   walletApproved:false as const,executionEnabled:false as const,mayBroadcastMainnet:false as const};
- if(!inspection.pinnedConfigMatches||!inspection.pinnedBorrowerMatches||
+ if(!inspection.pinnedConfigMatches||
+   (!inspection.pinnedBorrowerMatches&&inspection.temporalAccrualVerified!==true)||
    inspection.importedContractCount<3)
   return {...base,status:'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF' as const,
    attemptedTransaction:false,transactionFinal:false,receiptCount:0,
@@ -183,6 +185,8 @@ export function summarizeStage37SandboxOutcome(
   failedCallbackReceiptCount:failedCallbacks,
   topLevelFailureObserved:overallFail,gasBurntGasUnits:gas,
   blockers:[
+   ...(!inspection.pinnedBorrowerMatches&&inspection.temporalAccrualVerified===true?
+    ['BORROWER_TEMPORAL_ACCRUAL_PROVED_NOT_EXACT_PINNED_VIEW_PARITY']:[]),
    ...(!inspection.allStoredKeysAttested?['FULL_IMPORTED_CONTRACT_STORAGE_KEYSET_NOT_ATTESTED']:[]),
    ...(!success?[
     ...(overallFail?['SANDBOX_TOP_LEVEL_TRANSACTION_FAILED']:[]),
