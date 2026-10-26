@@ -127,7 +127,7 @@ test('Stage71 validates real borrower debt and collateral deltas with same-token
    in_assets:[{token_id:'usdt.near',amount:'20'}],
    out_assets:[{token_id:'usdt.near',amount:'30'}]}},
   {Repay:{token_id:'usdt.near',amount:'20'}},
-  {Withdraw:{token_id:'usdt.near',amount:'10'}}
+  {Withdraw:{token_id:'usdt.near',max_amount:'10'}}
  ]};
  const b=(d,c)=>({positions:{REGULAR:{
   borrowed:[leg('usdt.near',d)],collateral:[leg('usdt.near',c)]
@@ -151,7 +151,7 @@ test('Stage71 validates real borrower debt and collateral deltas with same-token
  assert.equal(unpaid.status,'BLOCKED_ACTOR_HAS_LIABILITY');
  for(const mutation of [
   v=>v.actions[2].Repay.amount='19',
-  v=>v.actions[3].Withdraw.amount='30',
+  v=>v.actions[3].Withdraw.max_amount='30',
   v=>v.actions[1].Liquidate.out_assets[0].amount='20',
   v=>v.actions.splice(2,1),
  ]){
