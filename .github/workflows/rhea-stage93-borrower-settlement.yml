@@ -303,6 +303,15 @@ jobs:
           mkdir -p verified
           cp "$verified"/stage{37-sandbox-execution,41-sandbox-balance-settlement,55-sandbox-phase-evidence}.json verified/
           cp "$verified"/stage38-positive-stage35-evidence.json verified/
+          # The Stage135 step runs in a NEW shell: copy every authenticated
+          # raw input now; never rely on a prior step's local $verified var.
+          for input in stage116-raw-transaction.json stage116-signed-transaction.json \
+            stage129-finalized-transaction.json stage116-before-state.json \
+            stage116-after-state.json stage131-immediate-finalized-state.json \
+            stage134-finality-recovery.json; do
+            test -s "$verified/$input"
+            cp "$verified/$input" "verified/$input"
+          done
           jq -n --slurpfile proposal "$verified/stage38-positive-stage35-evidence.json" \
             --slurpfile receipt "$verified/stage37-sandbox-execution.json" \
             --slurpfile settlement "$verified/stage41-sandbox-balance-settlement.json" \
@@ -316,7 +325,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$(find verified -name stage37-sandbox-execution.json -print -quit)"
-          node scripts/stage135-independent-proof.mjs "$verified" verified
+          node scripts/stage135-independent-proof.mjs verified verified
           jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .chain == "NEAR_SANDBOX" and .finalReceiptCount > 0 and .callbackCount == 1 and .actorOutstandingDebtAfterInternal == "0" and .mainnetExecutionEnabled == false and .outcomeMerkleProofIndependentlyVerified == false' verified/stage135-independent-proof.json
 
       - name: Publish successful actual liquidation proof
