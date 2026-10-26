@@ -22,6 +22,7 @@ import {stage104AttestTemporalAccrual} from './stage104-temporal-accrual-parity.
 import {inspectStage49RheaAssets,registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
+import {selectStage164PricingClosure,attestStage164PricingClosure} from './stage164-source-pricing-closure.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
@@ -105,7 +106,18 @@ async function main(){
  // Complete, pinned Rhea source config must prove the legacy price oracle
  // disabled before omitting that unused full-state clone. Preserve Stage71's
  // single-token Repay+Withdraw route and all genuine dependency contracts.
- const ids=selectPinnedActivePythSandboxDependencies(config.value,plan);
+ // Stage164: Rhea's Pyth callback can call other borrower collateral pricing
+ // contracts even when the selected repayment is LiNEAR/LiNEAR. Derive the
+ // complete bounded closure from the SAME pinned deployed lender metadata.
+ // Never guess a contract ID, deploy a fake price adapter or skip hash/state.
+ const priceInfos=await rpc.view(plan.lendingContract,'get_all_token_pyth_infos',{},block);
+ if(priceInfos.blockHeight!==String(block))
+  throw Error('STAGE164_PINNED_PRICE_METADATA_BLOCK_DRIFT');
+ const priceClosure=selectStage164PricingClosure({
+  baseIds:selectPinnedActivePythSandboxDependencies(config.value,plan),
+  priceInfos:priceInfos.value,
+ });
+ const ids=priceClosure.ids;
  cloneMonitor=createStage88CloneWitness({contractIds:ids,sourceBlockHeight:block});
  await cloneMonitor.initialize();
  // Two completely independent archival clones at a time; 450 ms pacing per
@@ -296,6 +308,14 @@ async function main(){
  });
  await writeFile('stage51-active-pyth-sandbox-parity.json',
   JSON.stringify(pythParity,null,2)+'\n');
+ // Stage51 checks source-pinned quote/ratio parity for the selected route.
+ // Stage164 additionally checks ALL other deployed derived-price contracts
+ // Rhea may call while valuing unrelated borrower collateral on callback.
+ const derivedParity=await attestStage164PricingClosure({
+  rpc,contracts,blockHeight:block,dependencies:priceClosure.dependencies,
+ });
+ await writeFile('stage164-derived-price-parity.json',
+  JSON.stringify(derivedParity,null,2)+'\n');
  // Public borrowed token and borrower state may require additional Ft account storage.
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
  await markStage55('SANDBOX_ACTOR_REGISTRATION');
