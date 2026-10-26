@@ -94,23 +94,47 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
   const tearDown=worker.tearDown.bind(worker);
   worker.tearDown=async()=>{try{return await tearDown();}finally{await rm(dir,{recursive:true,force:true});}};
   ready=true;
-  return {worker,witness,startReplayClock:async({localPartnerTimeCompression=false}={})=>{
+  return {worker,witness,startReplayClock:async({localPartnerTimeCompression=false,ultraShortLocalFinancingWindow=false}={})=>{
    if(localPartnerTimeCompression && (
      env.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'||
      env.STAGE147_LOCAL_CLOCK_COMPRESSION!=='true'||
      env.NEAR_WORKSPACES_NETWORK!=='sandbox'||
      env.EXECUTION_ENABLED!=='false'))
     throw Error('STAGE147_REALTIME_OR_MAINNET_TIME_COMPRESSION_FORBIDDEN');
+   if(ultraShortLocalFinancingWindow && (
+     !localPartnerTimeCompression||
+     env.STAGE152_ULTRA_SHORT_LOCAL_CLOCK!=='true'||
+     env.STAGE150_LARGE_SANDBOX!=='true'||
+     env.STAGE150_LARGE_SANDBOX_TOKENS!=='100'||
+     env.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'||
+     env.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+     env.EXECUTION_ENABLED!=='false'||
+     env.NEAR_PRIVATE_KEY||env.MAINNET_PRIVATE_KEY||env.NEAR_ACCOUNT_ID))
+    throw Error('STAGE152_ARTIFICIAL_LOCAL_CLOCK_NOT_AUTHORIZED');
+   // Stage152 specifically investigates whether the previously measured
+   // negative 100-token interest margin disappears under IMPOSSIBLY favorable
+   // elapsed time. It is a mechanics-only sensitivity experiment, NOT an
+   // economic fix, market viability proof or realistic execution benchmark.
    // A deliberate and bounded historical-Sandbox ONLY test. Without this
    // explicit opt-in Stage93 keeps its old 1x/normal-time replay semantics.
    // Real Pyth quote bytes and freshness contract configuration are unchanged.
-   await writeFile(phaseFile,localPartnerTimeCompression?'2':'1');
+   await writeFile(phaseFile,ultraShortLocalFinancingWindow?'3':
+    (localPartnerTimeCompression?'2':'1'));
    return {...attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header),
-    clockPhase:localPartnerTimeCompression?
-     'STAGE147_HISTORICAL_LOCAL_MULTITX_COMPRESSED_TIME':'HISTORICAL_EXECUTION',
-    reconstructionClockRate:0.01,clockRate:localPartnerTimeCompression?0.05:1,
+    clockPhase:ultraShortLocalFinancingWindow?
+     'STAGE152_ARTIFICIAL_ULTRASHORT_SANDBOX_FINANCING':
+     (localPartnerTimeCompression?
+      'STAGE147_HISTORICAL_LOCAL_MULTITX_COMPRESSED_TIME':'HISTORICAL_EXECUTION'),
+    reconstructionClockRate:0.01,
+    clockRate:ultraShortLocalFinancingWindow?0.001:
+     (localPartnerTimeCompression?0.05:1),
     localTimeCompressionEnabled:localPartnerTimeCompression,
-    nominalTimeCompressionRatio:localPartnerTimeCompression?20:1,
+    nominalTimeCompressionRatio:ultraShortLocalFinancingWindow?1000:
+     (localPartnerTimeCompression?20:1),
+    stage152AssumesNonRealizableNearZeroFinancingTime:ultraShortLocalFinancingWindow,
+    syntheticTimeMayUnderstateBorrowInterest:ultraShortLocalFinancingWindow,
+    originalStage151HundredTokenEconomicFailureRetained:ultraShortLocalFinancingWindow,
+    realisticEconomicsAndMainnetViabilityVerified:false,
     oracleQuoteAndFreshnessRulesUnmodified:true,
     timingPerformanceOnRealMainnetNotProven:localPartnerTimeCompression,
     fullLenderRepaymentNotYetProven:true};
