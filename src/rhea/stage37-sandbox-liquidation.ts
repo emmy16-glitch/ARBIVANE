@@ -1,4 +1,5 @@
 import type {SourceLiquidationSizing} from './stage35-atomic-reference-sizing.ts';
+import {stage131SelfRepayCap} from './stage131-self-repay-cap.ts';
 
 /** Stage37: construct an EXACT observed Rhea execute_with_pyth ABI action
  * sequence for an ISOLATED SANDBOX transaction. This is not a mainnet executor.
@@ -20,7 +21,7 @@ export interface SandboxReplayPlan {
   {Borrow:{token_id:string;amount:string}},
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
-  {Repay:{token_id:string;amount:string}},
+  {Repay:{token_id:string;amount?:string;max_amount?:string}},
   {Withdraw:{token_id:string;amount?:string;max_amount?:string}}
  ];
  depositYocto:'1';gasUnits:'300000000000000';
@@ -71,7 +72,8 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   in_assets:[{token_id:e.repay.tokenId,max_amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
-  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
+  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,
+   max_amount:stage131SelfRepayCap(repay,seize)}},
   {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(seize)-BigInt(repay)).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
