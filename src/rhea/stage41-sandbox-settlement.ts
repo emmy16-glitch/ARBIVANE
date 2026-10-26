@@ -1,4 +1,5 @@
 import type {SandboxReplayPlan,SandboxResult} from './stage37-sandbox-liquidation.ts';
+import {attestStage131SameTokenSelfRepay} from './stage131-self-repay-cap.ts';
 
 /** Stage41: reconcile an ACTUAL local NEAR Sandbox liquidation callback against
  * borrower debt/collateral, any leftover actor debt, and raw FT inventory.
@@ -140,7 +141,8 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
  if(borrowed===0n||liquidationRepay!==borrowed||
   (same?(!selfRepay||selfRepay.token_id!==repay||
-    uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
+    !attestStage131SameTokenSelfRepay(plan.actions[0].Borrow.amount,
+     plan.actions[1].Liquidate.out_assets[0].amount,selfRepay)||
     liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
     withdrawn!==liquidationSeize))
   throw Error('STAGE41_INVALID_ATOMIC_ROUTE_AMOUNTS');
