@@ -168,7 +168,7 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
  assert.equal(p.actions[3].Withdraw.amount,undefined);
  assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
-  String(BigInt(p.actions[3].Withdraw.max_amount)+BigInt(p.actions[2].Repay.amount)));
+  String(BigInt(p.actions[3].Withdraw.max_amount)+BigInt(p.actions[0].Borrow.amount)));
  assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
 });
 
