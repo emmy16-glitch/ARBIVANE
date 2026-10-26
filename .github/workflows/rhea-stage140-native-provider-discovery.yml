@@ -1,0 +1,60 @@
+name: Stage140 NEAR flash-provider onchain read-only discovery
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage140-native-flash-provider-discovery.mjs'
+      - 'scripts/stage140-native-flash-provider-cli.mjs'
+      - 'tests/rhea-stage140-native-provider-discovery.test.mjs'
+      - '.github/workflows/rhea-stage140-native-provider-discovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage140-native-flash-provider-discovery.mjs'
+      - 'scripts/stage140-native-flash-provider-cli.mjs'
+      - 'tests/rhea-stage140-native-provider-discovery.test.mjs'
+      - '.github/workflows/rhea-stage140-native-provider-discovery.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fail_closed_unit_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/rhea-stage140-native-provider-discovery.test.mjs
+  inspect_real_near_contract_exports:
+    if: github.event_name != 'pull_request'
+    needs: fail_closed_unit_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+      NEAR_RPC_URL: https://rpc.mainnet.near.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read real finalized Rhea/Ref deployed WASM without signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/stage140-native-flash-provider-cli.mjs stage140-native-provider-discovery.json
+          jq -e '.mode == "STAGE140_ONCHAIN_NATIVE_FLASH_LOAN_DISCOVERY" and .network == "NEAR_MAINNET" and .readOnly == true and .providerConnectedForExecution == false and .hasVerifiedUncollateralizedLiNEARProvider == false and .maySignMainnet == false and .mayBroadcastMainnet == false' stage140-native-provider-discovery.json
+      - name: Publish public contract-code and missing-provider evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage140-live-readonly-deployed-provider-exports
+          path: stage140-native-provider-discovery.json
+          retention-days: 90
+          if-no-files-found: error

@@ -68,6 +68,10 @@ node scripts/stage139-flash-financing-cli.mjs flash-research candidate.json revi
 
 The CI [Stage139 authentic funding gate](../.github/workflows/rhea-stage139-flash-financing-gate.yml) downloads previously successful real Stage93 evidence, classifies its actual financing, and rejects a tampered no-collateral deposit. This is a **negative proof about our existing route**, not a flash-loan execution demonstration.
 
+## Follow-on deployed-provider discovery
+
+Stage140 implements a real **read-only** on-chain inspection of Rhea and Ref deployed code identity and exported methods. This cannot fund a trade or prove an uncollateralized lender; see [Stage140 technical results](STAGE140_NATIVE_PROVIDER_DISCOVERY.md).
+
 ## Research priorities and exit conditions
 
 1. Enumerate native NEAR lenders from verified contracts, source histories and read-only RPC. Match their actual flash liquidity to the Rhea repay asset. Do not treat Rhea collateralized Borrow, Ref/Rhea DEX pools or EVM lenders as interchangeable.
