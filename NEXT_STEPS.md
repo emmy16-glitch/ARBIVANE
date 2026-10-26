@@ -1,5 +1,11 @@
 # Stage 111 handoff
 
+## Stage 120 current blocker and implementation
+- Main `4461d72` merges PR #168 after CI/native wNEAR checks passed. Actual Stage93 `40301745945` FAILED at Pyth parity with `STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING`; no liquidation call. All authentic dependencies now import successfully.
+- Artifact `12641335340`: source block `221671156`, hash `7VAcnxN9zKk8YKTrbNJkj6hjc7n6VHPGfUpk4g9XZoh2`, timestamp `1793007824419919432`; local timestamp at parity `1793007896098270687`. Reconstruction consumed about 71.7 seconds, exceeding the unchanged 60-second oracle age limit even for a quote published at the source snapshot.
+- Branch `fix/stage120-execution-continuation` makes reconstruction explicitly advance at 1/100 speed while authenticated bytes are copied. After all clones finish, the clock switches irreversibly to rate 1 BEFORE source parity, funding or liquidation. It never rewinds, changes prices, alters borrower bytes or raises a freshness bound. This is a historical Sandbox replay, not evidence of current market eligibility or mainnet profit. Both clock phases/rates are persisted.
+- Compiled clock regression verifies slow forward reconstruction, forward-only transition, normal execution rate and refusal to return to slow time. Typecheck and all 732 tests pass locally. Next: native clock/wNEAR CI, merge only if green, then inspect the automatic actual Stage93 run and signed receipt artifacts. Keep mainnet signing/spending disabled.
+
 ## Stage 119 current execution checkpoint
 - Native wNEAR regression `40300767819` PASSED at the exact failed block: all three original records patched, source digest `415066bed268221250b49ebdbf5e629a5e43a1b447d5f8c742288b993877388c`, exact token-view parity. The original exception is therefore not a consistently reproducible storage-layout defect; transient RPC/SDK contention remains an inference, not a proven cause.
 - Current branch removes automatic shared-file triggers from Stage69/87 (manual recovery remains available), so Stage93 is the single automatic real settlement lane. It uses the existing bounded, pinned-only resilient RPC wrapper and saves sanitized clone exception details/cause before reducing them to an enum. No contract rejection, block drift, bad state or expired quote is retried or bypassed.
