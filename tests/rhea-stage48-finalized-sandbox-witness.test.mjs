@@ -73,6 +73,28 @@ test('failing callbacks, insufficient block movement, unchanged borrower and pos
  assert.equal(failed.status,'SANDBOX_RECEIPT_FAILURE');
  assert.throws(()=>attestStage48FinalizedSandboxReplay(args(failed)),/STAGE48_/);
 });
+test('Stage131 ignores accrued interest and farm metadata but rejects forged share mutations',()=>{
+ const later=structuredClone(after);
+ later.borrower.positions.REGULAR.borrowed[0].balance='81';
+ later.borrower.positions.REGULAR.borrowed[0].apr='0.123';
+ later.borrower.farms=[{farm_id:'NetTvl',rewards:[]}];
+ const report=attestStage48FinalizedSandboxReplay({
+  ...args(),afterFinalBlock:later,
+ });
+ assert.equal(report.persistedAtLaterFinalizedBlock,true);
+ for(const tamper of [
+  d=>d.borrower.positions.REGULAR.borrowed[0].shares='81',
+  d=>d.borrower.account_id='attacker.near',
+  d=>d.actor.account_id='attacker.near',
+  d=>d.actor.positions.REGULAR={borrowed:[{
+   token_id:'linear-protocol.near',shares:'1',balance:'1'}],collateral:[]},
+ ]){
+  const bad=structuredClone(later);tamper(bad);
+  assert.throws(()=>attestStage48FinalizedSandboxReplay({
+   ...args(),afterFinalBlock:bad,
+  }),/STAGE48_/);
+ }
+});
 test('runner uses real NEAR Sandbox finalized advancement, no unguarded promotion',async()=>{
  const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
  assert.match(script,/provider\.fastForward\(10000\)/);
