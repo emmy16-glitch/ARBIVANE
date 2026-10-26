@@ -1,5 +1,5 @@
-import {stage146AttemptRealPartnerFundedLocalRhea} from './stage146-real-workspaces-partner-lender.mjs';
 #!/usr/bin/env node
+import {stage146AttemptRealPartnerFundedLocalRhea} from './stage146-real-workspaces-partner-lender.mjs';
 /** Stage37 execution attempt ONLY inside NEAR Workspaces local Sandbox.
  * No mainnet signer, transaction RPC method, wallet secrets or public mutations.
  * Strict pre-state checks fail closed if large lending storage cannot be imported.
