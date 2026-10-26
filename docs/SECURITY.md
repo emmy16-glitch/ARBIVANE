@@ -1,41 +1,58 @@
-# Security posture and production blockers
+# Security model and production blockers
 
-## Current stage
+**Current assessment — 26 October 2026.** ARBIVANE has genuine local NEAR Sandbox transaction and state verification. It does not have a production mainnet signer, wallet custody, enforceable funded trading limits or a realized-profit withdrawal system.
 
-**No live signing, no token custody, no liquidation execution, no Intents deposit.** `EXECUTION_ENABLED=false` is mandatory for the read-only CLI. RPC calls use `query` only. Every financial value is parsed as an exact decimal integer string; unknown/unsupported inputs abort or are rejected.
+## Current enforcement boundaries
+
+| Boundary | What is implemented | What must not be inferred |
+| --- | --- | --- |
+| Public NEAR RPC | Read-only queries and fixed-block checks for Rhea borrower, oracle, asset and code evidence | Permission to sign or submit a trade |
+| Local NEAR Workspaces | Disposable Sandbox actor, imported relevant Rhea/token/oracle contracts and genuine signed local calls | Access to owner wallet or full-mainnet state-trie equivalence |
+| Callback and balance verification | Original FINAL receipt/callback checks, account shares and FT balances, zero actor debt | A completed swap or cash profit |
+| Transaction-authenticity verification | Independent legacy V0 Borsh reconstruction, SHA-256 and Ed25519; SHA-256 fingerprints of source artifacts | Validator-certified inclusion into canonical NEAR mainnet |
+| Merkle paths | Stage137 calculates outcomes, paths and supplied header/root consistency | Independently authenticated validator-approved head |
+| Mainnet capital policy | Stage138 rejects missing budgets, stale quotes, unverified economics, unauthorized signing | An enforceable on-chain risk limit or usable mainnet broadcaster |
+
+The earliest README and this document once said that **no transaction executes anywhere**. That statement is superseded by the recorded **Sandbox-only** Rhea liquidations ([evidence](STATUS_AND_EVIDENCE.md)). The owner has not transferred capital.
 
 ## Threat model
 
-| Threat | Required mitigation before launch | Current status |
-| --- | --- | --- |
-| Stale indexed positions or oracle price | Protocol-equivalent revalidation at fresh final block | Only pinned raw reads exist |
-| Compromised agent / manipulated AI output | On-chain executor custody, restrictive attested caller, owner pause | Not implemented |
-| Replay and duplicated live order | Durable nonce/idempotency lock, callback guards, pending tracking | In-memory demo guard only |
-| Secret exfiltration / phishing | No Full Access key in browser/TEE, keys scoped to receiver/method | No secrets are required yet |
-| Failed async NEAR receipts | Promise/callback status, final balance/debt reconciliation | Not implemented |
-| False profits from unsold collateral | Strict distinction between inventory and realized token balances | Pure rule implemented |
-| Intents deposit loss/refund issues | Exact quote, token/chain/address validation, tiny-value test, refund state | Precondition validation only |
-| Oracle manipulation / lending protocol exploits | Verify current Rhea deployments, oracle configuration and paused markets | Unverified |
-| Hidden competitors | Unknown competition means unknown, not zero; conservative caps | Basic historical pressure logic |
-| UI-to-backend authorization bypass | Server-side auth, on-chain owner checks, CSRF/origin controls | No API/UI yet |
+**Stale positions and manipulated price data.** A borrower can repay, collateral can change and oracle prices can expire while a scan is running. Source reads are pinned to an exact block, and fresh same-block Pyth and eligible-route checks must be redone before attempting any future funded transaction. Missing or incompatible data rejects the opportunity.
 
-## Mandatory gates before ANY real tokens
+**Partial or mismatched imported contract state.** The Sandbox runner verifies relevant contract code, token vault holdings, borrower positions, asset share indexes and critical oracle views against pinned source. Successful selected-key import is not a complete Merkle state-trie attestation.
 
-1. Verify the *current* Rhea lending and oracle contract IDs, protocol version, market status, and exact liquidation methods using official sources and live read-only inspection.
-2. Validate share-to-atomic conversions, price decimals, volatility ratios, health/discount and repay/seize rounding against the deployed contract or verified exact fixtures.
-3. Establish actual financing/collateral needs. No confirmed native Rhea flash loan was found during the initial research.
-4. Design and test NEAR contract-controlled custody and callbacks. Do not use a separate unrestricted worker signing key.
-5. Have contract and critical execution logic independently reviewed, including source and compiler dependencies.
-6. Integrate a real TEE with attested immutable image, registration, bounded function-call key permissions and tested revocation.
-7. Use durable DB transactions, outbox, idempotency, pending tx tracking, receipts and accounting reconciliation.
-8. Implement failover RPC, circuit breakers, gas/daily loss limits, price freshness and pause, then adversarial integration tests.
-9. Create a *separate* testnet contract demonstration and a very small, manually authorized NEAR Intents mainnet test. Intents has no public testnet deployment.
-10. Require explicit owner opt-in and a maximum total loss budget; no autonomous mainnet mode by default.
+**Asynchronous callback ambiguity.** Rhea uses cross-contract calls. The original outer transaction may emit intermediate events even if a later callback fails. Stage130 requires canonical original signed FINAL outcome/child receipts. Stage41 requires actual borrower debt/collateral reductions, liquidator FT gain, and zero remaining actor debt. Stage48 examines later finalized persistence, rather than assuming a requested block jump advanced chain finality.
 
-## Disclosed dependency limitations
+**Forged reports or compromised runner.** Stage135 checks raw signed transaction, source-approved action sizing, canonical receipt status, source-file hashes and independent state. Stage136 reconstructs the signed transaction Borsh bytes, verifies the hash and Ed25519 signature. Local evidence still depends on truthful original chain/import sources and is not a validator-approved mainnet outcome proof.
 
-Upstream Shade Agent Framework documents an unaudited status. The archived old Morpho liquidation bot and legacy Rhea runtime must not be treated as secure drop-ins. The current codebase copies architectural ideas, not third-party executable source. All proposed extension interfaces require compatibility reviews at the exact version selected.
+**AI decisions and operator impersonation.** No language model has spending privileges. An explanation, risk estimate or JSON boolean saying approved cannot authorize use of funds. Operator approval must be cryptographically bound to a specific owner, network, asset, contract, budget and transaction.
 
-## Reporting issues
+**Competition and false profits.** Historical liquidation counts are not a live inventory of competitors. An estimated margin before gas, funding, slippage, sale and storage cost is not realized net profit. Received LiNEAR token inventory in the local actor is not withdrawable owner income.
 
-Do not post private keys, RPC credentials or real-account secret material in a GitHub issue. Use a minimal redacted reproduction. All test data in this stage are synthetic.
+**Wallet compromise and unauthorized spending.** No owner account or production key is configured. The planned treasury/policy contract is **not deployed**, and Stage138 always returns maySignMainnet=false and mayBroadcastMainnet=false. There is no mainnet trade executor in this milestone.
+
+**Replay after crash or partial finalization.** GitHub Actions concurrency helps serialize isolated tests, but it does not provide the persistent nonce/outbox accounting required for a production exchange or liquidation system.
+
+## Before mainnet capital can be used
+
+1. Confirm an owner-controlled NEAR mainnet account ID, separately bounded execution funds and a verified owner approval mechanism. Do not put owner private keys into repository or GitHub Actions.
+2. Require executable current-chain source/wasm/price/parity checks, valid borrower health, financing headroom and actual reserved liquidity. Do not treat historical Sandbox eligibility as live eligibility.
+3. Calculate conservative after-cost *realized* net-profit potential in a common unit, including liquidity depth, actual swap/quote fill, slippage, gas, storage, financing and race costs.
+4. Design and independently review a restricted custody/signing route with a real owner-controlled enforcement boundary. A separate Full Access worker key must not be capable of bypassing the off-chain policy.
+5. Implement transaction-level and daily capital caps, maximum loss, minimum net profit, cancellation/pause, key revocation, replay protection, deduplication and a durable outbox.
+6. Validate the current action on a state-faithful test and require manually approved, very small first mainnet spend with complete canonical receipts and on-chain balance reconciliation.
+7. Complete security review of the wallet adapter and protocol interaction. Automatic retries must first determine whether the prior signed transaction finalized.
+
+**Mainnet execution is not enabled.** This is a missing audited feature, not merely an environment variable that needs to be flipped.
+
+## Wallet and credential handling
+
+NEVER share a seed phrase, private key, mnemonic, recovery file or password in chat, screenshots, source, issues, PRs, CI, logs or project documentation. Public NEAR account IDs and public transaction hashes are fine. For significant funds, retain ownership on a hardware-protected wallet and isolate a small execution allowance or escrow under a separately tested policy. NEAR FunctionCall access keys may restrict method and receiver; they do not automatically enforce all of ARBIVANE's daily loss or economic constraints.
+
+Start with [Owner wallet and mainnet](WALLET_AND_MAINNET.md). An eventual security incident procedure must include pausing execution, revoking access keys, preserving the original receipts and reconciling all transfers before retrying.
+
+## Dependencies, disclosure and limitations
+
+The project studies Rhea/Burrow, Morpho, Shade and NEAR Intents, but does not inherit audits or security claims from referenced upstream code. See [third-party sources](REUSE.md). The Stage137 path checker is **not a trusted light client** because validator approvals/epoch transitions are not independently checked.
+
+Report vulnerabilities privately with a redacted reproduction and public transaction or run identifiers. Never attach access keys or recovery material.
