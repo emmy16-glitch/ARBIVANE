@@ -140,7 +140,11 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
  if(borrowed===0n||liquidationRepay!==borrowed||
   (same?(!selfRepay||selfRepay.token_id!==repay||
-    uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
+    !(selfRepay.amount===undefined&&selfRepay.max_amount===undefined&&
+      Object.keys(selfRepay).length===1||
+      selfRepay.max_amount===undefined&&
+      Object.keys(selfRepay).length===2&&
+      uint(selfRepay.amount,'ACTOR_REPAY')===borrowed)||
     liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
     withdrawn!==liquidationSeize))
   throw Error('STAGE41_INVALID_ATOMIC_ROUTE_AMOUNTS');

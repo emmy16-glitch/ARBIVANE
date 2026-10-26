@@ -60,7 +60,12 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   ((withdraw.amount===undefined)===(withdraw.max_amount===undefined))||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
-   plan.actions[2].Repay.amount!==rawQty||
+   !(plan.actions[2].Repay.amount===rawQty&&
+    plan.actions[2].Repay.max_amount===undefined&&
+    Object.keys(plan.actions[2].Repay).length===2||
+    plan.actions[2].Repay.amount===undefined&&
+    plan.actions[2].Repay.max_amount===undefined&&
+    Object.keys(plan.actions[2].Repay).length===1)||
    BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==
    BigInt(withdraw.amount??withdraw.max_amount??'0')):
    plan.actions.length!==3)||

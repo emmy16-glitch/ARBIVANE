@@ -372,6 +372,16 @@ async function main(){
   seizeToken.view('ft_balance_of',{account_id:actor.accountId}),
  ]);
  const [actorBefore,repayFtBefore,seizeFtBefore]=await snapshot();
+ // Source-backed full-share repayment MUST NOT sweep any preexisting actor
+ // debt. Only the brand-new Borrow of this single Sandbox transaction is
+ // repayable. Reject even one prior debt share before sending the transaction.
+ if(!actorBefore||typeof actorBefore!=='object'||
+  !actorBefore.positions||typeof actorBefore.positions!=='object'||
+  Object.values(actorBefore.positions).some(p=>
+   !p||!Array.isArray(p.borrowed)||p.borrowed.some(row=>
+    !row||!/^\\d+$/.test(row.shares??'')||
+    BigInt(row.shares)>0n)))
+  throw Error('STAGE132_REFUSE_PREEXISTING_ACTOR_BORROWED_SHARES');
  await writeFile('stage116-before-state.json',JSON.stringify({
   borrower:sandboxBorrower,actor:actorBefore,repayFt:repayFtBefore,seizeFt:seizeFtBefore,
   block:await worker.provider.block({finality:'final'}),
