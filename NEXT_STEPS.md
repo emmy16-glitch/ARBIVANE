@@ -1,5 +1,12 @@
 # Stage 111 handoff
 
+## Stage123 consolidated settlement checkpoint
+- Main `ca7efd1` (PR #173, 1-yocto Rhea ABI) was merged concurrently after successful CI. Previous authentic Stage93 `40305687819` executed signed transaction `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe` with deposit 0; Rhea rejected it. No liquidation or seized FT was verified.
+- Branch `fix/stage123-consolidated-settlement` preserves concurrent Stage122 machine-readable result and native stdout independently, fixes malformed trailing receipt-evidence newline, includes parseability regression, and records Stage37 process JSON in workflow artifact. It also respects source-attested bounded temporal accrual without claiming exact borrower parity: Stage37 classifier requires exact pinned config and either matching borrower or independent Stage104 verified temporal witness. Malformed/forged temporal claims block.
+- This branch changes the Stage93 workflow so its successful merge automatically triggers ONE new actual borrower 2579 Sandbox attempt; avoid manual duplicate. Mainnet signing/spending remains disabled and all Stage41/48/55 finality and balance gates remain intact.
+- Next: require CI and inspect subsequent Stage93 artifacts/receipt hashes, real borrower debt/collateral decreases, and token delta; do not claim liquidation success prematurely.
+
+
 ## Stage122 confirmed deployed execute ABI blocker (2026-10-26)
 - Main `06302cd` (PR #170 merged); actual Stage93 run `40305687819` FAILED in SANDBOX_FINALIZED_STATE with `STAGE48_UNTRUSTED_OR_FAILED_CALLBACK_REPORT`. The underlying authentic local raw execution (artifact `12642846079`, txn `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe`) shows `execute_with_pyth` called and rejected by contract.main.burrow.near: `Requires attached deposit of exactly 1 yoctoNEAR`. The builder incorrectly hardcoded depositYocto `0`. No verified liquidation, callback settlement or balance deltas.
 - Branch `fix/stage122-execute-one-yocto` changes only the Sandbox plan ABI deposit from 0 to exactly 1 yoctoNEAR, updating tests and preserving typed bigint transfer, signed receipts, all oracle/state/finality/economic checks and disabled mainnet signing/spending. Public successful on-chain Rhea execute_with_pyth evidence also attaches deposit `1` (nearblocks transaction `7AF24kgjBptrQbRHod7VBetMg9c2jmRWSg716HsTeHs`).

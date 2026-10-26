@@ -210,3 +210,24 @@ test('Stage72 uses only pinned active Pyth storage clones with cross-token and S
  assert.ok(script.includes('clonePinnedContractWithState'));
  assert.ok(script.includes('STAGE37_ALLOW_SANDBOX_MUTATION'));
 });
+
+test('Stage122 permits only attested temporal accrual when authentic source view bytes differ',()=>{
+ const raw={final_execution_status:'FINAL',status:{SuccessValue:''},
+  receipts_outcome:[receipt({SuccessValue:''})],
+  receipts:[callbackReceipt('4'.repeat(43))]};
+ const inspection={pinnedConfigMatches:true,pinnedBorrowerMatches:false,
+  temporalAccrualVerified:true,importedContractCount:4,allStoredKeysAttested:false};
+ const accepted=summarizeStage37SandboxOutcome(raw,inspection);
+ assert.equal(accepted.status,'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF');
+ assert.ok(accepted.blockers.includes('BORROWER_TEMPORAL_ACCRUAL_PROVED_NOT_EXACT_PINNED_VIEW_PARITY'));
+ for(const bad of [
+  {...inspection,temporalAccrualVerified:false},
+  {...inspection,temporalAccrualVerified:undefined},
+  {...inspection,pinnedConfigMatches:false},
+  {...inspection,importedContractCount:2},
+ ]){
+  const blocked=summarizeStage37SandboxOutcome(raw,bad);
+  assert.equal(blocked.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
+  assert.equal(blocked.attemptedTransaction,false);
+ }
+});
