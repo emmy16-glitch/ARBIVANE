@@ -58,13 +58,24 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
  // remaining collateral. This is not a flash loan or mainnet authorisation.
  if(sameToken&&BigInt(seize)<=BigInt(repay))
   throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
- const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
+ // Deployed Rhea rounds Borrow's newly credited supplied shares down.
+ // Borrowing exactly the source liquidation input can thus leave slightly
+ // less supplied balance than the next Liquidate action requires. In a
+ // SAME-TOKEN route borrow a tightly capped actor-only buffer, then fully
+ // repay that larger temporary loan and leave dust before withdrawing.
+ // Never change the independently source-sized borrower liquidation legs.
+ const surplus=BigInt(seize)-BigInt(repay);
+ const buffer=sameToken?BigInt(repay)/10000n+2n:0n;
+ if(sameToken&&surplus<=buffer*4n)
+  throw Error('STAGE124_SAME_TOKEN_NO_ROUNDING_SAFE_SURPLUS');
+ const borrowAmount=sameToken?(BigInt(repay)+buffer).toString():repay;
+ const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:borrowAmount}};
  const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
   in_assets:[{token_id:e.repay.tokenId,amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
-  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
-  {Withdraw:{token_id:e.seize.tokenId,amount:(BigInt(seize)-BigInt(repay)).toString()}}
+  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:borrowAmount}},
+  {Withdraw:{token_id:e.seize.tokenId,amount:(surplus-buffer*2n).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
  ];
