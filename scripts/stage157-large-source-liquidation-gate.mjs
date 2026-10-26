@@ -1,11 +1,9 @@
 import {readFile,writeFile} from 'node:fs/promises';
-import {MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC} from './stage157-large-source-candidates.mjs';
 
 // Stage157: quantify original mainnet Rhea + active-Pyth reference sizing
 // BEFORE allowing a new isolated Workspaces attempt. These are NOT realized
 // token prices, executable quotes, or evidence of a mainnet financing source.
 const NUM=/^(0|[1-9][0-9]{0,70})$/;
-const E27=10n**27n;
 const denied={chain:'NEAR_MAINNET',stage:'STAGE157_LARGE_LIQUIDATION_SOURCE_GATE',
  mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
  actualMainnetLoan:false,actualFlashLoan:false,realizedNetEconomicProfitVerified:false,
@@ -19,10 +17,11 @@ function block(x){
  return typeof x==='string'&&/^[1-9][0-9]{0,15}$/.test(x);
 }
 export function stage157EvaluateLargeSourceLiquidation(qualification,options={}){
- const minRepay=decimal(options.minRepayUsdE27??(1000n*E27).toString(),'MIN_REPAY_USD_E27');
- const minGross=decimal(options.minGrossUsdE27??(10n*E27).toString(),'MIN_GROSS_USD_E27');
- if(minRepay<1000n*E27||minGross<10n*E27)
-  throw Error('STAGE157_MINIMUMS_CANNOT_BE_WEAKENED');
+ // No arbitrary size floor: any positive source-qualified amount can be
+ // researched in disposable Sandbox. Optional user filters are NOT protocol
+ // limits, execution guarantees, or permission to waive finance-cost checks.
+ const minRepay=decimal(options.minRepayUsdE27??'0','MIN_REPAY_USD_E27');
+ const minGross=decimal(options.minGrossUsdE27??'0','MIN_GROSS_USD_E27');
  const base={...denied,sourceBorrower:null,sourceBlockHeight:null,
   sourceRepayAsset:null,sourceSeizeAsset:null,referenceRepayUsdE27:null,
   referenceGrossUsdE27:null,minimumRepayUsdE27:minRepay.toString(),
@@ -78,19 +77,18 @@ export function stage157EvaluateLargeSourceLiquidation(qualification,options={})
  const observations={sourceBorrower:p.borrowerAccountId,sourceBlockHeight:p.blockHeight,
   sourceRepayAsset:p.repay.tokenId,sourceSeizeAsset:p.seize.tokenId,
   referenceRepayUsdE27:repay.toString(),referenceGrossUsdE27:gross.toString()};
- // Positive quoted USD gross cannot justify a tiny or loss-making
- // internal-asset route. The executable Rhea leg must itself be >=10x the
- // previously proven small source and leave strictly positive same-token
- // assets after principal repayment, before any financing cost.
- if(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC||seizeInternal<=repayInternal)
+ // Zero debt, zero quoted value, or zero/negative same-token remainder
+ // cannot fund a repayment, at ANY size. No 10x/$1000/$10 price-size floor.
+ if(repayInternal===0n||repay===0n||gross===0n||seizeInternal<=repayInternal)
   return {...base,...observations,blockers:[
-   ...(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC?['STAGE159_LIQUIDATION_REPAY_NOT_TEN_TIMES_PREVIOUS_SOURCE']:[]),
+   ...(repayInternal===0n||repay===0n?['STAGE160_NO_POSITIVE_SOURCE_REPAYMENT']:[]),
+   ...(gross===0n?['STAGE160_NO_POSITIVE_REFERENCE_GROSS']:[]),
    ...(seizeInternal<=repayInternal?['STAGE159_NONPOSITIVE_INTERNAL_SAME_TOKEN_SPREAD']:[])
   ]};
  if(repay<minRepay||gross<minGross)
   return {...base,...observations,blockers:[
-   ...(repay<minRepay?['STAGE157_SOURCE_LIQUIDATION_REPAY_VALUE_BELOW_1000_USD']:[]),
-   ...(gross<minGross?['STAGE157_SOURCE_GROSS_SPREAD_BELOW_10_USD']:[])
+   ...(repay<minRepay?['STAGE160_BELOW_OPTIONAL_REQUESTED_REPAY_FILTER']:[]),
+   ...(gross<minGross?['STAGE160_BELOW_OPTIONAL_REQUESTED_GROSS_FILTER']:[])
   ]};
  return {...base,...observations,
   status:'ELIGIBLE_FOR_SOURCE_PINNED_LOCAL_SANDBOX_REPLAY_ONLY',
@@ -107,7 +105,10 @@ if(process.argv[1]&&import.meta.url===new URL('file://'+process.argv[1]).href){
    process.env.NEAR_PRIVATE_KEY||process.env.MAINNET_PRIVATE_KEY)
    throw Error('STAGE157_KEYLESS_SANDBOX_ONLY');
   const source=JSON.parse(await readFile(src,'utf8'));
-  const result=stage157EvaluateLargeSourceLiquidation(source);
+  const result=stage157EvaluateLargeSourceLiquidation(source,{
+   minRepayUsdE27:process.env.STAGE157_MIN_REPAY_USD_E27,
+   minGrossUsdE27:process.env.STAGE157_MIN_GROSS_USD_E27,
+  });
   await writeFile(output,JSON.stringify(result,null,2)+'\n',{encoding:'utf8',mode:0o600});
   console.log(JSON.stringify(result,null,2));
  }catch(error){
