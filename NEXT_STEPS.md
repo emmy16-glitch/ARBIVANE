@@ -1,5 +1,11 @@
 # Stage 111 handoff
 
+## Stage123 execution trigger checkpoint (2026-10-26)
+- Baseline main `ca7efd1b76121583393a12875b5a48708aa78bc8` merges PR #173 with real Rhea `execute_with_pyth` 1-yoctoNEAR ABI fix. Its push triggered safety checks and Stage37 gate, but NO Stage93 because the workflow's push.paths omitted `src/rhea/stage37-sandbox-liquidation.ts` (the very file changed by #173).
+- Branch `fix/stage123-activate-execute-deposit-run`: add that file to Stage93 push trigger, with regression proving builder ABI value exactly `1`, no mainnet execution. Initial commits `b9ec5da`, `99b0461`; review PR CI and merge if green to automatically dispatch exactly one genuine Stage93 on main. Do not manually duplicate runs.
+- Last genuine liquidation attempt: run `40305687819`, failed signed tx `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe` with 0-yocto deposit, fixed on main but not yet retested. On fresh Stage93 inspect the candidate and verify jobs and artifacts for callback success, actual debt/collateral decrease and seized FT increase; no success until receipts prove it. Mainnet signing/spending DISABLED. PRs #171/#172 are divergent/unmerged; do not blindly merge overlapping deposit or weakened state-parity logic.
+
+
 ## Stage122 confirmed deployed execute ABI blocker (2026-10-26)
 - Main `06302cd` (PR #170 merged); actual Stage93 run `40305687819` FAILED in SANDBOX_FINALIZED_STATE with `STAGE48_UNTRUSTED_OR_FAILED_CALLBACK_REPORT`. The underlying authentic local raw execution (artifact `12642846079`, txn `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe`) shows `execute_with_pyth` called and rejected by contract.main.burrow.near: `Requires attached deposit of exactly 1 yoctoNEAR`. The builder incorrectly hardcoded depositYocto `0`. No verified liquidation, callback settlement or balance deltas.
 - Branch `fix/stage122-execute-one-yocto` changes only the Sandbox plan ABI deposit from 0 to exactly 1 yoctoNEAR, updating tests and preserving typed bigint transfer, signed receipts, all oracle/state/finality/economic checks and disabled mainnet signing/spending. Public successful on-chain Rhea execute_with_pyth evidence also attaches deposit `1` (nearblocks transaction `7AF24kgjBptrQbRHod7VBetMg9c2jmRWSg716HsTeHs`).
