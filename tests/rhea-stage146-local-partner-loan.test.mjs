@@ -107,7 +107,7 @@ test('Stage146 must preserve independent archival source fallback from successfu
 test('Stage146 resolves finalized Rhea promise callback BEFORE interpreting Workspaces initial result',async()=>{
  const s=await readFile(new URL('../scripts/stage146-real-workspaces-partner-lender.mjs',import.meta.url),'utf8');
  assert.doesNotMatch(s,/rawReceipt\(raw,method\.toUpperCase\(\)\)/);
- const start=s.indexOf("const final=await resolveStage124RheaCallbackReceipts");
+ const start=s.indexOf("final=await resolveStage124RheaCallbackReceipts");
  const end=s.indexOf("return {...rawReceipt(final,'RHEA_PYTH_CALLBACK')");
  assert.ok(start>0&&end>start,'Rhea FINAL receipt resolver must precede approval');
  assert.match(s,/worker\.provider\.txStatusReceipts\(hash,signerAccountId,'FINAL'\)/);
