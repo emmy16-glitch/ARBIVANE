@@ -170,7 +170,8 @@ export async function attestStage51PythParity({
    !/^-?(0|[1-9][0-9]*)$/.test(String(quote.expo)))
    throw Error('STAGE51_INVALID_ACTIVE_PYTH_QUOTE');
   if(!equal(source,mirrored))
-   throw Error('STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT');
+   throw Error(mirrored===null?'STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING':
+    'STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT');
   quoteChecks++;
  }
  for(const {token,method} of derived){
