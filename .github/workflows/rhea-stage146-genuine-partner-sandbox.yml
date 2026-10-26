@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'scripts/stage146-real-workspaces-partner-lender.mjs'
+      - 'scripts/stage115-historical-sandbox-clock.mjs'
+      - 'scripts/stage118-replay-clock.c'
+      - 'tests/rhea-stage147-local-oracle-clock.test.mjs'
       - 'scripts/stage146-real-funded-workspaces-runner.mjs'
       - 'tests/rhea-stage146-local-partner-loan.test.mjs'
       - '.github/workflows/rhea-stage146-genuine-partner-sandbox.yml'
@@ -29,7 +32,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs
+      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs
   genuine_ft_transfer_and_rhea_partner_funding:
     if: github.event_name != 'pull_request'
     needs: local_execution_contract_regressions
@@ -41,6 +44,9 @@ jobs:
       STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
       STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true'
       STAGE146_ALLOW_LOCAL_NEAR_LOAN: 'true'
+      # Artificial local time compression; does NOT prove real-time mainnet
+      # oracle freshness. Pyth contract's original quote and expiry unchanged.
+      STAGE147_LOCAL_CLOCK_COMPRESSION: 'true'
       STAGE82_SINGLE_BORROWER: 'true'
       SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
       NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
