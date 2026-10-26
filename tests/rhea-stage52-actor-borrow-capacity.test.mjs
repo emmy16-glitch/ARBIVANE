@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {attestStage52BorrowCollateralCapacity}
  from '../scripts/stage52-solvent-sandbox-borrow-capacity.mjs';
+import {stage124PrepareShareSafeBorrow} from '../scripts/stage124-supplied-shares-safe-borrow.mjs';
 
 const H=221440179,E27=10n**27n,NEAR=10n**24n;
 const P='contract.main.burrow.near',O='aggregate-oracle.near';
@@ -114,4 +115,42 @@ test('Stage52 gate executes after verified local funding but before Rhea call an
   script.indexOf('sandboxTransactionSubmitted=true'));
  assert.ok(script.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!script.includes('broadcast_tx'));
+});
+
+test('Stage124 actor health remeasures an authentic Sandbox loan share buffer and conservatively prices the WHOLE borrow',async()=>{
+ const x=input();
+ const token='usdt.tether-token.near';
+ const repay=x.proposal.repay.amountLendingInternalAtomic;
+ const seize=(BigInt(repay)+10n**18n).toString();
+ const delta=(BigInt(seize)-BigInt(repay)).toString();
+ x.plan.method='execute_with_pyth';
+ x.plan.depositYocto='1';
+ x.plan.borrowerAccountId='debtor.near';
+ x.plan.actions=[
+  {Borrow:{token_id:token,amount:repay}},
+  {Liquidate:{account_id:'debtor.near',
+   in_assets:[{token_id:token,amount:repay}],
+   out_assets:[{token_id:token,amount:seize}]}},
+  {Repay:{token_id:token,amount:repay}},
+  {Withdraw:{token_id:token,amount:delta}},
+ ];
+ x.shareProofAssets=[[token,{supplied:{
+  balance:'1000000000000000000000000',shares:'1000000000000000000000000'
+ }}]];
+ const prepared=stage124PrepareShareSafeBorrow(x.plan,x.shareProofAssets);
+ x.plan=prepared.plan;
+ const evidence=await attestStage52BorrowCollateralCapacity(x);
+ assert.equal(evidence.extraBorrowShareProofVerified,true);
+ assert.equal(evidence.realLocalBorrowInternal,x.plan.actions[0].Borrow.amount);
+ assert.ok(BigInt(evidence.borrowReferenceUsdE27)>BigInt(x.proposal.repay.referenceUsdE27));
+ assert.equal(evidence.actorCoveredByConservativeReference,true);
+ for(const bad of [
+  {...x,shareProofAssets:null},
+  {...x,shareProofAssets:[[token,{supplied:{balance:'1000000000000000000000001',
+   shares:'1000000000000000000000000'}}]]},
+  {...x,plan:{...x.plan,stage124ShareFunding:undefined}},
+  {...x,plan:{...x.plan,actions:x.plan.actions.map((y,i)=>i===1?
+    {Liquidate:{...y.Liquidate,
+     in_assets:[{token_id:token,amount:'1'}]}}:y)}},
+ ])await assert.rejects(()=>attestStage52BorrowCollateralCapacity(bad),/STAGE52_|STAGE124_/);
 });
