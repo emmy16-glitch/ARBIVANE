@@ -254,6 +254,7 @@ jobs:
             stage129-finalized-transaction.json
             stage116-signed-transaction.json
             stage116-before-state.json
+            stage131-immediate-state.json
             stage116-after-state.json
             stage52-actor-borrow-capacity.json
             stage55-sandbox-phase-evidence.json
