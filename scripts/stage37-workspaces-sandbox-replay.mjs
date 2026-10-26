@@ -24,6 +24,7 @@ import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
+import {stage146RunActualLocalPartnerFinance} from './stage146-actual-local-partner-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
@@ -323,6 +324,27 @@ async function main(){
  });
  if(localVault!==repayReserve.tokenVaultFtAtomic)
   throw Error('STAGE50_CLONED_FT_VAULT_MISMATCH');
+ // Stage146: a separate disposable Sandbox partner obtains real cloned
+ // LiNEAR against its own LOCAL collateral, transfers it to a zero-collateral
+ // actor, and the actor liquidates the authentic borrower. No mainnet signer.
+ if(e.STAGE146_SANDBOX_PARTNER_FINANCING==='true'){
+  const proof=await stage146RunActualLocalPartnerFinance({
+   root,actor,lending,wrapped:contracts.get('wrap.near'),repayToken,
+   contracts,assetRows:sandboxAssets,plan,positionId:proposal.positionId,
+   provider:worker.provider,
+  });
+  await writeFile('stage37-process-result.json',JSON.stringify({
+   mode:'STAGE146_PARTNER_FINANCING_LOCAL_PROCESS_RESULT',
+   chain:'NEAR_SANDBOX',
+   status:'REAL_LOCAL_PARTNER_FUNDED_RHEA_AND_REPAYMENT_VERIFIED',
+   realLocalPartnerFinancedRhea:true,
+   partnerRheaDebtClosed:proof.partnerRheaBorrowDebtAfterInternal==='0',
+   realFlashLoan:false,realMainnetExecuted:false,
+   realMainnetProfit:false,mayBroadcastMainnet:false,
+   resultPath:'stage146-actual-partner-funded-result.json'
+  },null,2)+'\n');
+  return;
+ }
  // Strict active Pyth parity, pinned vault, and source actor registration were
  // completed before this genuinely funded (but sandbox-only) loan attempt.
  await markStage55('SANDBOX_COLLATERAL_FUNDING');
@@ -503,6 +525,22 @@ main().catch(async err=>{
   stage55ReasonCode:failure.observedFailureCode,
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']};
+ if(e.STAGE146_SANDBOX_PARTNER_FINANCING==='true'){
+  const stage146Failure={
+   mode:'STAGE146_ACTUAL_PARTNER_FINANCED_SANDBOX_LIQUIDATION',
+   network:'NEAR_SANDBOX',status:'BLOCKED_NO_COMPLETE_REAL_PARTNER_SETTLEMENT',
+   realLocalRheaLiquidationFinalized:false,
+   realLocalLoanPrincipalReturnedToPartner:false,
+   partnerRheaBorrowDebtAfterInternal:null,
+   realUncollateralizedFlashLoanUsed:false,
+   verifiedMainnetProfit:false,realOwnerWalletPayout:false,
+   canSignMainnet:false,canBroadcastMainnet:false,
+   failurePhase:failure.currentPhase,
+   failureCode:failure.observedFailureCode
+  };
+  await writeFile('stage146-attempt-failure.json',
+   JSON.stringify(stage146Failure,null,2)+'\n').catch(()=>{});
+ }
  await writeFile('stage37-process-result.json',JSON.stringify(processResult,null,2)+'\n').catch(()=>{});
  console.log(JSON.stringify(processResult,null,2));
  process.exitCode=2;
