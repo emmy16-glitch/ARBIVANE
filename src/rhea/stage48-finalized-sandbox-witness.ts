@@ -19,6 +19,42 @@ function valid(s:Stage48PositionSnapshot):boolean {
  return s!==null&&typeof s==='object'&&plain(s.borrower)&&plain(s.actor)&&
   balance(s.repayFt)&&balance(s.seizeFt);
 }
+/** Interest/farm metadata naturally change as Sandbox advances blocks.
+ * Independently attest immutable position SHARE ledgers and actual wallet FTs,
+ * rather than bitwise-identical interest-accrued account-view JSON.
+ */
+function positionShares(account:unknown):string{
+ if(!plain(account))throw Error('STAGE48_INVALID_ACCOUNT_POSITION_VIEW');
+ const a=account as Record<string,unknown>;
+ if(typeof a.account_id!=='string'||a.account_id.length<2||
+  !plain(a.positions))throw Error('STAGE48_INVALID_ACCOUNT_POSITION_VIEW');
+ const p=a.positions as Record<string,unknown>;
+ if(Object.keys(p).length>64)throw Error('STAGE48_POSITION_LIMIT');
+ const legs=(raw:unknown)=>{
+  if(!Array.isArray(raw)||raw.length>256)
+   throw Error('STAGE48_INVALID_SHARE_LEDGER');
+  const out:Record<string,string>={};
+  for(const v of raw){
+   if(!v||typeof v!=='object'||Array.isArray(v))
+    throw Error('STAGE48_INVALID_SHARE_LEDGER');
+   const x=v as Record<string,unknown>;
+   if(typeof x.token_id!=='string'||
+    !/^[a-z0-9._-]{2,64}$/.test(x.token_id)||
+    Object.hasOwn(out,x.token_id)||!balance(x.shares))
+    throw Error('STAGE48_INVALID_SHARE_LEDGER');
+   out[x.token_id]=x.shares as string;
+  }
+  return Object.entries(out).sort((x,y)=>x[0].localeCompare(y[0]));
+ };
+ const positions=Object.entries(p).sort(([x],[y])=>x.localeCompare(y))
+  .map(([id,row])=>{
+   if(!/^[A-Za-z0-9._:-]{1,100}$/.test(id)||!plain(row))
+    throw Error('STAGE48_INVALID_POSITION_ID');
+   const v=row as Record<string,unknown>;
+   return [id,legs(v.collateral),legs(v.borrowed)];
+  });
+ return JSON.stringify({accountId:a.account_id,positions,supplied:legs(a.supplied??[])});
+}
 export function attestStage48FinalizedSandboxReplay(input:{
  receipt:SandboxResult;before:Stage48PositionSnapshot;
  immediatelyAfter:Stage48PositionSnapshot;afterFinalBlock:Stage48PositionSnapshot;
