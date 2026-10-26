@@ -153,12 +153,12 @@ test('Stage50 real Rhea Workspaces call uses bigint gas/deposit, not JSON string
 
 
 const sameAssetPlan=()=>plan({actions:[
- {Borrow:{token_id:repay,amount:'100'}},
+ {Borrow:{token_id:repay,amount:'102'}},
  {Liquidate:{account_id:'debtor.near',
   in_assets:[{token_id:repay,amount:'100'}],
   out_assets:[{token_id:repay,amount:'110'}]}},
- {Repay:{token_id:repay,amount:'100'}},
- {Withdraw:{token_id:repay,amount:'10'}}
+ {Repay:{token_id:repay,amount:'102'}},
+ {Withdraw:{token_id:repay,amount:'6'}}
 ]});
 test('Stage71 keeps four-action same-token route source-pinned and borrow repaid before surplus withdrawal',()=>{
  const r=inspectStage49RheaAssets(sameAssetPlan(),assets(),221433162);
