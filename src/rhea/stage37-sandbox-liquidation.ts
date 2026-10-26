@@ -143,6 +143,10 @@ export function summarizeStage37SandboxOutcome(
  }
  const failed=[...statuses.values()].filter(st=>Object.prototype.hasOwnProperty.call(st,'Failure')).length;
  const receiptDefs=result.receipts;
+ // Preserve definitive failed receipt evidence even if SDK does not include
+ // callback receipt definitions. Success still requires full callback proof.
+ if(failed>0&&(!Array.isArray(receiptDefs)||receiptDefs.length===0))
+  throw Error('SANDBOX_FAILED_ASYNC_RECEIPT_WITHOUT_CALLBACK_ATTESTATION');
  if(!Array.isArray(receiptDefs)||receiptDefs.length===0)
   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
  const callbacks=new Set<string>();
