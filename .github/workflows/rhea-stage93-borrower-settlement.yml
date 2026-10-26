@@ -175,10 +175,20 @@ jobs:
             else
               sandbox_exit=$?
             fi
+            attempt_exit=0
             EXECUTION_ENABLED=false NEAR_NETWORK=mainnet node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
               stage69-sandbox-actual.json stage55-sandbox-phase-evidence.json \
               stage37-sandbox-execution.json stage41-sandbox-balance-settlement.json \
-              > stage69-sandbox-attempt-stdout.json
+              > stage69-sandbox-attempt-stdout.json || attempt_exit=$?
+            # Keep diagnostics bounded to validated enum-like codes; full
+            # source account and oracle values remain only in the artifact.
+            if test -s stage55-sandbox-phase-evidence.json; then
+              jq -c '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,actualRheaSettlementVerified}' stage55-sandbox-phase-evidence.json
+            fi
+            if test -s stage69-sandbox-actual.json; then
+              jq -c '{status,stage55Phase,stage55ReasonCode,attemptedTransaction}' stage69-sandbox-actual.json
+            fi
+            (( attempt_exit == 0 )) || exit "$attempt_exit"
             jq -e '.chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and .maySignMainnet == false and .mayBroadcastMainnet == false' stage56-sandbox-attempt-evidence.json
             jq -c '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,actualRheaSettlementVerified}' stage56-sandbox-attempt-evidence.json
           fi
