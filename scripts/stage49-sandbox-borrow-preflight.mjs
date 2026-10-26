@@ -50,6 +50,10 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  const liquidation=plan.actions[1]?.Liquidate;
  const withdraw=plan.actions.at(-1)?.Withdraw;
  const same=liquidation?.out_assets?.[0]?.token_id===token;
+ if(!withdraw||((withdraw.amount===undefined)===(withdraw.max_amount===undefined))||
+  (same&&withdraw.max_amount===undefined)||
+  (!same&&withdraw.amount===undefined))
+  throw Error('STAGE125_INVALID_BOUNDED_WITHDRAW_MODE');
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
@@ -60,7 +64,7 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
    plan.actions[2].Repay.amount!==rawQty||
-   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==BigInt(withdraw.amount??'0')):
+   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==BigInt(withdraw.max_amount??'0')):
    plan.actions.length!==3)||
   liquidation.account_id!==plan.borrowerAccountId)
   throw Error('STAGE49_PLAN_REPAY_ROUTE_MISMATCH');
