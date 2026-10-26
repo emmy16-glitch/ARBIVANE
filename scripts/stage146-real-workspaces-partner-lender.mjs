@@ -2,6 +2,29 @@ import {writeFile} from 'node:fs/promises';
 import {registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
 
+/** Stage146: preserve EXACT observed deployed Rhea enum ABI.
+ * The inner `Liquidate` parameters ARE NOT a standalone action; the deployed
+ * action deserializer requires `{Liquidate:{account_id,in_assets,out_assets}}`.
+ * Never send a bare `account_id` object into execute_with_pyth.
+ */
+export function stage146BuildPartnerFundedLiquidationActions(plan){
+ const inner=plan?.actions?.[1]?.Liquidate;
+ const input=inner?.in_assets?.[0],out=inner?.out_assets?.[0];
+ if(plan?.chain!=='NEAR_SANDBOX'||plan?.maySignMainnet!==false||
+  !inner||inner.account_id!==plan.borrowerAccountId||
+  !Array.isArray(inner.in_assets)||inner.in_assets.length!==1||
+  !Array.isArray(inner.out_assets)||inner.out_assets.length!==1||
+  input?.token_id!=='linear-protocol.near'||
+  out?.token_id!=='linear-protocol.near'||
+  typeof out.amount!=='string'||!U.test(out.amount)||
+  input.amount!==undefined&&input.max_amount!==undefined)
+  throw Error('STAGE146_UNTRUSTED_SOURCE_LIQUIDATION_ABI');
+ return [
+  {Liquidate:structuredClone(inner)},
+  {Withdraw:{token_id:'linear-protocol.near',max_amount:out.amount}}
+ ];
+}
+
 /**
  * Stage146 — local NEAR Workspaces genuine NEP-141 financed Rhea attempt.
  * The separately controlled partner deposits disposable Workspaces wNEAR
@@ -260,11 +283,7 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   });
   await guard('EXECUTE_AUTHENTIC_RHEA_LIQUIDATION_WITH_EXTERNALLY_TRANSFERRED_FT',async()=>{
    result.receiptProofs.rheaLiquidate=await call(liquidator,lending,'execute_with_pyth',{
-    actions:[
-     liquidation,
-     {Withdraw:{token_id:'linear-protocol.near',max_amount:
-      liquidation.out_assets[0].amount}}
-    ]
+    actions:stage146BuildPartnerFundedLiquidationActions(plan)
    });
    const afterBorrower=await snapshot(plan.borrowerAccountId);
    const debtReduction=stage146FindLegShares(borrowerBefore,'borrowed','linear-protocol.near')-
