@@ -203,3 +203,19 @@ test('Stage71 registers only the lending contract and one unique NEP-141 token',
  assert.equal(s.mainnetExecutionEnabled,undefined);
  assert.equal(s.maySignMainnet,false);
 });
+
+test('Stage125 requires source-pinned max_amount for same-token surplus, never an exact minimum',()=>{
+ const p=sameAssetPlan();
+ assert.equal(p.actions[3].Withdraw.max_amount,'10');
+ assert.equal(p.actions[3].Withdraw.amount,undefined);
+ assert.equal(inspectStage49RheaAssets(p,assets(),221433162).repayAndSeizeShareToken,true);
+ for(const mutation of [
+  x=>{x.actions[3].Withdraw.amount='10';},
+  x=>{delete x.actions[3].Withdraw.max_amount;x.actions[3].Withdraw.amount='10';},
+  x=>{delete x.actions[3].Withdraw.max_amount;},
+  x=>{x.actions[3].Withdraw.max_amount='11';},
+ ]){
+  const x=structuredClone(p);mutation(x);
+  assert.throws(()=>inspectStage49RheaAssets(x,assets(),221433162),/STAGE(125|49)_/);
+ }
+});
