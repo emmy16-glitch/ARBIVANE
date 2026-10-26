@@ -3,6 +3,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
+import {verifyStage136NearTransactionPreimage} from './stage136-near-borsh-preimage.mjs';
 
 /** Stage135: independent OFFLINE cross-file verification of real local Sandbox
  * evidence. Ed25519 authenticates the claimed transaction hash, but NEAR
@@ -74,6 +75,10 @@ export function verifyStage135Bundle(d,bytes){
   tx.receiver_id!=='contract.main.burrow.near'||tx.signer_id===proposal.borrowerAccountId)
   fail('UNTRUSTED_SANDBOX_SIGNER');
  const check=signedSandboxEvidence(raw,{signerId:tx.signer_id,receiverId:tx.receiver_id});
+ const preimage=verifyStage136NearTransactionPreimage(raw,before);
+ if(preimage.transactionId!==check.manifest.transactionId||
+  preimage.signerId!==tx.signer_id||preimage.chain!=='NEAR_SANDBOX')
+  fail('BORSH_PREIMAGE_SIGNED_IDENTITY_MISMATCH');
  if(signed.chain!=='NEAR_SANDBOX'||signed.mode!==check.manifest.mode||
   signed.mainnetExecutionEnabled!==false||signed.settlementVerified!==false||
   signed.outcomeMerkleProofIndependentlyVerified!==false||
@@ -206,7 +211,8 @@ export function verifyStage135Bundle(d,bytes){
  const hashes=Object.fromEntries(names.map(k=>[k,hash(bytes[k])]));
  return {mode:'STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF',
   chain:'NEAR_SANDBOX',verification:'ED25519_TRANSACTION_HASH_AND_SELF_CONSISTENT_RECEIPTS_AND_STATE',
-  hashBorshPreimageIndependentlyVerified:false,
+  hashBorshPreimageIndependentlyVerified:true,
+  borshPreimageWitness:preimage,
   outcomeMerkleProofIndependentlyVerified:false,
   fullImportedTrieParityVerified:false,realizedNetProfitVerified:false,
   mainnetExecutionEnabled:false,
@@ -229,6 +235,8 @@ export async function verifyStage135Directory(inputDir,outputDir){
  }
  const verified=verifyStage135Bundle(d,bytes);
  await mkdir(outputDir,{recursive:true});
+ await writeFile(join(outputDir,'stage136-borsh-preimage.json'),
+  JSON.stringify(verified.borshPreimageWitness,null,2)+'\n');
  await writeFile(join(outputDir,'stage135-independent-proof.json'),JSON.stringify(verified,null,2)+'\n');
  return verified;
 }

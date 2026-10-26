@@ -18,6 +18,8 @@ test('Stage135 requires real Ed25519 validation, original final receipts and raw
  assert.match(source,/debt\(after\.actor\)!==0n/);
  assert.match(source,/actorFtIncreaseAtomic/);
  assert.match(source,/outcomeMerkleProofIndependentlyVerified:false/);
+ assert.match(source,/verifyStage136NearTransactionPreimage\(raw,before\)/);
+ assert.match(source,/hashBorshPreimageIndependentlyVerified:true/);
  assert.match(source,/fullImportedTrieParityVerified:false/);
  assert.match(source,/mainnetExecutionEnabled:false/);
 });
@@ -25,9 +27,12 @@ test('Stage93 and historic proof CI both run the same fail-closed independent ve
  const stage93=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
  const stage135=await readFile(new URL('../.github/workflows/stage135-independent-proof-audit.yml',import.meta.url),'utf8');
  assert.match(stage93,/stage135-independent-proof\.mjs/);
- assert.match(stage93,/node scripts\/stage135-independent-proof\.mjs "\$verified" verified/);
+ assert.match(stage93,/node scripts\/stage135-independent-proof\.mjs verified verified/);
  assert.match(stage135,/40317139342/);
  assert.match(stage135,/FORGED_SETTLEMENT_INCORRECTLY_PASSED/);
  assert.match(stage135,/FORGED_FINALITY_INCORRECTLY_PASSED/);
  assert.match(stage135,/actions\/download-artifact@v4/);
+ assert.match(stage135,/FORGED_BORSH_REFERENCE_BLOCK_INCORRECTLY_PASSED/);
+ assert.match(stage93,/stage116-raw-transaction\.json stage116-signed-transaction\.json/);
+ assert.match(stage93,/stage136-borsh-preimage\.json/);
 });
