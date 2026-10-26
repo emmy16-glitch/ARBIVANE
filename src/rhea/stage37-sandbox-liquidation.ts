@@ -24,6 +24,17 @@ export interface SandboxReplayPlan {
   {Withdraw:{token_id:string;amount:string}}
  ];
  depositYocto:'1';gasUnits:'300000000000000';
+ /** Source-constrained Sandbox actor funding only, not borrower eligibility. */
+ stage124ShareFunding?:{
+  mode:'STAGE124_REAL_POOL_SHARE_ROUNDING_FINANCING';chain:'NEAR_SANDBOX';
+  repaymentTokenId:string;sourceLiquidationRepayInternal:string;
+  sourceLiquidationSeizeInternal:string;borrowedInternal:string;
+  incrementalBorrowInternal:string;poolSuppliedBalanceInternal:string;
+  poolSuppliedShares:string;mintedBorrowShares:string;
+  roundedUpRequiredLiquidationShares:string;maxExtraBorrowInternal:string;
+  expectedRemainingAfterSelfRepayInternal:string;
+  borrowerStateModified:false;oraclePriceModified:false;mainnetExecutionEnabled:false;
+ };
  sourceCodeHash:string;sourceOracleHash:string;
  sourceMathOnly:true;realContractReplayVerified:false;fullImportedStateVerified:false;
  realWalletAuthorized:false;executionEnabled:false;maySignMainnet:false;mayBroadcastMainnet:false;
