@@ -1,3 +1,11 @@
+## Stage146 actual local partner-financed Rhea execution experiment (26 October 2026)
+
+- **In development, not yet proven successful:** alternate explicit `STAGE146_SANDBOX_PARTNER_FINANCING=true` path for the already source-attested local Stage37 Workspaces reconstruction.
+- A separate disposable Sandbox partner obtains LiNEAR through its OWN **1 NEAR local wNEAR collateral** and an actual Rhea Borrow. It uses real NEP-141 `ft_transfer` to the liquidator; the liquidator has no wNEAR collateral, deposits these FTs to Rhea, calls actual Rhea Liquidate→Withdraw, repays partner with NEP-141, and the partner must repay its Rhea loan to zero. Full original FINAL transaction receipts are required.
+- **Do not call this a flash loan:** the partner funds collateral and is not a real-world liquidity provider. Genuine transfers and liquidation must be proven in a new Stage146 Actions run; the pre-existing Stage93 four-action replay is insufficient.
+- Stage146 fail-closed Actions [workflow](.github/workflows/rhea-stage146-actual-local-partner.yml) checks only this local route, captures raw original Rhea and FT calls, and must fail if ANY async callback or outstanding lender debt remains. No mainnet private keys, signing or payouts.
+- **Next:** inspect actual new Stage146 original receipts, correct runtime/amount/async failures if found, and establish partner collateral withdrawal. Mainnet funding partner or permissionless flash lender and actual mainnet realized net gain remain unverified.
+
 ## Stages143–145 offline recovery, partner accounting and production qualification (26 October 2026)
 
 - Stage143 `scripts/stage143-async-financing-journal.mjs`: immutable hash-chained event journal and permitted financing transitions. Rejects duplicated receipt references, out-of-order callbacks, forged/suppressed debt; preserves principal owed if settlement fails; never authorizes payouts.
