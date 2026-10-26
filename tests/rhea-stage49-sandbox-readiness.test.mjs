@@ -153,12 +153,12 @@ test('Stage50 real Rhea Workspaces call uses bigint gas/deposit, not JSON string
 
 
 const sameAssetPlan=()=>plan({actions:[
- {Borrow:{token_id:repay,amount:'100'}},
+ {Borrow:{token_id:repay,amount:'101'}},
  {Liquidate:{account_id:'debtor.near',
   in_assets:[{token_id:repay,amount:'100'}],
   out_assets:[{token_id:repay,amount:'110'}]}},
- {Repay:{token_id:repay,amount:'100'}},
- {Withdraw:{token_id:repay,amount:'10'}}
+ {Repay:{token_id:repay,amount:'101'}},
+ {Withdraw:{token_id:repay,amount:'9'}}
 ]});
 test('Stage71 keeps four-action same-token route source-pinned and borrow repaid before surplus withdrawal',()=>{
  const r=inspectStage49RheaAssets(sameAssetPlan(),assets(),221433162);
@@ -191,4 +191,22 @@ test('Stage71 registers only the lending contract and one unique NEP-141 token',
  assert.equal(s.storagePaidYocto,(2n*BigInt(MIN)).toString());
  assert.equal(s.mainnetExecutionEnabled,undefined);
  assert.equal(s.maySignMainnet,false);
+});
+
+test('Stage124 rejects unconstrained borrow buffers and withdrawals of temporary borrowed funds',()=>{
+ const valid=sameAssetPlan();
+ assert.equal(valid.actions[0].Borrow.amount,'101');
+ const invalid=[
+  p=>p.actions[0].Borrow.amount='100',
+  p=>p.actions[0].Borrow.amount='102',
+  p=>p.actions[2].Repay.amount='100',
+  p=>p.actions[3].Withdraw.amount='10',
+  p=>p.actions[3].Withdraw.amount='0',
+  p=>p.actions[1].Liquidate.in_assets[0].amount='101',
+ ];
+ for(const edit of invalid){
+  const bad=structuredClone(valid);edit(bad);
+  assert.throws(()=>inspectStage49RheaAssets(bad,assets(),221433162),/STAGE49_/);
+ }
+ assert.equal(inspectStage49RheaAssets(valid,assets(),221433162).repayAndSeizeShareToken,true);
 });
