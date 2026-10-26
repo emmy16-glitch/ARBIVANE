@@ -12,7 +12,7 @@ test('Stage125 accepts real Workspaces EXECUTED only after local FINAL status re
  const raw={result:result('EXECUTED')};
  let reads=0;
  const provider={txStatus:async(h,a,finality)=>{
-  assert.deepEqual([h,a,finality],[hash,actor,'FINAL');reads++;
+  assert.deepEqual([h,a,finality],[hash,actor,'FINAL']);reads++;
   return {...result('FINAL'),status:{SuccessValue:''}};
  }};
  const finalized=await finalizeStage124FundingReceipt(raw,provider,actor,'BORROW');
