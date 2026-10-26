@@ -1,205 +1,74 @@
-# Implementation plan and acceptance criteria
+# ARBIVANE roadmap — proven milestones and next acceptance tests
 
-Research and a Stage 1 safety foundation were begun October 23, 2026 at the user's request. Hackathon organizers may have time-window rules; check them and distinguish pre-hackathon preparation from eligible implementation work.
+**Status as of 26 October 2026.** Engineering began 23 October 2026. This plan distinguishes completed code, independently observed local contract execution and future **owner-funded** execution. It replaces the previous Stage 1/2 and proposed two-week sprint list as the primary roadmap; historical Stage documents remain in the repository for provenance.
 
-## Stage 1 (implemented in code, not deployed)
+## Delivered
 
-- [x] Typed data model and signed/unsigned integer parsing
-- [x] Conservative financial estimates with rounding helpers
-- [x] Fail-closed risk decision engine
-- [x] Historical competition pressure proxy with explicit uncertainty
-- [x] Read-only, finalized-block NEAR/Rhea RPC scanner (mock tests only)
-- [x] Lifecycle transition validator and nonpersistent replay helper
-- [x] Settlement order guard (no funds moving)
-- [x] Test suite and CI configuration
-- [ ] Test read-only scan against current real Rhea deployment
-
-## Stage 2 (completed locally; NOT yet validated against current live contracts)
-
-- [x] Parse historical Burrow-style asset pools, share balances, risk ratios and price feed structures with strict schema checks.
-- [x] Use bigint fixed-point arithmetic with conservative rounding and debt-free/unknown-price handling.
-- [x] Implement documented Rhea initial/final health and liquidation discount rules without constructing executable transactions.
-- [x] Match the Rhea official published 1000-DAI / 152-wNEAR example in automated tests.
-- [x] Fail closed on malformed data, zero share pools, missing or duplicate oracle prices and invalid transfers.
-- [x] Document the current `aggregate-oracle.near` vs legacy `priceoracle.near` difference.
-- [ ] Confirm actual deployed oracle method ABI and successful pinned-block **live** RPC reads.
-- [ ] Verify arithmetic parity, precise rounding, asset config and code hashes against live lending contract.
-- [ ] Independently verify financing and health constraints for the liquidator.
-
-See [Rhea parity evidence](RHEA_PARITY.md). No execution capability added.
-
-## November 1–14 target sprint, subject to verification
-
-| Day | Delivery | Acceptance proof |
+| Capability | Implementation | Verified evidence |
 | --- | --- | --- |
-| 1 | Verify Rhea contracts, oracles, methods and deployment/network | Logged final-block read with on-chain call evidence |
-| 2 | Exact position/share parsing and protocol health math | Test vectors match verified deployed contract |
-| 3 | Liquidation sizing and liquidator financing model | No division/rounding or liquidity mismatch in edge fixtures |
-| 4 | Fresh candidate revalidation and invalidation | A stale borrower or price cannot enter approved state |
-| 5 | Risk, cost model, market depth and competition evidence | Adversarial fixtures cause reject decisions |
-| 6 | Build on-chain Rust policy/treasury prototype | Owner, limit, replay, pause, expiry unit tests |
-| 7 | Verify on-chain custody and protocol call path | Unauthorized worker cannot spend even if compromised |
-| 8 | Shade SDK + TEE testnet registration | Attestation and unauthorized rejection both demonstrated |
-| 9 | Transaction outbox + durable state machine | Crash, restart, replay, duplicate callback tests |
-| 10 | Verified NEAR AI explanation adapter | AI cannot override deterministic policy; verification proof |
-| 11 | Reconciliation against actual receipt and balances | Accounting separates unsold inventory from proceeds |
-| 12 | NEAR Intents quote/status/refund adapter | Sandbox fixture plus **optional** owner-authorized tiny mainnet round-trip |
-| 13 | Readable owner dashboard, observability and kill-switch UI | Judge can see all evidence without private keys |
-| 14 | End-to-end safety demo, documentation and submission | Independent steps reproduce all claims |
+| Deterministic project foundation | BigInt amount accounting, lifecycle state machine, deny-by-default risk policy, tests | npm run check, GitHub CI |
+| Read-only Rhea discovery | Asset/borrower/debt indexing, full and sharded pagination, cursor recovery, RPC failover and rate limits | Earlier Rhea investigation/workflow artifacts; scope varies by run |
+| Protocol checks | Source-backed share conversions, oracle precision, isolated collateral/debt health, capped repay/seize sizing, current Pyth admission | Historical stage35/38 source proofs and parity tests |
+| NEAR Workspaces imported-state replay | Lending/oracle/wrapped NEAR/LiNEAR bytecode and relevant storage, account registration, real Sandbox actor collateral | Stage90–96 import canaries, subsequent Stage93 real runs |
+| **Real local Rhea liquidation** | Signed Borrow → Liquidate → Repay → Withdraw, original successful FINAL async callback and borrower/actor/FT balance verification | [Stage93 #40315134156](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40315134156), [#40317139342](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40317139342), [#40320594342](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40320594342) |
+| Independent transaction authenticity | Original signed proof, canonical receipt review, SHA-256 source artifact fingerprints, rebuilt NEAR Borsh V0 preimage, SHA-256 and Ed25519 | [Stage135/136 audit](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40320594331) |
+| Merkle path checker | Outcome, shard, lite-header and supplied-head-root consistency | [Stage137 read-only gate](https://github.com/emmy16-glitch/ARBIVANE/actions/workflows/rhea-stage137-proof-gate.yml); a trusted validator head is **not** yet authenticated |
+| Mainnet capital policy preview | Explicit spending, loss, quote and profitability validation with unconditional broadcast refusal | Stage138 source and test suite; **not** a funded execution authority |
 
-**Priority:** If Rhea funding/custody or exact liquidations cannot be validated, show accurate detection/paper decision paths, actual testnet contract controls and a separate small-value Intents proof. Do **not** claim mainnet trading worked when it did not.
+These milestones support the central claim: a **real Rhea liquidation has been completed inside local NEAR Sandbox**. They do not support a claim that a funded mainnet liquidation, sale or withdrawal has produced profit.
 
-## Post-hackathon only
+## Next milestone 1 — validator-authenticated canonical outcome inclusion
 
-Morpho Base read-only integration, Chain Signatures, audited custody/execution, competing-liquidator data pipeline, optional EVM flash-loan execution and production live capital controls.
+**Objective:** turn Stage137's self-consistency proof into authenticated canonical-chain evidence.
 
-## Stage 3 (October 23, 2026): public contract identity / API compatibility probe
+**Engineering work:** obtain genuine NEAR light-client proof responses from read-only RPC, independently verify the trusted validator-approved light-client head and epoch transitions, and authenticate all relevant outcome Merkle paths against that head. Explicitly distinguish historical NEAR-mainnet receipts from local Sandbox receipts.
 
-- [x] Implement read-only, finalized-block-pinned contract account/code hash verification.
-- [x] Add schema and freshness probe for current documented Rhea contracts with no fallback to legacy oracle.
-- [x] Add mock-RPC regression coverage including oracle method and code-hash mismatch.
-- [x] Add advisory GitHub Actions network probe storing verifiable diagnostics.
-- [ ] Confirm real mainnet RPC probe output and capture exact code hashes, timestamp and error methods.
-- [ ] Differential-test current deployed contract math and receipt traces. No funds or transaction execution until audited.
+**Acceptance:** authentic public transaction inclusion with trusted checkpoint chain; altered root/path, stale head, incorrect epoch or forged validator approval rejected. No permission to spend.
 
-## Stage 4 (October 24, 2026): Pyth-style aggregate oracle adapter
+## Next milestone 2 — stronger source-to-Sandbox state attestation
 
-- [x] Identify documented Pyth oracle method signatures and a real Rhea-to-oracle receipt.
-- [x] Implement explicit asset-to-price-ID mappings with no implicit symbol fallback.
-- [x] Parse Pyth price, confidence, exponent and publish timestamp via integer math.
-- [x] Read single-block Pyth batch quotes and reject null, stale, out-of-bound and partial responses.
-- [x] Add non-executing compatibility CLI with code-hash observations and 9+ regression tests.
-- [ ] Confirm on-chain mappings and current deployed oracle source and code hashes.
-- [ ] Confirm current RPC outputs match this parser; GitHub Actions advisory probe cannot authorize trading.
-- [ ] Establish exact lending-contract liquidation arithmetic and gas/financing controls.
+**Objective:** independently establish the exact historical state relied on for a replay.
 
-See [Stage 4 aggregate oracle details](RHEA_AGGREGATE_ORACLE.md).
+**Engineering work:** capture source contract hashes, state roots and relevant storage proofs for Rhea lending, Pyth/oracle and NEP-141 assets; verify imported bytes and accounted balances against anchored mainnet sources. Document where provider APIs do not supply a full authenticated trie proof.
 
-## Stage 5 — lending-owned price metadata discovery (read-only)
+**Acceptance:** independently reproducible source/import manifest with no unexplained missing storage or mutable provenance. A selected-key import must not be presented as parity of the complete mainnet trie.
 
-- [x] Implement finalized-block-pinned `get_config`, `get_assets_paged` and `get_all_token_pyth_infos` reads.
-- [x] Parse token-specific feed identifiers/default prices and flag missing information.
-- [x] Preserve shared-feed mappings without inferring asset values or liquidator profit.
-- [x] Add fail-closed code-hash pin, block consistency and invalid-schema tests.
-- [x] Add advisory GitHub Actions diagnostics, isolated from wallet and transaction signing.
-- [ ] Confirm live mainnet method/API compatibility from actual recorded CI evidence.
-- [ ] Verify derived asset price ratios, oracle refresh constraints and on-chain contract lineage.
-- [ ] Differential test health-factor, share rounding, liquidation restrictions and liquidator financing against deployed contract.
-- [ ] Verify source/code-hash matching before funding or any form of execution.
+## Next milestone 3 — current executable opportunity economics
 
-**No live liquidation, transfer, wallet signing, or safe-trading designation exists.**
+**Objective:** identify opportunities that are positive *after* actual financing and settlement costs, not merely source-sized liquidation spreads.
 
+**Engineering work:** fresh borrower and Rhea share health, executable funding, conservative on-chain liquidity reserve, current Pyth price, realistic sell/swap quotes and depth, storage/gas/slippage, route failure downside, competitive revalidation, a common audited value unit and bounded retries.
 
-### Stage 6 implementation (read-only)
+**Acceptance:** a real, current, fully sourced opportunity with independently checked minimum positive net value and explicit expiry; fail-closed outcomes when prices or fills change. No exposure to real money during proof construction.
 
-- [x] Classify unpriced lending assets using same-block global pool balances and configuration flags.
-- [x] Add strict derivative-token ratio price **diagnostics**, without using them as execution valuations.
-- [x] Add provenance-aware, non-authorizing valuation reference comparisons.
-- [x] Add advisory on-chain coverage workflow and explicit issue #7 follow-up.
-- [ ] Verify current deployed-contract price semantics and exact liquidation arithmetic with independently audited source.
-- [ ] Independently resolve all four missing assets and close issue #7 based on actual borrower positions, source and RPC evidence.
-- [ ] Build an enforceable NEAR policy/treasury contract; no funds before a security review.
+## Next milestone 4 — owner wallet and enforceable bounded custody
 
+**Objective:** an account and permissions owned by the user rather than by a development runner.
 
-### Stage 7 (research prototype) — borrower exposure + offline differential harness
-- Implement a bounded, read-only borrower sample at a finalized block.
-- Count missing-price collateral/debt exposure without treating shares as USD.
-- Check reference fixtures against indicative arithmetic; never grant parity.
-- **Not complete:** exhaustive borrower enumeration, on-chain source verification, USN authoritative valuation, deployed liquidation math, custody safety, TEE, real execution.
+**Engineering work:** obtain only public NEAR account ID and explicit risk decisions from owner; design separate low-balance executor or on-chain treasury; bind allowed contracts/methods, capital per trade, daily total, maximum loss and pause/revocation to actual keys or contract custody; implement durable nonce/idempotency/outbox to avoid duplicate spending after timeout.
 
-### Stage 8 — historical source arithmetic and full four-rule guard (implemented, no deployment)
-- [x] Pin and study a **historical** public Burrow contract source commit for mathematical references.
-- [x] Add the previously missing liquidation safety invariant: borrower health must strictly improve.
-- [x] Implement a separate 27-decimal upstream-formula model of ratio rounding, share accounting and balance valuation.
-- [x] Add an offline differential comparison that reports exact rounding divergence without clearing financial risk.
-- [x] Add regression fixtures and an offline example CLI; all outputs mark live parity and execution approval false.
-- [ ] Match the currently deployed mainnet contract's WASM hash to an auditable source revision.
-- [ ] Validate today's Pyth/default/derived pricing paths and all legacy debt exposures.
-- [ ] Validate complete liquidation pool mutations and receipt-reconciled execution in an isolated sandbox before any funds.
+**Acceptance:** tests showing unauthorized and over-limit operations cannot move any asset, even with a compromised agent; missing budget/wallet/signature always rejects. A generic green policy JSON must not authorize a full-access key.
 
-See [Stage 8 source-math verification](RHEA_STAGE8_SOURCE_MATH.md).
+## Next milestone 5 — bounded funded mainnet transaction
 
-## Stage 9: Deployed borrower share differential
-Implemented: strictly block-pinned share-to-amount comparisons to the deployed `get_account` view on a bounded borrower sample; on-chain code hash observations and optional pins; explicit incompatible and mismatch outcomes. **Liquidation, oracle, custody and bytecode parity still not verified.**
+**Blocked until milestones 1–4 and owner consent.** Integrate and audit wallet signing with owner-controlled permissions; verify current Rhea Wasm/quotes/asset cap, get approval for the exact transaction, start with a small owner-approved amount and reconcile all chain receipts, capital and gas. Avoid retries while prior finality is unknown.
 
+**Acceptance:** real canonical transaction hash, source opportunity and authorized risk budget, successful callbacks and separately verified changes to the owner's account/execution treasury. Realized net profit must not be asserted until collateral is sold and full costs accounted.
 
-### Stage 10 — isolated-position differential, not execution approval
+## Next milestone 6 — settlement, reporting and hardening
 
-Read-only `get_account_all_positions` validation, position-scoped shares, pinned finalized blocks and adverse schema tests. A live advisory probe reports its true JSON status separately from the green CI wrapper. Follow-up: prove deployed Wasm provenance, inspect any unsupported position schema, validate dynamic interest accrual, price composition and mutation rules; leave signing and money movement disabled.
+**Objective:** determine actual profits and provide an owner-reviewable record.
 
+**Engineering work:** swap/sell/NEAR Intents integration only when route compatibility and refund flow are tested, actual asset inventory and realized proceeds ledger, fee reconciliation, proof archive, operator dashboard, alerts, kill switch, persistent runtime and independent security audits.
 
-### Stage 11 — Rhea debt discovery (read-only implementation)
+**Acceptance:** owner can explain each signed transfer, stop future spending and verify actual realized profit to their account from canonical transactions.
 
-Bounded account-index scans with an exact nextOffset, isolated-position debt-share reporting, schema-error counters and manually dispatched public-RPC evidence. These findings are **unvalued**, not liquidatable opportunities. Later work requires same-block detail checks and independently verified deployed-Wasm liquidation parity before custody or execution.
+## Possible later extensions, not live
 
-## Stage 12 — Debt-position candidate triage (read only)
+Shade/TEE attested agents, NEAR AI evidence explanations, cross-chain execution, Morpho and EVM flash loans, dedicated monitoring dashboard and deployed Rust treasury. The current repository contains preliminary modules or design notes, not live audited instances of those technologies.
 
-- [x] Join bounded debt discovery with same-finalized-block position-aware details.
-- [x] Validate borrowed token scope, token IDs, unique position IDs and exact integer shares.
-- [x] Surface missing on-chain Pyth metadata and derived/default-price sources explicitly.
-- [x] Distinguish unavailable detail reads and budget exhaustion from debt-free positions.
-- [x] Publish a strictly advisory read-only CI experiment and regression tests.
-- [ ] Verify deployed share and health calculations, actual asset prices, USN valuation and solvency.
-- [ ] Complete independent execution/custody/financing verification before funds move.
+## Project completion definition
 
-### Stage 13 — Read-only on-chain quote evidence
-- [x] Derive direct Pyth feed IDs solely from lending-owned on-chain metadata.
-- [x] Scope price quotes to positions validated by Stage 12, at one finalized block.
-- [x] Strict freshness, confidence, source/fee coverage and bounded budget checks.
-- [x] Offline regression tests and advisory on-chain CI workflow.
-- [ ] Verify production lending price transformation, derivative ratios and exact
-  deployed liquidation/health parity. This remains a critical **blocking gate**.
+The project is end-to-end only after it can **find** a presently eligible Rhea position, **independently verify** it, **safely authorize** limited capital under owner's control, **execute and finalize** a profitable chain transaction, **reconcile** all assets and debt, and **deliver realized net proceeds** to an approved account without an unrestricted key or unbounded retry loop. The successful Sandbox proof is a critical earlier milestone, not the whole system.
 
-### Stage 14 (implemented: read-only full-market backfill)
-
-NEAR RPC finalized-block complete-account-index scanner with bounded concurrent
-pagination, checkpoint/resume only at the identical block and verified code hash,
-position-aware debt findings and zero execution permission. Live debt totals
-remain unknown until the full scan completes. NEAR Lake future integration is
-reserved for event-based incremental indexing and reconciliation, not claimed
-implemented. See [Stage 14 design](RHEA_STAGE14_FULL_INDEX.md).
-
-### Stage 15 — Position-scoped paper health screen (implemented; not trade-ready)
-- [x] Compose Stage 11-13 borrower, position and price evidence at one finalized NEAR block.
-- [x] Compare detailed shares to historical upstream pool conversion using BigInt; block on mismatch.
-- [x] Evaluate historical 27-decimal collateral and debt adjustments and indicative health per isolated position.
-- [x] Explicit missing/stale/invalid quote blockers, bounded RPC reads and advisory CI artifact.
-- [ ] Independently prove **deployed** Rhea health/oracle/liquidation parity and derivative prices.
-- [ ] Obtain a complete source-backed market debt index; confirm any observed risk against authoritative live code.
-- [ ] Establish liquidator solvency, costs, timing, competition and fund-safety policies before trade execution.
-
-See [Stage 15 notes](RHEA_STAGE15_PAPER_HEALTH.md).
-
-### Stage 16 — Read-only hypothetical liquidation economics (implemented)
-- [x] Combine a Stage 15 paper-health input with carefully scoped hypothetical
-  repayment/seizure USD legs, exact BigInt historical-source discount checks,
-  and after-liquidation health-improvement invariants.
-- [x] Require explicit funding capacity and conservative gas, slippage, protocol,
-  competition and financing cost bounds to calculate an offline paper margin.
-- [x] Reject stale/inconsistent contract and block identities, missing prices,
-  no borrower risk, missing financing evidence and unknown competition signals.
-- [x] Rank only paper-positive synthetic scenarios, with permanent
-  `executionEnabled=false` and `profitabilityVerified=false` flags.
-- [ ] Complete the NEAR mainnet backfill, deployed contract and price parity,
-  executable liquidity and fee quotes, safe custody/limits and MEV analysis.
-See [Stage 16 scope](RHEA_STAGE16_PAPER_OPPORTUNITIES.md).
-
-
-## Stage 17 checkpoint-to-health integration
-
-Implemented: strict Stage 14 checkpoint validation, targeted one-row NEAR index
-rechecks, isolated-position scope and share parity, pooled Pyth price validation,
-Stage 15 historical-source health results, and optional Stage 16 hypothetical
-scenario scoring. Manual GitHub Actions workflow and comprehensive mocks added.
-Pending: reliable complete real debt index, current deployed Rhea contract parity,
-production price coverage, real competition/funding/fee estimates, custody proofs
-and safe execution. Live liquidation remains disabled.
-
-
-### Stage 18 — Verified detailed-shard health bridge
-
-- [x] Reconcile all detailed borrower shards, code-hash pins, same-block account coverage and unique registry IDs.
-- [x] Recheck indexed borrowers from \`get_account_all_positions\` even when the paged account row omits its debt.
-- [x] Validate detailed share-to-balance arithmetic, block metadata, direct-Pyth quotes and old-block freshness before paper-health labels.
-- [x] Add a bounded manual or successful-main-scan-triggered GitHub Actions artifact bridge.
-- [ ] Obtain complete live market shard evidence, verify deployed Rhea Wasm health and liquidation parity, and prove funding, liquidity, costs and net profit.
+For exact run IDs and asset unit definitions, use [Evidence and status](STATUS_AND_EVIDENCE.md). For setup and operator requirements, use [Operations](OPERATIONS.md) and [Wallet and mainnet](WALLET_AND_MAINNET.md).
