@@ -15,6 +15,8 @@ See [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md). Stage140 extend
 
 Stages142–145 now have **offline defensive implementations**, including a financing-intent adapter, event-sourced simulated repayment recovery, partner accounting simulation, an original Stage93 proof comparison and ten deny-by-default live-release gates. **No real partner-backed Rhea Workspaces transaction, funded lender, genuine profit or mainnet signing was produced by these stages**. See [Stages143–145](STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
 
+Stage146 now adds a **genuine Workspaces transaction attempt** with a separately Sandbox-collateralized lender, new zero-collateral liquidator, real LiNEAR NEP-141 transfer/supply, source-backed Rhea liquidation and attempted lender repayment. The workflow requires actual original receipts and no partner debt. This is NOT a permissionless flash loan; inspect the [Stage146 real run](STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md) before claiming completion. An unrun or failed attempt remains **BLOCKED**, regardless of green unit tests.
+
 ## Delivered
 
 | Capability | Implementation | Verified evidence |
