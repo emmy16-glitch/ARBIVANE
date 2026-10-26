@@ -1,0 +1,155 @@
+name: Stage157 genuine larger Rhea liquidation candidate and Sandbox execution
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "Bounded historical LiNEAR-debt candidate batch (0..3), each 4 x 12"
+        required: true
+        default: '0'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
+      - 'scripts/stage157-large-source-candidates.mjs'
+      - 'scripts/stage157-large-source-discovery-cli.mjs'
+      - 'tests/rhea-stage157-larger-source.test.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage157-real-large-source-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.batch || '0' }}
+  cancel-in-progress: false
+jobs:
+  safety_regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: node --check scripts/stage157-large-source-candidates.mjs && node --check scripts/stage157-large-source-discovery-cli.mjs && node --test tests/rhea-stage157-larger-source.test.mjs tests/rhea-stage134-finality-fallback.test.mjs
+  independently_reprice_large_historical_liNear_debt:
+    needs: safety_regressions
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      EXECUTION_ENABLED: 'false'
+      NEAR_NETWORK: mainnet
+      NEAR_WORKSPACES_NETWORK: sandbox
+      RHEA_LENDING_CONTRACT: contract.main.burrow.near
+      RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+      RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+      RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+      NEAR_RPC_URL: https://rpc.mainnet.fastnear.com
+      NEAR_RPC_FALLBACK_URL: https://rpc.mainnet.near.org
+      RHEA_RPC_SPACING_MS: '900'
+      STAGE157_VERIFIED_INDEX_PATH: source/rhea-full-paged-index.json
+      STAGE157_BATCH: ${{ github.event_name == 'workflow_dispatch' && inputs.batch || '0' }}
+      STAGE157_SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download exact authenticated 7,801-debt historical source registry
+        uses: actions/download-artifact@v4
+        with:
+          name: rhea-full-paged-verified-market
+          run-id: '40128285853'
+          github-token: ${{ github.token }}
+          path: source
+      - name: Validate untrusted workflow parameters and unchanged source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$STAGE157_BATCH" =~ ^[0-3]$ ]]
+          jq -e '.mode == "RHEA_COMPLETE_PAGED_INDEX_ATTESTATION" and
+            .status == "COMPLETE_DEBT_INDEX_READ_ONLY" and
+            .chain == "NEAR_MAINNET" and
+            .debtAccounts == 7801 and .completeSnapshot == true and
+            .zeroSchemaErrors == true and (.findings | length) == 7801 and
+            .lendingCodeHash == "6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa"' \
+            "$STAGE157_VERIFIED_INDEX_PATH" >/dev/null
+      - name: Refresh up to twelve genuine historical LiNEAR debt accounts against current Pyth/Rhea
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/stage157-large-source-discovery-cli.mjs \
+            > stage157-stdout.json 2> stage157-progress.log
+          jq -e '.mode == "STAGE157_GENUINE_LARGER_LIQUIDATION_DISCOVERY"
+            and .mainnetExecutionEnabled == false
+            and .maySignMainnet == false and .mayBroadcastMainnet == false
+            and .realizedEconomicProfitVerified == false and
+            .reviewed <= 12 and
+            .minimumRepayLendingInternalAtomic == "18584902646058010"' \
+            stage157-large-discovery-report.json >/dev/null
+          jq -c '{batch,shard,status,reviewed,qualifiedLargerSourceAccounts,
+            bestSourceRepayLendingInternalAtomic}' stage157-large-discovery-report.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Real isolated contract replay ONLY when larger CURRENT source liquidation verified
+        if: ${{ hashFiles('stage157-large-source-evidence.json') != '' }}
+        shell: bash
+        env:
+          STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
+          STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true'
+          STAGE82_SINGLE_BORROWER: 'true'
+          STAGE37_STAGE35_EVIDENCE_PATH: stage157-large-source-evidence.json
+          SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
+          NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+          NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
+        run: |
+          set -euo pipefail
+          jq -e '.mode == "RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and
+            .chain == "NEAR_MAINNET" and .referenceRulesPass == true and
+            .repay.tokenId == "linear-protocol.near" and
+            .seize.tokenId == "linear-protocol.near" and
+            (.repay.amountLendingInternalAtomic | tonumber >= 18584902646058010) and
+            .executionEnabled == false and .maySign == false and .mayBroadcast == false and
+            .gasAndSwapNetProfitVerified == false' stage157-large-source-evidence.json >/dev/null
+          npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+          sandbox_exit=0
+          timeout --kill-after=10s 20m node --experimental-strip-types \
+            scripts/stage37-workspaces-sandbox-replay.mjs > stage157-sandbox-actual.json \
+            2> stage157-sandbox-stderr.log || sandbox_exit=$?
+          node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
+            stage157-sandbox-actual.json stage55-sandbox-phase-evidence.json \
+            stage37-sandbox-execution.json stage41-sandbox-balance-settlement.json \
+            > stage157-sandbox-verification-stdout.json
+          jq -e '.mode == "ARBIVANE_STAGE56_EVIDENCED_SANDBOX_ATTEMPT" and
+            .chain == "NEAR_SANDBOX" and .realMainnetExecuted == false and
+            .realProfitVerified == false and .mayBroadcastMainnet == false and
+            .maySignMainnet == false' stage56-sandbox-attempt-evidence.json >/dev/null
+          jq -c '{status,currentPhase,observedFailureCode,localLiquidationCallInvoked,
+            actualRheaSettlementVerified}' stage56-sandbox-attempt-evidence.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Archive each recheck, original Sandbox receipt and all blocked reasons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage157-large-liquidation-shard-${{ matrix.shard }}-batch-${{ env.STAGE157_BATCH }}
+          retention-days: 60
+          if-no-files-found: warn
+          path: |
+            stage157-large-discovery-report.json
+            stage157-large-source-evidence.json
+            stage157-stdout.json
+            stage157-progress.log
+            stage157-sandbox-actual.json
+            stage157-sandbox-stderr.log
+            stage157-sandbox-verification-stdout.json
+            stage37-process-result.json
+            stage37-sandbox-execution.json
+            stage41-sandbox-balance-settlement.json
+            stage49-sandbox-funding.json
+            stage50-pinned-repay-reserve.json
+            stage51-active-pyth-sandbox-parity.json
+            stage52-actor-borrow-capacity.json
+            stage55-sandbox-phase-evidence.json
+            stage56-sandbox-attempt-evidence.json
+            stage116-raw-transaction.json
+            stage129-finalized-transaction.json
