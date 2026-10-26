@@ -48,6 +48,10 @@ The Stage157/158 larger-borrower search now has an explicit **LiNEAR/LiNEAR-only
 
 This only improves opportunity selection and stops invalid replays: **a larger funded, fully repaid liquidation has not yet been proven**, and an estimated spread is not actual financing-covered profit. Mainnet execution remains disabled.
 
+## Stage162 — diagnose genuine borrower eligibility and select supported LiNEAR pairs
+
+The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md) follow Stage161's completed four-batch review of 169 historic LiNEAR-debt candidates. **All 16 conditional Sandbox replays were skipped: no newly qualified liquidation, complete partner repayment or profit was proven.** Stage162 improves the next read-only scan by selecting LiNEAR/LiNEAR pairs *inside* each source-sized borrower, and recording explicit Stage35 healthy, route mismatch, source-rule, liquidity permission/headroom, oracle and read-failure categories rather than collapsing everything into one generic rejection. It does not loosen original protocol rules, funding settlement requirements or enable mainnet execution.
+
 ## Stage160 — any positive source-sized amount, no mandatory minimum
 
 [Stage160](docs/STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md) removes Stage159's arbitrarily fixed size floors in **both** Rhea borrower-discovery lanes. It also fixes the Stage157 regression workflow's Node TypeScript flag; the previous large workflow failed before any market scan. The original borrower, protocol risk rules, LiNEAR asset route, positive same-token remainder, FINAL callback/FT receipts, principal and financing-interest repayment and zero remaining debt still govern real Sandbox success. You cannot select an unsupported loan amount by overriding the source's real debt. **No mainnet signing, wallet spending or payouts.**
