@@ -11,7 +11,7 @@ The owner cannot supply trading principal or collateral. Stage139 isolates the r
 - **Next:** independently identify and attest a deployed native liquidity provider; if compatible, extend Workspaces to include real provider/token state and prove the end-to-end issue → liquidate → repay principal+fee → reconcile flow, including failed callbacks. If none qualifies, record a clear `NO_COMPATIBLE_NEAR_FLASH_LOAN_SOURCE` blocker rather than fabricating liquidity.
 - **Until then:** mainnet signing and spending remain disabled. Public owner wallet `okunlola_labs.near` and proposed restricted `sillywiki4201.near` do not need to be funded for research.
 
-See [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md). Stage140 extends it with read-only finalized Rhea/Ref deployed WASM and SHA256/method-export inspection, without falsely certifying a flash lender. See [Stage140](STAGE140_NATIVE_PROVIDER_DISCOVERY.md).
+See [Stage139 financing](STAGE139_FLASH_LIQUIDITY_FINANCING.md). Stage140 extends it with read-only finalized Rhea/Ref deployed WASM and SHA256/method-export inspection, without falsely certifying a flash lender. See [Stage140](STAGE140_NATIVE_PROVIDER_DISCOVERY.md). Stage141 extends the read-only discovery to **six documented deployed contract accounts** and checks LiNEAR metadata and candidate-held balance without calling it borrowable reserve. See [Stage141](STAGE141_LENDER_QUALIFICATION.md). No loan is activated.
 
 ## Delivered
 
