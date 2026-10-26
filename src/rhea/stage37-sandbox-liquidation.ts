@@ -71,7 +71,11 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   in_assets:[{token_id:e.repay.tokenId,max_amount:repay}],
   out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
-  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId,amount:repay}},
+  // A bare Repay consumes the actor's entire CURRENT borrowed share balance.
+  // Exact amount can leave a one-share (two-atomic) debt after pool rounding.
+  // The actor is freshly registered and must have zero prior debt; only its
+  // bounded Borrow from this SAME atomic transaction is eligible to repay.
+  borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId}},
   {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(seize)-BigInt(repay)).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
