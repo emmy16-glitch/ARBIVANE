@@ -19,6 +19,14 @@
 
 # Stage 111 handoff
 
+## Stage127 observed signed Borrow accounting blocker (26 Oct 2026)
+- Main base `1c3be343`. Genuine Stage93 run `40310497704` on #190 merge `d776293` FAILED at `SANDBOX_BORROW_CAPACITY`, reason `STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT`, before any liquidation call. Source borrower 2579 still qualified; original Borrow transaction `6Sq4VHBUvh96zkKP5AnY8J5vSzp5U6fs7tHw5uweYqc9` is on isolated Sandbox with authentic FINAL child success receipts (artifact `12643993207`), but the combined debt-or-FT amount check rejected. No successful liquidation or FT seizure.
+- The Stage124 error conflates two different read conditions: actor debt below requested lending internal units, or actor LiNEAR FT below requested token atomic units. Neither exact post-Borrow amount appears in prior failure artifacts. Do not infer the underlying rounding/transfer cause.
+- Branch `fix/stage127-borrow-ft-delta-proof` writes `stage127-actor-borrow-balance-witness.json` with exact observed real actor debt and actual actor FT, source-requested quantity, both precise shortfalls and original signed transaction hash, BEFORE failing closed. Artifact is uploaded even when funding does not meet preflight. No artificial funds, adjusted source prices/borrower state, relaxed min balance, weakened mainnet policy or resubmission.
+- Next: CI and green merge, let single Stage93 auto-trigger; compare actual shortfall to source pool share conversion and FT wallet bytes. Implement only a source-justified conservatively bounded remedy, maintaining genuine FT conservation and risk gates. Require successful FINAL callbacks, debt/collateral decreases and seized FT increase before proclaiming one liquidation.
+
+
+
 ## Stage126 real prefunding-finality checkpoint
 - Main base `8d8d166` merged #182 authentic local Borrow -> real LiNEAR FT -> genuine ft_transfer_call supply, with original borrower, oracle freshness and full Stage41 debt/FT settlement gates. Actual Stage93 run `40309744691` FAILED `STAGE124_BORROW_UNVERIFIED_RECEIPTS` in `SANDBOX_BORROW_CAPACITY` before liquidation. In earlier authentic Sandbox runs Workspaces returned `final_execution_status=EXECUTED`; Stage124 mistakenly only admitted `FINAL/EXECUTED_OPTIMISTIC` for provisional status.
 - Branch `fix/stage126-executed-prefund-finality` admits `EXECUTED` solely as provisional, requires a LOCAL `txStatus(...,'FINAL')` response matching original signed hash and actor signer, no failed callback outcome or transaction identity drift. Unknown statuses and failed callbacks remain blocked. Persists raw borrow/supply transactions before validation and final local receipts after verification; uploads artifacts. No fabricated supply, changed borrower, price alteration, spoofed success or mainnet sign/spend.
