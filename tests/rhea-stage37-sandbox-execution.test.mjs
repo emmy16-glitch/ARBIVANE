@@ -163,9 +163,13 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.equal(p.actions[2].Repay.token_id,'wrap.near');
  assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
  assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
- assert.equal(p.actions[3].Withdraw.amount,'10000000000000000000');
- assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
-  String(BigInt(p.actions[3].Withdraw.amount)+BigInt(p.actions[2].Repay.amount)));
+ const repay=BigInt(p.actions[1].Liquidate.in_assets[0].amount);
+ const buffer=repay/10000n+2n;
+ const seize=BigInt(p.actions[1].Liquidate.out_assets[0].amount);
+ assert.equal(p.actions[0].Borrow.amount,(repay+buffer).toString());
+ assert.equal(p.actions[3].Withdraw.amount,(seize-repay-2n*buffer).toString());
+ assert.ok(BigInt(p.actions[3].Withdraw.amount)>0n);
+ assert.ok(seize>BigInt(p.actions[3].Withdraw.amount)+BigInt(p.actions[2].Repay.amount));
  assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
 });
 
@@ -230,4 +234,13 @@ test('Stage122 permits only attested temporal accrual when authentic source view
   assert.equal(blocked.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
   assert.equal(blocked.attemptedTransaction,false);
  }
+});
+
+
+test('Stage124 never consumes all same-token gross surplus to cover share rounding',()=>{
+ const q=proposal();q.seize.tokenId=q.repay.tokenId;
+ // Source-sized 1-atomic-unit liquidation surplus cannot finance even
+ // a bounded genuine actor loan without altering borrower eligibility.
+ q.seize.amountLendingInternalAtomic=(BigInt(q.repay.amountLendingInternalAtomic)+1n).toString();
+ assert.throws(()=>buildStage37SandboxPlan(q),/STAGE124_SAME_TOKEN_NO_ROUNDING_SAFE_SURPLUS/);
 });
