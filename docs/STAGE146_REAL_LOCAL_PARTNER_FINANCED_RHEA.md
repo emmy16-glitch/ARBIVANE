@@ -2,6 +2,20 @@
 
 **26 October 2026. This is an attempted real *local NEAR Workspaces* transaction route, NOT an uncollateralized mainnet flash loan. Status is determined only by the genuine post-merge [Stage146 GitHub Actions workflow](../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml) and its real receipt artifact, never by tests alone.**
 
+## Actual lender issue, executor transfer and Rhea supply — FINAL receipt proof
+
+Live Workspaces [run #40341498348](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40341498348) passed the authenticated historical import. The preserved [artifact #12659333146](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40341498348/artifacts/12659333146) independently establishes *FINAL* original signed receipt references for:
+
+- Rhea partner Borrow→Withdraw: `CRttpqVd9iEyHAiiT8URDXEzw2PUXzW9tT4y8pFQdV79`, 12 successful final receipt outcomes
+- Real LiNEAR NEP-141 partner→liquidator `ft_transfer`: `FCHPrB1sNgUZ8EjeSx6c6LHDoC1YhCSCe3fSDgrmeh54`, two successful final outcomes
+- Real LiNEAR `ft_transfer_call` supplied to Rhea: `CC3no1rQ3P6TALdwVkNRBboAMRQ4hJWinfG8Kv3HgSRf`, six successful final outcomes, with Rhea `deposit` event
+
+The local lender issued **1,858,490,264,605,800 atomic LiNEAR** to the fresh zero-collateral executor. It was actually transferred into Rhea. **The run is still BLOCKED before Liquidate**: the verifier erroneously searched `position.supplied`, but authenticated deployed Rhea's `get_account_all_positions` places deposited uncollateralized assets in `account.supplied` and only `borrowed` / `collateral` inside `positions.REGULAR`. Corrected the role-specific parser and now save the post-deposit actual supplied-share count and remaining wallet FT balance *before* applying the strict deposit proof gate.
+
+Original actual successful Stage93 `stage116-before-state.json` and `stage116-after-state.json` independently confirm this exact account layout. No borrower liquidation or external lender repayment has been verified yet; Stage145 is BLOCKED.
+
+---
+
 ## Genuine run evidence and known blocker (26 October 2026)
 
 The live push-to-main [Stage146 run #40340360901](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40340360901) **failed** after clearing all pinned source imports, Pyth view parity and initial wNEAR collateral funding. Genuine artifact `stage146-real-local-partner-to-rhea-financing-attempt` [#12658428585](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40340360901/artifacts/12658428585) preserves the phase.
