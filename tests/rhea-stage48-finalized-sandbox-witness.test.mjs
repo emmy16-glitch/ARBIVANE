@@ -73,7 +73,9 @@ test('failing callbacks, insufficient block movement, unchanged borrower and pos
 });
 test('runner uses real NEAR Sandbox finalized advancement, no unguarded promotion',async()=>{
  const script=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
- assert.match(script,/provider\.fastForward\(10000\)/);
+ assert.match(script,/provider\.fastForward\(previousFinalHeight\+64\)/);
+ assert.ok(!script.includes('provider.fastForward(10000)'));
+ assert.match(script,/stage131-immediate-after-state\.json/);
  assert.match(script,/provider\.block\(\{finality:'final'\}\)/);
  assert.match(script,/attestStage48FinalizedSandboxReplay/);
  assert.match(script,/receipt:verifiedReport/);
