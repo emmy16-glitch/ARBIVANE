@@ -1,6 +1,8 @@
 # Stage 111 handoff
 
 ## Stage 119 current execution checkpoint
+- Native wNEAR regression `40300767819` PASSED at the exact failed block: all three original records patched, source digest `415066bed268221250b49ebdbf5e629a5e43a1b447d5f8c742288b993877388c`, exact token-view parity. The original exception is therefore not a consistently reproducible storage-layout defect; transient RPC/SDK contention remains an inference, not a proven cause.
+- Current branch removes automatic shared-file triggers from Stage69/87 (manual recovery remains available), so Stage93 is the single automatic real settlement lane. It uses the existing bounded, pinned-only resilient RPC wrapper and saves sanitized clone exception details/cause before reducing them to an enum. No contract rejection, block drift, bad state or expired quote is retried or bypassed.
 - Main `95199cb`: PR #167 merged after CI `40299407046` and native clock `40299407003` passed. Native source-anchored clock is now proven; no freshness or price changes.
 - Actual Stage93 `40299556177` FAILED in `SANDBOX_STATE_CLONE`, `UNCLASSIFIED_RUNTIME_ERROR`. Artifact `12639846683` shows lending's authentic 169-record closure COMPLETE; wNEAR BLOCKED; oracle/LiNEAR not started. No liquidation call. Source block is `221669384`, hash `iQfaKaeeJs5UQCK4wcZHjbDfBVJKDoKHrH582gXBbTP`, timestamp `1793006809814046000`.
 - Direct rechecks of all seven pinned wNEAR source views succeeded. Existing failure taxonomy discarded the SDK exception. Reproduce the real wNEAR native import in the bounded native regression before another full liquidation attempt; this uses the authentic pinned block and borrower, and prints a credential-redacted exception. Do not infer root cause from the generic code.

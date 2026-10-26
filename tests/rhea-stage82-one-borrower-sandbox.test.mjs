@@ -108,7 +108,7 @@ test('Stage82 rejects forged account, duplicated assets, bad code hash and missi
 });
 test('Stage82 authentic fastlane invokes same real liquidation and settlement gate after borrower parity',async()=>{
  const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
- const workflow=await readFile(new URL('../.github/workflows/rhea-stage69-fastlane.yml',import.meta.url),'utf8');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
  assert.ok(workflow.includes("STAGE82_SINGLE_BORROWER: 'true'"));
  assert.ok(workflow.includes("scripts/stage82-targeted-lending-clone.mjs"));
  assert.ok(workflow.includes('stage82-one-borrower-parity.json'));

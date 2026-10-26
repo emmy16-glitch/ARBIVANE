@@ -50,13 +50,15 @@ test('Stage92 singleton remaining aggregate oracle clone is still authenticated 
  }),/STAGE76_CLONE_COMPLETION_EVIDENCE_INVALID/);
 });
 test('Stage92 focused and broad workflows always retain the real indexed FT parity proof',async()=>{
- for(const name of ['rhea-stage69-fastlane.yml','rhea-stage87-one-borrower-execution.yml']){
+ for(const name of ['rhea-stage69-fastlane.yml','rhea-stage87-one-borrower-execution.yml','rhea-stage93-borrower-settlement.yml']){
   const s=await readFile(new URL('../.github/workflows/'+name,import.meta.url),'utf8');
   assert.ok(s.includes('stage91-linear-parity.json'));
   assert.ok(s.includes('stage89-wnear-parity.json'));
   assert.ok(s.includes('stage41-sandbox-balance-settlement.json'));
   assert.ok(s.includes('stage37-sandbox-execution.json'));
-  assert.ok(s.includes('scripts/stage91-targeted-linear-token.mjs'));
+  if(name==='rhea-stage93-borrower-settlement.yml')
+   assert.ok(s.includes('scripts/stage91-targeted-linear-token.mjs'));
+  else {assert.ok(s.includes('workflow_dispatch:'));assert.ok(!s.includes('\n  push:'));}
   assert.ok(s.includes("EXECUTION_ENABLED: 'false'"));
   assert.ok(s.includes('cancel-in-progress: false'));
   assert.ok(!s.includes('MAINNET_PRIVATE_KEY:'));
