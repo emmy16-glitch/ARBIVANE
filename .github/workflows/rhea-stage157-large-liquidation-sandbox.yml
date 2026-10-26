@@ -134,7 +134,7 @@ jobs:
           node scripts/stage157-large-source-liquidation-gate.mjs > stage157-gate-summary.json
           jq -e '.mainnetExecutionEnabled == false and .maySignMainnet == false
             and .mayBroadcastMainnet == false and .realizedNetEconomicProfitVerified == false' stage157-large-source-admission.json
-          jq -c '{refreshed,positiveSourcePlans,rejectedByRequiredRoute,failedFreshReads,\
+          jq -c '{refreshed,positiveSourcePlans,rejectedByRequiredRoute,failedFreshReads,
             recoveryDeferredFindings,recoveryBudgetExhausted,boundedRecoveryAttempts}' \
             stage38-qualification.json >> "$GITHUB_STEP_SUMMARY"
           jq -c '{status,canAttemptSandbox,sourceBorrower,referenceRepayUsdE27,
