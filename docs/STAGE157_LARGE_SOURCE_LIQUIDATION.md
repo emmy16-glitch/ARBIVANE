@@ -1,6 +1,6 @@
 # Stage157 — source-backed large Rhea liquidation search
 
-**Objective:** identify and (only if truly qualified) execute a *materially larger liquidation* in isolated NEAR Workspaces Sandbox. This is not a larger loan against the old tiny borrower.
+**Historical objective:** identify and (only if truly qualified) execute a *materially larger liquidation* in isolated NEAR Workspaces Sandbox. **Stage160 supersedes all dollar and 10× minimum-size constraints**; see [amount-neutral screening](STAGE160_SIZE_AGNOSTIC_SOURCE_SCREENING.md). This is not a larger loan against the old tiny borrower.
 
 ## Existing evidence and why large borrowing alone is insufficient
 
@@ -16,13 +16,13 @@ Stage157 requires, at one fresh, genuine finalized NEAR block, all of the follow
 
 1. Verified Rhea and Pyth contract code identity; real indexed borrow position; genuinely current account debt; active, timely, bounded-confidence Pyth prices; exact same-block valuation.
 2. Original four-rule Rhea reference eligibility, authentic fixed-point precision, identical `repay`/`seize` token for the available reference route, borrower identity and final source block preserved in the written artifact.
-3. **At least $1,000 USD reference repay value** and **at least $10 USD reference liquidation gross** before financing/gas/slippage. These values are expressed as decimal integer strings in E27 units, NEVER floating-point dollars or spendable token quantities.
+3. **No arbitrary minimum** reference repay or gross value under Stage160. Both must be strictly positive, with an authentic same-token source repayment and positive remainder; the reference values are decimal integer strings in E27 units, NEVER floating-point dollars or spendable token quantities.
 4. No claims that a gross margin proves net realizable profit, reserve funding, collateral-free lending, settled callback receipts or mainnet safety. The result can only authorize a *separate disposable local Sandbox attempt*, not a live transaction.
 5. If the eligible source cannot actually be cloned, converted to NEP-141 atomic units, funded, finalized and settled at zero temporary debt in Workspaces, mark the attempt **FAILED/BLOCKED** with the original source and transaction evidence. Do not alter historical storage or silently enlarge borrower positions.
 
 **Workflow:** [Stage157 large liquidation search](../.github/workflows/rhea-stage157-large-liquidation-sandbox.yml) runs the Stage32 fresh active-Pyth sweep and Stage38 pinned source sizing on four disjoint 80-account ranges: indexes 2537–2616, 4989–5068, 7671–7750 and 2986–3065, total **320** source-backed accounts. The original archived registry independently identifies **62 distinct LiNEAR-debt borrowers** across these windows (19, 16, 14 and 13 respectively), versus only 10 across the previously scanned 0–79, 1820–1899, 4050–4129 and 6800–6879 windows. These are historical debt *locations*, NOT proof of current liquidation eligibility. It rechecks each historical borrower at *fresh* blocks. The Stage157 gate then separately audits the Stage38 paper evidence; only qualified source plans may reach existing real local Workspaces replay.
 
-**Executable asset-route qualification:** the presently verified Stage37 route is LiNEAR repayment against LiNEAR seizure. Large same-token WNEAR or other token paper plans remain **blocked** until that deployed route is implemented and tested, even if their USD reference values exceed the minimums.
+**Executable asset-route qualification:** the presently verified Stage37 route is LiNEAR repayment against LiNEAR seizure. Large same-token WNEAR or other token paper plans remain **blocked** until that deployed route is implemented and tested, regardless of their USD reference values.
 
 This is a **partial market search**, not a claim to scan every current Rhea borrowing account. A failed or unprocessed RPC read remains a blocker and can be safely retried. No dummy candidate, mutable source account, made-up discount, fake lender, fabricated timestamp, unqualified increase in principal, or profit transfer can satisfy the gate.
 

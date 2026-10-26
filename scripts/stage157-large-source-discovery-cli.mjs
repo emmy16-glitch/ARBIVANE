@@ -4,8 +4,7 @@ import {FailoverNearReadOnlyRpc} from '../src/rhea/failover-readonly-rpc.ts';
 import {PacedNearReadOnlyRpc} from '../src/rhea/paced-readonly-rpc.ts';
 import {evaluateActualCandidate} from '../src/rhea/stage38-live-candidate-pipeline.ts';
 import {buildStage37SandboxPlan} from '../src/rhea/stage37-sandbox-liquidation.ts';
-import {stage157SelectHistoricalLiNearBorrowers,stage157AdmitSourceLargerLiquidation,
- MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC} from './stage157-large-source-candidates.mjs';
+import {stage157SelectHistoricalLiNearBorrowers,stage157AdmitSourceLargerLiquidation} from './stage157-large-source-candidates.mjs';
 
 const env=process.env;
 const number=(name,def)=>{
@@ -80,8 +79,7 @@ async function main(){
   selectedHistoricalBlockHeight:selected.sourceBlockHeight,
   totalHistoricalLiNearCandidates:selected.totalHistoricalLiNearCandidates,
   excludedPreviousSmallBorrowerIndex:2579,shard:selected.shard,batch:selected.batch,
-  reviewed:rows.length,minimumRepayLendingInternalAtomic:
-   MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC.toString(),
+  reviewed:rows.length,sizeFloorApplied:false,
   qualifiedLargerSourceAccounts:rows.filter(x=>x.largeSourceLiquidationQualified).length,
   bestSourceRepayLendingInternalAtomic:largest?.repay?.amountLendingInternalAtomic??null,
   currentPriceAndBlockRechecked:true,

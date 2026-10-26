@@ -3,7 +3,6 @@
  * Historical presence/diversity is NOT proof of debt size or liquidation risk.
  */
 export const PREVIOUS_REPAY_INTERNAL_ATOMIC=1858490264605801n;
-export const MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC=PREVIOUS_REPAY_INTERNAL_ATOMIC*10n;
 const uint=x=>typeof x==='string'&&/^(0|[1-9][0-9]*)$/.test(x);
 export function stage157SelectHistoricalLiNearBorrowers(source,{batch=0,shard=0,perShard=12}={}){
  if(source?.mode!=='RHEA_COMPLETE_PAGED_INDEX_ATTESTATION'||
@@ -42,15 +41,13 @@ export function stage157AdmitSourceLargerLiquidation(evidence,accountId){
   uint(evidence?.seize?.amountLendingInternalAtomic)&&
   uint(evidence?.paperGrossUsdE27);
  if(!basic)return {qualified:false,reason:'SOURCE_RULE_OR_DENOMINATION_NOT_VERIFIED'};
- if(BigInt(evidence.repay.amountLendingInternalAtomic)<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC)
-  return {qualified:false,reason:'SOURCE_LIQUIDATION_NOT_TEN_TIMES_LARGER'};
- if(BigInt(evidence.seize.amountLendingInternalAtomic)<=0n||
-  BigInt(evidence.paperGrossUsdE27)<=0n)
-  return {qualified:false,reason:'NO_POSITIVE_SOURCE_PROCEEDS'};
- return {qualified:true,reason:'CURRENT_SOURCE_LIQUIDATION_MORE_THAN_TEN_TIMES_LARGER',
+ const repay=BigInt(evidence.repay.amountLendingInternalAtomic);
+ const seize=BigInt(evidence.seize.amountLendingInternalAtomic);
+ if(repay===0n||seize<=repay||BigInt(evidence.paperGrossUsdE27)===0n)
+  return {qualified:false,reason:'NO_POSITIVE_REPAY_AND_SOURCE_SURPLUS'};
+ return {qualified:true,reason:'CURRENT_SOURCE_POSITIVE_SAME_TOKEN_REFERENCE_LIQUIDATION',
   repayLendingInternalAtomic:evidence.repay.amountLendingInternalAtomic,
   historicalReferenceRepayLendingInternalAtomic:PREVIOUS_REPAY_INTERNAL_ATOMIC.toString(),
-  minimumRequiredRepayLendingInternalAtomic:MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC.toString(),
   paperGrossUsdE27:evidence.paperGrossUsdE27,
   realWorldNetProfitVerified:false,permissionToTradeMainnet:false};
 }

@@ -86,7 +86,7 @@ export async function qualifyStage38Candidates(
   !number(o.startFinding,0,source.debtAccounts)||
   !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,80)||
   !number(o.concurrency,1,3)||
-  !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27)||
+  !/^(0|[1-9][0-9]{0,38})$/.test(o.minimumPaperGrossUsdE27)||
   (o.requiredSameTokenId!==undefined&&o.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('INVALID_STAGE38_CANDIDATE_OPTIONS');
  const check:SweepOptions={...o,batchSize:20};

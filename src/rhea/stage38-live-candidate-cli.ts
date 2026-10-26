@@ -21,7 +21,7 @@ const n=(key:string,def:string)=>{
  const sandboxGross=e.RHEA_STAGE38_SANDBOX_MIN_PAPER_GROSS_USD_E27;
  if(sandboxGross!==undefined&&
   (e.NEAR_WORKSPACES_NETWORK!=='sandbox'||e.NEAR_PRIVATE_KEY||
-   e.MAINNET_PRIVATE_KEY||!/^[1-9][0-9]{0,38}$/.test(sandboxGross)))
+   e.MAINNET_PRIVATE_KEY||!/^(0|[1-9][0-9]{0,38})$/.test(sandboxGross)))
   throw Error('STAGE68_TINY_GROSS_REQUIRES_KEYLESS_LOCAL_SANDBOX');
  const minimumPaperGrossUsdE27=sandboxGross??'1000000000000000000000000';
  // Stage159 explicitly limits the large-liquidation execution lane to its

@@ -1,5 +1,7 @@
 # Stage157 — genuinely larger Rhea liquidation, source-gated Sandbox experiment
 
+> **Stage160 supersession (26 October 2026):** The former ten-times source-amount floor described below has been removed from current code and both discovery workflows. Any positive source-supported amount is permitted for research and local Sandbox admission, subject to positive same-token remainder and all protocol/financing validation. See [Stage160](STAGE160_SIZE_AGNOSTIC_SOURCE_SCREENING.md). The older figure below records Stage157's original design, not today's operating limit.
+
 **Status:** Implementation of the next experiment, not evidence of a completed new larger liquidation. No mainnet signing, owner funds, external lender, real swap or realized economic profit.
 
 ## Why this changes the test

@@ -1,11 +1,9 @@
 import {readFile,writeFile} from 'node:fs/promises';
-import {MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC} from './stage157-large-source-candidates.mjs';
 
 // Stage157: quantify original mainnet Rhea + active-Pyth reference sizing
 // BEFORE allowing a new isolated Workspaces attempt. These are NOT realized
 // token prices, executable quotes, or evidence of a mainnet financing source.
 const NUM=/^(0|[1-9][0-9]{0,70})$/;
-const E27=10n**27n;
 const denied={chain:'NEAR_MAINNET',stage:'STAGE157_LARGE_LIQUIDATION_SOURCE_GATE',
  mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
  actualMainnetLoan:false,actualFlashLoan:false,realizedNetEconomicProfitVerified:false,
@@ -18,15 +16,11 @@ function decimal(x,name){
 function block(x){
  return typeof x==='string'&&/^[1-9][0-9]{0,15}$/.test(x);
 }
-export function stage157EvaluateLargeSourceLiquidation(qualification,options={}){
- const minRepay=decimal(options.minRepayUsdE27??(1000n*E27).toString(),'MIN_REPAY_USD_E27');
- const minGross=decimal(options.minGrossUsdE27??(10n*E27).toString(),'MIN_GROSS_USD_E27');
- if(minRepay<1000n*E27||minGross<10n*E27)
-  throw Error('STAGE157_MINIMUMS_CANNOT_BE_WEAKENED');
+export function stage157EvaluateLargeSourceLiquidation(qualification){
  const base={...denied,sourceBorrower:null,sourceBlockHeight:null,
   sourceRepayAsset:null,sourceSeizeAsset:null,referenceRepayUsdE27:null,
-  referenceGrossUsdE27:null,minimumRepayUsdE27:minRepay.toString(),
-  minimumGrossUsdE27:minGross.toString(),canAttemptSandbox:false,
+  referenceGrossUsdE27:null,minimumRepayUsdE27:'0',
+  minimumGrossUsdE27:'0',sizeFloorApplied:false,canAttemptSandbox:false,
   status:'BLOCKED_NO_VERIFIED_LARGE_SOURCE',blockers:[]};
  if(!qualification||qualification.mode!=='RHEA_STAGE38_LIVE_CANDIDATE_TO_SANDBOX'||
   qualification.chain!=='NEAR_MAINNET'||
@@ -78,19 +72,15 @@ export function stage157EvaluateLargeSourceLiquidation(qualification,options={})
  const observations={sourceBorrower:p.borrowerAccountId,sourceBlockHeight:p.blockHeight,
   sourceRepayAsset:p.repay.tokenId,sourceSeizeAsset:p.seize.tokenId,
   referenceRepayUsdE27:repay.toString(),referenceGrossUsdE27:gross.toString()};
- // Positive quoted USD gross cannot justify a tiny or loss-making
- // internal-asset route. The executable Rhea leg must itself be >=10x the
- // previously proven small source and leave strictly positive same-token
- // assets after principal repayment, before any financing cost.
- if(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC||seizeInternal<=repayInternal)
+ // No artificial dollar or 10x token floor. Rhea must still have a
+ // positive protocol-denominated repay, genuine seized proceeds and a
+ // positive same-token remainder. Conversion, financing and gas are separate
+ // *mandatory* gates before any real-money execution, never assumed here.
+ if(repayInternal===0n||seizeInternal<=repayInternal||repay===0n||gross===0n)
   return {...base,...observations,blockers:[
-   ...(repayInternal<MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC?['STAGE159_LIQUIDATION_REPAY_NOT_TEN_TIMES_PREVIOUS_SOURCE']:[]),
-   ...(seizeInternal<=repayInternal?['STAGE159_NONPOSITIVE_INTERNAL_SAME_TOKEN_SPREAD']:[])
-  ]};
- if(repay<minRepay||gross<minGross)
-  return {...base,...observations,blockers:[
-   ...(repay<minRepay?['STAGE157_SOURCE_LIQUIDATION_REPAY_VALUE_BELOW_1000_USD']:[]),
-   ...(gross<minGross?['STAGE157_SOURCE_GROSS_SPREAD_BELOW_10_USD']:[])
+   ...(repayInternal===0n||repay===0n?['STAGE160_ZERO_REPAY_AMOUNT']:[]),
+   ...(seizeInternal<=repayInternal?['STAGE159_NONPOSITIVE_INTERNAL_SAME_TOKEN_SPREAD']:[]),
+   ...(gross===0n?['STAGE160_NO_POSITIVE_REFERENCE_SPREAD']:[])
   ]};
  return {...base,...observations,
   status:'ELIGIBLE_FOR_SOURCE_PINNED_LOCAL_SANDBOX_REPLAY_ONLY',

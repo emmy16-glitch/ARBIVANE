@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {stage157SelectHistoricalLiNearBorrowers,stage157AdmitSourceLargerLiquidation,
- MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC,PREVIOUS_REPAY_INTERNAL_ATOMIC}
+ PREVIOUS_REPAY_INTERNAL_ATOMIC}
  from '../scripts/stage157-large-source-candidates.mjs';
 
 const source=()=>{
@@ -34,18 +34,21 @@ test('Stage157 ranks only historical recorded LiNEAR debt, never infers current 
  assert.equal(v.selectionIsHistoricalNotCurrentRisk,true);
  assert.equal(stage157SelectHistoricalLiNearBorrowers(source(),{batch:2,shard:3}).candidates.length,0);
 });
-test('Stage157 requires >10x source-confirmed Rhea internal repay quantity',()=>{
- assert.equal(MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC,PREVIOUS_REPAY_INTERNAL_ATOMIC*10n);
- assert.equal(stage157AdmitSourceLargerLiquidation(
-  candidate(MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC-1n),'genuine.near').qualified,false);
- const good=stage157AdmitSourceLargerLiquidation(
-  candidate(MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC),'genuine.near');
- assert.equal(good.qualified,true);
- assert.equal(good.realWorldNetProfitVerified,false);
- assert.equal(good.permissionToTradeMainnet,false);
+test('Stage160 permits any strictly positive same-token source surplus, irrespective of old 10x floor',()=>{
+ const tiny=stage157AdmitSourceLargerLiquidation(candidate(1n),'genuine.near');
+ assert.equal(tiny.qualified,true);
+ assert.equal(tiny.realWorldNetProfitVerified,false);
+ assert.equal(tiny.permissionToTradeMainnet,false);
+ assert.equal(tiny.minimumRequiredRepayLendingInternalAtomic,undefined);
+ const normal=stage157AdmitSourceLargerLiquidation(candidate(PREVIOUS_REPAY_INTERNAL_ATOMIC),'genuine.near');
+ assert.equal(normal.qualified,true);
+ assert.equal(stage157AdmitSourceLargerLiquidation(candidate(0n),'genuine.near').qualified,false);
+ const noSpread=candidate(1n);
+ noSpread.seize.amountLendingInternalAtomic='1';
+ assert.equal(stage157AdmitSourceLargerLiquidation(noSpread,'genuine.near').qualified,false);
 });
 test('Stage157 blocks forged source identity, wrong assets, and mainnet execution',()=>{
- const x=candidate(MINIMUM_LARGE_REPAY_INTERNAL_ATOMIC*100n);
+ const x=candidate(PREVIOUS_REPAY_INTERNAL_ATOMIC*100n);
  assert.equal(stage157AdmitSourceLargerLiquidation(x,'other.near').qualified,false);
  assert.equal(stage157AdmitSourceLargerLiquidation({...x,maySign:true},'genuine.near').qualified,false);
  assert.equal(stage157AdmitSourceLargerLiquidation({...x,

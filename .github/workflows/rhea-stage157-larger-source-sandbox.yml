@@ -87,11 +87,11 @@ jobs:
             and .maySignMainnet == false and .mayBroadcastMainnet == false
             and .realizedEconomicProfitVerified == false and
             .reviewed <= 12 and
-            .minimumRepayLendingInternalAtomic == "18584902646058010"' \
+            .sizeFloorApplied == false' \
             stage157-large-discovery-report.json >/dev/null
           jq -c '{batch,shard,status,reviewed,qualifiedLargerSourceAccounts,
             bestSourceRepayLendingInternalAtomic}' stage157-large-discovery-report.json >> "$GITHUB_STEP_SUMMARY"
-      - name: Real isolated contract replay ONLY when larger CURRENT source liquidation verified
+      - name: Real isolated contract replay ONLY when CURRENT source and positive surplus verified
         if: ${{ hashFiles('stage157-large-source-evidence.json') != '' }}
         shell: bash
         env:
@@ -175,7 +175,7 @@ jobs:
         with:
           pattern: stage157-large-liquidation-shard-*-batch-*
           path: reports
-      - name: Decide continuation only after all four shards finish without a source-large candidate
+      - name: Decide continuation only after all four shards finish without a supported source candidate
         id: gate
         shell: bash
         run: |
@@ -196,10 +196,10 @@ jobs:
             )' "${files[@]}" >/dev/null
           total=$(jq -s '[.[].qualifiedLargerSourceAccounts] | add' "${files[@]}")
           echo "qualified=$total" >> "$GITHUB_OUTPUT"
-          echo "Batch $STAGE157_BATCH: $total genuinely source-qualified larger accounts." >> "$GITHUB_STEP_SUMMARY"
+          echo "Batch $STAGE157_BATCH: $total genuinely source-qualified accounts (no arbitrary amount floor)." >> "$GITHUB_STEP_SUMMARY"
           if (( total > 0 || STAGE157_BATCH >= 3 )); then
             echo 'more=false' >> "$GITHUB_OUTPUT"
-            echo 'Either a live larger candidate was found or all 169 historical LiNEAR debt candidates were exhausted.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Either a source-qualified candidate was found or all bounded historical LiNEAR debt candidates were exhausted.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'more=true' >> "$GITHUB_OUTPUT"
             echo "next=$((STAGE157_BATCH+1))" >> "$GITHUB_OUTPUT"

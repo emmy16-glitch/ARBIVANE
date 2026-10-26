@@ -1,5 +1,7 @@
 # Stage159 — executable LiNEAR source priority and funding-size guard
 
+> **Superseded size requirements:** Stage160 removed Stage159's historical 10× and $1,000/$10 source-size floors while preserving route-first selection and positive same-token surplus. See [Stage160](STAGE160_SIZE_AGNOSTIC_SOURCE_SCREENING.md). Figures below document the earlier Stage159 implementation, not the current amount policy.
+
 **Status:** implementation and CI verification; not a funded mainnet liquidation and not an economic success claim.
 
 ## Observed problem

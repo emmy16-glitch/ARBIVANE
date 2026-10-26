@@ -1,3 +1,11 @@
+## Stage160 — size-agnostic opportunity screening and failed Stage159 large-search regression (26 October 2026)
+
+- User requirement: **no preset minimum amount** for candidate discovery or disposable Sandbox experimentation. Remove the $1,000 reference repay / $10 reference gross / 10× historical internal repay floors. Keep **strictly positive, source-approved repay and positive reference and same-token surplus**, original Rhea rules, deployed LiNEAR route, Pyth freshness, contract balances and all financing/finality/zero-debt verification. User-selected size cannot exceed actually liquidatable debt and available capital; neither gross spread nor a local simulation is net profit.
+- Stage159 `main` large search [#40372238960](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40372238960) **FAILED before candidate jobs**: `ERR_UNKNOWN_FILE_EXTENSION: ".ts"` from the newly included Stage38 tests in `node --test` on Node 22. Stage160 runs `node --experimental-strip-types --test`; the old run establishes **no** fresh-market large candidate outcome.
+- Updated both Stage157 search workflows and historical-debt candidate path; maintained `EXECUTION_ENABLED=false`, no mainnet wallet signer, no actual flash lender and no profit payout. See [Stage160 verification and economics](docs/STAGE160_SIZE_AGNOSTIC_SOURCE_SCREENING.md).
+- After merge: inspect the new Stage157 320-account workflow's **source gate first**, then 4 actual scan shard job statuses and original uploaded artifacts. Separately inspect the 169-debt-account workflow and stop auto-continuation if a source-qualified candidate exists; require authentic signed FINAL callback receipts and verified zero partner debt for any successful local execution claim.
+- **Do not interpret a successful pipeline as a liquidation, an economically viable trade or a working mainnet flash loan.**
+
 ### Stage157 — next genuinely larger source-backed Rhea liquidation (26 October 2026)
 
 - Stage151 100 test LiNEAR borrowed against the same tiny borrower 2579 had negative financing economics. Do not scale an unrelated loan principal again and mistake it for a larger liquidation. Stage156 artificial clock finality is an independent mechanics experiment.
