@@ -312,14 +312,39 @@ async function main(){
  // Stage51 checks source-pinned quote/ratio parity for the selected route.
  // Stage164 additionally checks ALL other deployed derived-price contracts
  // Rhea may call while valuing unrelated borrower collateral on callback.
+ // Stage167: an original historical block must be read from an archival
+ // provider first; regular head nodes can prune the block during a 62k-key
+ // clone and answer with non-transient JSON-RPC errors. Preserve the already
+ // verified block identity and source/clone ratio agreement.
+ const archivePrimary=e.STAGE45_ARCHIVAL_FALLBACK_URL||
+  'https://archival-rpc.mainnet.fastnear.com';
+ const archiveSecondary=archivePrimary==='https://archival-rpc.mainnet.fastnear.com'?
+  'https://archival-rpc.mainnet.near.org':
+  'https://archival-rpc.mainnet.fastnear.com';
+ const archivalOpts={maxRetries:2,initialDelayMs:500,maxDelayMs:5000,
+  maxCachedPinnedViews:16};
+ const stage167Primary=new ResilientNearReadOnlyRpc(
+  new NearReadOnlyRpc(archivePrimary),archivalOpts);
+ const stage167Fallback=new ResilientNearReadOnlyRpc(
+  new NearReadOnlyRpc(archiveSecondary),archivalOpts);
+ const sourcePricingObservations=[];
+ const onDiagnostic=async diagnostic=>{
+  sourcePricingObservations.push(diagnostic);
+  // Original evidence even on failure; bounded public method/contract labels
+  // only, no URLs, raw errors, private keys or quote/portfolio values.
+  await writeFile('stage167-pinned-derived-price-diagnostics.json',
+   JSON.stringify({
+    mode:'STAGE167_ORIGINAL_PINNED_DERIVED_PRICE_READS',
+    chain:'NEAR_SANDBOX',sourceBlockHeight:String(block),
+    observations:sourcePricingObservations,
+    mainnetExecutionEnabled:false,maySignMainnet:false,
+    mayBroadcastMainnet:false,actualRheaSettlementVerified:false,
+   },null,2)+'\n',{mode:0o600});
+ };
  const derivedParity=await attestStage164PricingClosure({
-  rpc,contracts,blockHeight:block,dependencies:priceClosure.dependencies,
-  // Stage166: independent archival SAME-BLOCK read fallback, only after a
-  // classified transient primary RPC failure. No unpinned reads or fake prices.
-  fallbackRpc:new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(
-   e.STAGE45_ARCHIVAL_FALLBACK_URL||'https://archival-rpc.mainnet.near.org'),{
-   maxRetries:1,initialDelayMs:500,maxDelayMs:5000,maxCachedPinnedViews:16,
-  }),
+  rpc:stage167Primary,contracts,blockHeight:block,
+  dependencies:priceClosure.dependencies,fallbackRpc:stage167Fallback,
+  onDiagnostic,
  });
  await writeFile('stage164-derived-price-parity.json',
   JSON.stringify(derivedParity,null,2)+'\n');

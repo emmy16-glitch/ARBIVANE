@@ -198,4 +198,5 @@ jobs:
             stage49-sandbox-funding.json
             stage51-active-pyth-sandbox-parity.json
             stage164-derived-price-parity.json
+            stage167-pinned-derived-price-diagnostics.json
             stage88-sandbox-clone-witness.json
