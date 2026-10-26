@@ -1,0 +1,73 @@
+name: Stage141 six-contract native flash-loan lender qualification
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage141-near-lender-qualification.mjs'
+      - 'scripts/stage141-near-lender-cli.mjs'
+      - 'tests/rhea-stage141-lender-qualification.test.mjs'
+      - '.github/workflows/rhea-stage141-lender-qualification.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage141-near-lender-qualification.mjs'
+      - 'scripts/stage141-near-lender-cli.mjs'
+      - 'tests/rhea-stage141-lender-qualification.test.mjs'
+      - '.github/workflows/rhea-stage141-lender-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated_readonly_regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject fake code identities, invalid token snapshots and flash-loan claims
+        run: node --test tests/rhea-stage141-lender-qualification.test.mjs
+  authenticated_six_contract_mainnet_readonly_survey:
+    if: github.event_name != 'pull_request'
+    needs: isolated_readonly_regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+      NEAR_RPC_URL: https://rpc.mainnet.near.org
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Independently inspect source-listed deployed contracts and LiNEAR metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/stage141-near-lender-cli.mjs stage141-native-loan-qualification.json
+          jq -e '
+            .mode == "STAGE141_EXTENDED_NEAR_LENDER_QUALIFICATION"
+            and .network == "NEAR_MAINNET"
+            and .chainReadOnly == true
+            and .providerCountExamined == 6
+            and .fundingStatus == "NO_VERIFIED_UNCOLLATERALIZED_NATIVE_LINEAR_LOAN_SOURCE"
+            and .qualifyingUncollateralizedProviders == []
+            and .lenderConnectedForBorrowing == false
+            and .maySignMainnet == false
+            and .mayBroadcastMainnet == false
+            and .actualFundsBorrowed == false
+            and (.candidates | all(.loanExecutionAllowed == false and .observedBalanceIsBorrowableLiquidity == false))
+          ' stage141-native-loan-qualification.json
+      - name: Preserve audit-ready public finalized provider evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage141-live-extended-near-provider-qualification
+          path: stage141-native-loan-qualification.json
+          retention-days: 90
+          if-no-files-found: error
