@@ -231,3 +231,14 @@ test('Stage122 permits only attested temporal accrual when authentic source view
   assert.equal(blocked.attemptedTransaction,false);
  }
 });
+
+test('Stage123 real settlement workflow triggers on the authenticated one-yocto execution ABI',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
+ const trigger=workflow.split('  push:')[1]?.split('permissions:')[0]??'';
+ assert.ok(trigger.includes("'src/rhea/stage37-sandbox-liquidation.ts'"));
+ const plan=buildStage37SandboxPlan(proposal());
+ assert.equal(plan.depositYocto,'1');
+ assert.equal(plan.executionEnabled,false);
+ assert.equal(plan.maySignMainnet,false);
+});
