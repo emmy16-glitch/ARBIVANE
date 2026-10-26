@@ -210,3 +210,15 @@ test('Stage72 uses only pinned active Pyth storage clones with cross-token and S
  assert.ok(script.includes('clonePinnedContractWithState'));
  assert.ok(script.includes('STAGE37_ALLOW_SANDBOX_MUTATION'));
 });
+
+
+test('Stage123 Stage93 workflow watches the authentic Sandbox execute ABI',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
+ const watched=workflow.split('  push:')[1]?.split('permissions:')[0]??'';
+ assert.ok(watched.includes("'src/rhea/stage37-sandbox-liquidation.ts'"));
+ const plan=buildStage37SandboxPlan(proposal());
+ assert.equal(plan.depositYocto,'1');
+ assert.equal(plan.executionEnabled,false);
+ assert.equal(plan.mayBroadcastMainnet,false);
+});
