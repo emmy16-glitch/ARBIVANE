@@ -155,7 +155,7 @@ export function summarizeStage37SandboxOutcome(
    throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
   const gas=receipts.reduce((n,x)=>{
    const y=(x as {outcome:{gas_burnt:unknown}}).outcome.gas_burnt;
-   if((typeof y!=='string'&&typeof y!=='number')||!/^\\d+$/.test(String(y)))
+   if((typeof y!=='string'&&typeof y!=='number')||!/^\d+$/.test(String(y)))
     throw Error('INVALID_SANDBOX_GAS');
    return n+BigInt(y);
   },0n).toString();
