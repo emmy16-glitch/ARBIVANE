@@ -162,8 +162,9 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
   ['Borrow','Liquidate','Repay','Withdraw']);
  assert.equal(p.actions[2].Repay.token_id,'wrap.near');
  assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+ assert.equal(BigInt(p.actions[0].Borrow.amount)-BigInt(p.actions[1].Liquidate.in_assets[0].amount),1000000000000000n);
  assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
- assert.equal(p.actions[3].Withdraw.amount,'10000000000000000000');
+ assert.equal(p.actions[3].Withdraw.amount,'9999000000000000000');
  assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
   String(BigInt(p.actions[3].Withdraw.amount)+BigInt(p.actions[2].Repay.amount)));
  assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
@@ -230,4 +231,21 @@ test('Stage122 permits only attested temporal accrual when authentic source view
   assert.equal(blocked.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
   assert.equal(blocked.attemptedTransaction,false);
  }
+});
+
+test('Stage124 borrows only a bounded full-self-repaid 10 ppm Sandbox rounding cushion',()=>{
+ const q=proposal();q.seize.tokenId=q.repay.tokenId;
+ const p=buildStage37SandboxPlan(q);
+ const repay=BigInt(p.actions[1].Liquidate.in_assets[0].amount);
+ const borrow=BigInt(p.actions[0].Borrow.amount);
+ const repaySelf=BigInt(p.actions[2].Repay.amount);
+ const seized=BigInt(p.actions[1].Liquidate.out_assets[0].amount);
+ assert.equal(borrow,repay+(repay+99999n)/100000n);
+ assert.equal(repaySelf,borrow);
+ assert.equal(BigInt(p.actions[3].Withdraw.amount),seized-borrow);
+ assert.equal(p.depositYocto,'1');
+ assert.equal(p.mayBroadcastMainnet,false);
+ for(const badSeize of [borrow.toString(),(borrow-1n).toString()])
+  assert.throws(()=>buildStage37SandboxPlan({...q,seize:{...q.seize,
+   amountLendingInternalAtomic:badSeize}}),/STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER/);
 });
