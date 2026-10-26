@@ -52,6 +52,42 @@ function borrowedShareTotal(account,token){
  }
  return total;
 }
+const MAX_STAGE148_DUST_ATOMIC=100000n;
+// Stage148: only accrued microscopic partner debt, never a second principal
+// loan. The 100000 atomic LiNEAR ceiling is tiny versus 1.858e15 principal,
+// but nevertheless requires genuine local FT wallet balance and actual Rhea
+// debt-share and balance views before any additional signed Sandbox call.
+export function stage148InspectOutstandingPartnerDebt(account,token){
+ const positions=account?.positions;
+ if(!positions||typeof positions!=='object'||Array.isArray(positions))
+  throw Error('STAGE148_BAD_PARTNER_POSITION_VIEW');
+ let shares=0n,amount=0n;
+ for(const p of Object.values(positions)){
+  if(!p||!Array.isArray(p.borrowed))throw Error('STAGE148_MISSING_BORROWED_LEGS');
+  for(const row of p.borrowed){
+   if(row.token_id!==token)continue;
+   shares+=balance(row.shares,'BAD_DEBT_SHARES');
+   amount+=balance(row.balance,'BAD_DEBT_BALANCE');
+  }
+ }
+ if((shares===0n)!==(amount===0n))
+  throw Error('STAGE148_MISMATCHED_DEBT_SHARES_AND_BALANCE');
+ return {sharesAtomic:shares.toString(),balanceAtomic:amount.toString()};
+}
+export function stage148BoundDebtTopup({debtSharesAtomic,debtBalanceAtomic,
+ actorBalanceAtomic,alreadySentAtomic}){
+ const shares=balance(debtSharesAtomic,'DEBT_SHARES');
+ const debt=balance(debtBalanceAtomic,'DEBT_BALANCE');
+ const actor=balance(actorBalanceAtomic,'ACTOR_WALLET');
+ const spent=balance(alreadySentAtomic,'ALREADY_SENT');
+ if(shares===0n||debt===0n||shares>MAX_STAGE148_DUST_ATOMIC||
+  debt>MAX_STAGE148_DUST_ATOMIC||spent>MAX_STAGE148_DUST_ATOMIC)
+  throw Error('STAGE148_NOT_BOUNDED_DEBT_DUST');
+ const add=debt+32n;
+ if(spent+add>MAX_STAGE148_DUST_ATOMIC||actor<=add)
+  throw Error('STAGE148_DUST_BUDGET_OR_ACTOR_RESIDUAL_EXCEEDED');
+ return add.toString();
+}
 function hasZeroCollateral(account){
  const positions=account?.positions;
  if(!positions||typeof positions!=='object'||Array.isArray(positions))return false;
@@ -150,6 +186,11 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   observedLiquidationCollateralDecreaseShares:null,
   observedLiquidatorToPartnerRepaymentAtomic:null,
   observedPartnerRemainingRheaDebtShares:null,
+  observedPartnerDebtDustBeforeShares:null,
+  observedPartnerDebtDustBeforeAtomic:null,
+  observedPartnerAdditionalDebtPaymentAtomic:'0',
+  partnerAccruedDebtDustClosed:false,
+  finalActorWalletResidualAtomic:null,
   phase:'STARTED',status:'ATTEMPT_IN_PROGRESS',
   actualOnchainLoanAndLiquidationVerified:false,
   mainnetExecution:false,ownerFunded:false,mainnetWalletsTouched:false,
@@ -322,9 +363,55 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
      token_id:'linear-protocol.near'
     }}]}})
    },1n,200000000000000n);
-   const remaining=borrowedShareTotal(await snapshot(partner.accountId),'linear-protocol.near');
-   result.observedPartnerRemainingRheaDebtShares=remaining.toString();
-   if(remaining!==0n)throw Error('STAGE146_PARTNER_RETAINED_RHEA_DEBT');
+   let state=await snapshot(partner.accountId);
+   let observed=stage148InspectOutstandingPartnerDebt(state,'linear-protocol.near');
+   result.observedPartnerDebtDustBeforeShares=observed.sharesAtomic;
+   result.observedPartnerDebtDustBeforeAtomic=observed.balanceAtomic;
+   result.observedPartnerRemainingRheaDebtShares=observed.sharesAtomic;
+   await save();
+   let total=0n;
+   result.receiptProofs.stage148DebtDust=[];result.receiptProofs.stage148DebtDustTransfers=[];
+   for(let round=0;round<3&&BigInt(observed.sharesAtomic)>0n;round++){
+    const actorSpendable=balance(await ft(liquidator.accountId),'ACTOR_DUST_SOURCE');
+    const topup=BigInt(stage148BoundDebtTopup({
+     debtSharesAtomic:observed.sharesAtomic,
+     debtBalanceAtomic:observed.balanceAtomic,
+     actorBalanceAtomic:actorSpendable.toString(),
+     alreadySentAtomic:total.toString()
+    }));
+    const partnerBefore=balance(await ft(partner.accountId),'PARTNER_BEFORE_DUST');
+    const actualTransfer=await call(liquidator,token,'ft_transfer',{
+     receiver_id:partner.accountId,amount:topup.toString(),
+     memo:'Stage148 genuine local accrued debt closure'
+    });
+    result.receiptProofs.stage148DebtDustTransfers.push(actualTransfer);
+    const partnerAfter=balance(await ft(partner.accountId),'PARTNER_AFTER_DUST');
+    if(partnerAfter-partnerBefore!==topup)
+     throw Error('STAGE148_DEBT_DUST_NE_P141_TRANSFER_NOT_CONSERVED');
+    const actualRepay=await call(partner,token,'ft_transfer_call',{
+     receiver_id:lending.accountId,amount:topup.toString(),
+     msg:JSON.stringify({Execute:{actions:[{Repay:{
+      token_id:'linear-protocol.near'
+     }}]}})
+    },1n,200000000000000n);
+    result.receiptProofs.stage148DebtDust.push(actualRepay);
+    total+=topup;
+    state=await snapshot(partner.accountId);
+    const next=stage148InspectOutstandingPartnerDebt(state,'linear-protocol.near');
+    if(BigInt(next.sharesAtomic)>=BigInt(observed.sharesAtomic))
+     throw Error('STAGE148_DEBT_DUST_NOT_REDUCED_AFTER_REAL_CALLBACK');
+    observed=next;
+    result.observedPartnerAdditionalDebtPaymentAtomic=total.toString();
+    result.observedPartnerRemainingRheaDebtShares=observed.sharesAtomic;
+    await save();
+   }
+   if(observed.sharesAtomic!=='0')
+    throw Error('STAGE148_BOUNDED_REPAYMENT_EXHAUSTED_OPEN_RHEA_DEBT');
+   const finalActor=balance(await ft(liquidator.accountId),'FINAL_ACTOR_FT_BALANCE');
+   if(finalActor===0n)throw Error('STAGE148_NO_REMAINING_ACTOR_TOKEN_INVENTORY');
+   result.finalActorWalletResidualAtomic=finalActor.toString();
+   result.partnerAccruedDebtDustClosed=true;
+   result.observedPartnerRemainingRheaDebtShares='0';
    await save();
   });
   result.phase='FINISHED';
