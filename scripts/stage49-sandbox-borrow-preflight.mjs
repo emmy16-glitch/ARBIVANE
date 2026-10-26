@@ -37,6 +37,19 @@ export function actorCollateralInternal(positions,tokenId=null){
  }
  return sum;
 }
+function validSelfRepay(plan,token,rawQty,liquidationSeize){
+ const self=plan.actions?.[2]?.Repay;
+ if(!self||self.token_id!==token||
+  (self.amount===undefined)===(self.max_amount===undefined))return false;
+ try {
+  const borrowed=amount(rawQty,'BORROW_AMOUNT');
+  const capped=amount(self.amount??self.max_amount,'SELF_REPAY');
+  const seize=amount(liquidationSeize,'SEIZE_AMOUNT');
+  return self.amount!==undefined?capped===borrowed:
+   capped>=borrowed&&capped<=borrowed+(borrowed+999999n)/1000000n&&
+   capped<seize;
+ }catch{return false;}
+}
 export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPositions}){
  if(!plan||plan.mode!=='ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN'||
   plan.chain!=='NEAR_SANDBOX'||plan.executionEnabled!==false||
@@ -59,8 +72,7 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   ((withdraw.amount===undefined)===(withdraw.max_amount===undefined))||
   (same?(plan.actions.length!==4||
-   plan.actions[2]?.Repay?.token_id!==token||
-   plan.actions[2].Repay.amount!==rawQty||
+   !validSelfRepay(plan,token,rawQty,liquidation.out_assets[0].amount)||
    BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==
    BigInt(withdraw.amount??withdraw.max_amount??'0')):
    plan.actions.length!==3)||
