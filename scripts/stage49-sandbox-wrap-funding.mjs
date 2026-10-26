@@ -6,6 +6,7 @@
  * silently substitute an unrelated FT for the actual cloned token.
  */
 import {actorCollateralInternal} from './stage49-sandbox-borrow-preflight.mjs';
+import {writeFile} from 'node:fs/promises';
 const NEAR=10n**24n;
 const DEPOSIT=NEAR; // one disposable Sandbox NEAR, not user's real money
 const STORAGE=NEAR/10n; // bounded 0.1 Sandbox NEAR per storage registration
@@ -57,6 +58,80 @@ function success(result,label){
    throw Error('STAGE49_'+label+'_FAILED_CALLBACK');
  }
 }
+// NEAR can return an optimistic SuccessReceiptId before the asynchronous
+// ft_transfer_call receiver and resolver receipts are finalized. Never
+// misclassify that provisional status as successful collateral funding.
+function fundingReceiptSummary(raw) {
+ const v=raw?.result??raw;
+ const status=v?.status;
+ return {
+  transactionHash:typeof v?.transaction?.hash==='string'?v.transaction.hash:null,
+  finalExecutionStatus:v?.final_execution_status??null,
+  transactionStatus:status&&typeof status==='object'?Object.keys(status).sort():[],
+  receipts:Array.isArray(v?.receipts_outcome)?
+   v.receipts_outcome.map(row=>({
+    id:typeof row?.id==='string'?row.id:null,
+    status:row?.outcome?.status&&typeof row.outcome.status==='object'?
+     Object.keys(row.outcome.status).sort():[],
+   })):[],
+ };
+}
+async function saveFundingReceipt(path,initial,final,classification){
+ if(!path)return;
+ await writeFile(path,JSON.stringify({
+  mode:'STAGE121_GENUINE_SANDBOX_WNEAR_TRANSFER_RECEIPTS',
+  chain:'NEAR_SANDBOX',classification,
+  initial:fundingReceiptSummary(initial),
+  final:final?fundingReceiptSummary(final):null,
+  actualLiquidationAttempted:false,mainnetExecutionEnabled:false,
+ },null,2)+'\\n');
+}
+export async function settleFundingTransferReceipt({
+ raw,provider,actorAccountId,evidencePath=null
+}){
+ const initial=fundingReceiptSummary(raw);
+ const v=raw?.result??raw;
+ if(v?.status&&typeof v.status==='object'&&Object.hasOwn(v.status,'Failure')){
+  await saveFundingReceipt(evidencePath,raw,null,'REJECTED_TRANSACTION_FAILURE');
+  throw Error('STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT');
+ }
+ if(Array.isArray(v?.receipts_outcome)&&v.receipts_outcome.some(
+  row=>row?.outcome?.status&&typeof row.outcome.status==='object'&&
+   Object.hasOwn(row.outcome.status,'Failure'))){
+  await saveFundingReceipt(evidencePath,raw,null,'REJECTED_FAILED_CALLBACK');
+  throw Error('STAGE49_WNEAR_COLLATERAL_TRANSFER_FAILED_CALLBACK');
+ }
+ let resolved=raw;
+ // A SuccessReceiptId is not final proof of the FT resolver callback.
+ // Query ONLY the local Sandbox provider and NEVER submit another transfer.
+ if(!['SuccessValue'].some(key=>initial.transactionStatus.includes(key))||
+  !['FINAL','EXECUTED_OPTIMISTIC'].includes(initial.finalExecutionStatus)){
+  if(!provider||typeof provider.txStatus!=='function'||
+   !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(initial.transactionHash??'')||
+   typeof actorAccountId!=='string'||!ID.test(actorAccountId)){
+   await saveFundingReceipt(evidencePath,raw,null,'PENDING_WITHOUT_FINAL_STATUS_PROVIDER');
+   throw Error('STAGE49_WNEAR_COLLATERAL_TRANSFER_FINAL_STATUS_UNAVAILABLE');
+  }
+  try{
+   let timeout;
+   try{
+    const final=await Promise.race([
+     provider.txStatus(initial.transactionHash,actorAccountId,'FINAL'),
+     new Promise((_,reject)=>{
+      timeout=setTimeout(()=>reject(Error('SANDBOX_TX_STATUS_TIMEOUT')),15000);
+     }),
+    ]);
+    resolved={result:final};
+   }finally{clearTimeout(timeout);}
+  }catch{
+   await saveFundingReceipt(evidencePath,raw,null,'FINAL_STATUS_READ_FAILED');
+   throw Error('STAGE49_WNEAR_COLLATERAL_TRANSFER_FINAL_STATUS_UNAVAILABLE');
+  }
+ }
+ await saveFundingReceipt(evidencePath,raw,resolved,'FINAL_STATUS_OBSERVED');
+ success(resolved,'WNEAR_COLLATERAL_TRANSFER');
+ return resolved;
+}
 async function registerIfNeeded(actor,contract,label){
  if(typeof contract.view!=='function')throw Error('STAGE49_'+label+'_NO_STORAGE_VIEW');
  const [existing,bounds]=await Promise.all([
@@ -83,7 +158,7 @@ async function registerIfNeeded(actor,contract,label){
  return true;
 }
 export async function seedSandboxLiquidatorWithWrappedNear({
- actor,lending,wrapped,assetRows
+ actor,lending,wrapped,assetRows,provider=null,evidencePath=null
 }){
  if(!actor||!ID.test(actor.accountId)||typeof actor.callRaw!=='function'||
   !lending||typeof lending.view!=='function'||!ID.test(lending.accountId)||
@@ -124,7 +199,8 @@ export async function seedSandboxLiquidatorWithWrappedNear({
   receiver_id:lending.accountId,amount:DEPOSIT.toString(),
   msg:'"OnlyIncreaseCollateral"',
  },{gas:200000000000000n,attachedDeposit:1n});
- success(rawCollateral,'WNEAR_COLLATERAL_TRANSFER');
+ await settleFundingTransferReceipt({raw:rawCollateral,provider,
+  actorAccountId:actor.accountId,evidencePath});
  const [after,remaining,vaultWnearAfter]=await Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   wrapped.view('ft_balance_of',{account_id:actor.accountId}),
