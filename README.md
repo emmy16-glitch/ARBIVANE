@@ -4,7 +4,7 @@
 
 ARBIVANE studies lending positions on NEAR, identifies candidate liquidations, checks protocol rules and available liquidity, and tests the complete transaction against an isolated copy of the real Rhea contracts. The emphasis is on proving what happened, not confusing a profitable-looking estimate with money actually earned.
 
-**Current state — 26 October 2026:** The project has executed and independently verified real Rhea liquidation transactions **inside NEAR Sandbox**. The latest successful Stage93 verification is [run #40320594342](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40320594342). It has **not** executed a funded mainnet liquidation, sold seized collateral for realized net profit, connected an owner's wallet or enabled production signing.
+**Current state — 26 October 2026:** The project has executed and independently verified genuine Rhea liquidation and separately financed repayment transactions **inside disposable NEAR Workspaces Sandbox**. The latest successful Stage93 verification is [run #40320594342](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40320594342). It has **not** executed a funded mainnet liquidation, sold seized collateral for realized net profit, connected an owner's wallet or enabled production signing.
 
 ## Capital-free funding is the next engineering objective
 
@@ -14,15 +14,19 @@ Stage139 now audits the original successful funding receipts and refuses to mark
 
 ## Financing recovery and production boundary (Stages142–145)
 
-Stage142 implements an **offline** flash-versus-partner financing intent. Stages143–145 add a strict simulated asynchronous repayment state machine, deterministic third-party capital accounting, an original signed Stage93 proof contrast and a fail-closed production readiness checklist. **The partner-financed scenario has not been executed on NEAR Workspaces** and no genuine uncollateralized lender is connected. All signing, funding and payouts stay disabled. See [Stage142](docs/STAGE142_FINANCING_ADAPTER.md) and [Stages143–145](docs/STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
+Stage142 implements an **offline** flash-versus-partner financing intent. Stages143–145 add a strict simulated asynchronous repayment state machine, deterministic third-party capital accounting, an original signed Stage93 proof contrast and a fail-closed production readiness checklist. **The original Stages143–145 partner scenario was only simulated at that stage; Stages146–152 later executed real *Sandbox* partner transfers and liquidations** and no genuine uncollateralized lender is connected. All signing, funding and payouts stay disabled. See [Stage142](docs/STAGE142_FINANCING_ADAPTER.md) and [Stages143–145](docs/STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
 
-## Attempting real separate-partner financing (Stage146)
+## Verified Sandbox partner funding and debt repayment (Stages146–153)
 
-Stage146 extends the original proven Rhea Workspaces imported-state path with a **separate disposable Sandbox partner**, real NEP-141 LiNEAR transfer to a fresh zero-collateral liquidator, source-backed Rhea liquidation and principal repayment checks. [Execution and evidence requirements](docs/STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md). Whether that NEW route succeeds must be established by a complete actual Workspaces run; it is not a live permissionless flash loan or real investor funding. Mainnet keys and spending remain disabled.
+**Stage146–148 are real *Sandbox* transactions, not mock accounting:** a separately created disposable Workspaces account financed the zero-collateral liquidator from Rhea using its own test wNEAR collateral. The liquidator transferred genuine cloned LiNEAR, reduced authentic borrowed/collateral positions, returned principal, and retired the partner's Rhea borrowed shares to zero. [Original full-cycle run #40347017312](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40347017312).
 
-## Stage150 larger genuine Sandbox principal stress test
+**Stage150 scaled the local loan to nearly 10 LiNEAR and succeeded**, including recovery of unused Rhea supply and partner repayment ([original run #40353279895](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40353279895)). **Stage151 scaled it to nearly 100 LiNEAR and FAILED to close the original lender's debt** ([run #40354682373](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40354682373)): `24,899,422,835,948` atomic LiNEAR of additional accrued liability remained, more than the tiny source borrower's liquidation surplus.
 
-A separate fully isolated [Stage150 trial](docs/STAGE150_LARGE_SANDBOX_FINANCING.md) attempts to move **10 whole test LiNEAR tokens** through authentic cloned Rhea and NEP-141 contracts, backed by a separate partner's **1,000 disposable Sandbox NEAR**. Unlike Stage148's 0.00000000185849 test LiNEAR principal, this is a multi-billion-fold increase in actual *test funding*. The source-pinned borrower liquidation remains tiny; we must withdraw the unused supplied tokens and repay the whole larger loan. **Do not claim large-loan success until the new on-chain Workspaces receipts pass.** No mainnet or real-world value.
+**Stage152** separately tried the 100-LiNEAR cycle under a **1,000× artificially compressed historical Sandbox clock**. Real Borrow/Withdraw events appeared, but canonical receipt verification stopped before the liquidation ([run #40357920852](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40357920852)). **Stage153** adds limited, read-only re-queries for original FINAL receipts for the *same transaction hash*, never repeats the borrow or weakens failed callback checks. See [current Stage153 rerun](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40361065214) for execution result; regression checks alone do not prove success.
+
+The [complete Stage153 financing diagnosis and scale gate](docs/STAGE153_SCALED_FINANCING_DIAGNOSIS.md) covers genuine transaction proof, next-run prerequisites and all known financial/production limitations. The historical borrower is still the same small debtor. Borrowing 100, 200 or 1,000 LiNEAR does not automatically increase the value that can be liquidated, while fees and accrued interest grow.
+
+**None of this is mainnet financing.** The Sandbox partner's collateral is disposable test NEAR; it is *not* a committed third-party investor, a permissionless flash loan, mainnet economic profit or money that can be withdrawn. Mainnet keys, wallet spending and owner payouts remain disabled.
 
 ## What works today
 
