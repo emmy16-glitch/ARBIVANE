@@ -1,3 +1,9 @@
+## Stage150 large-principal NEAR Workspaces test (26 October 2026)
+
+- New **readiness / implementation under test**, not a proven large-capital execution: `STAGE150_LARGE_SANDBOX=true`, default `STAGE150_LARGE_SANDBOX_TOKENS=10`, later explicitly selectable 100 whole LiNEAR. Partner actually wraps/deposits **1000 disposable local test NEAR**, Rhea must actually Borrow/Withdraw **10 full LiNEAR FT**, and transfer that genuine amount to the separate collateral-free executor. No invented token mint or mainnet funds.
+- Original source-pinned borrower liquidation remains only ~`1.858e15` atomic LiNEAR. After this **source-capped** real local liquidation the actor must use a second original Rhea `Withdraw` transaction to retrieve all unspent **large** LiNEAR supply, then repay actual full principal to partner and settle final interest entirely from actual remaining actor inventory (bounded 0.1% principal). Fail if real cloned vault liquidity, source-quote health, interest or FT supply recovery are insufficient.
+- New original onchain [Stage150 workflow](.github/workflows/rhea-stage150-large-financing-sandbox.yml), [docs](docs/STAGE150_LARGE_SANDBOX_FINANCING.md), guarded real-contract path and adversarial tests. Final production gate remains blocked. Independent successfully finalized NEP141 receipts and real Rhea debt zero are required, not the configured test amount.
+
 ## VERIFIED Stage148 full partner financing cycle — genuine NEAR Sandbox final receipts
 
 - [Post-merge run #40347017312](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40347017312) passed BOTH genuine-local-execution and adversarial tests. [Original artifact #12661728104](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40347017312/artifacts/12661728104) was independently downloaded and inspected. This is not simulated bookkeeping: authentic local cloned-Rhea and NEP141 contracts were invoked with finalized original signed Sandbox receipt trees.
