@@ -444,10 +444,30 @@ async function main(){
    throw Error('STAGE48_FINALIZED_SANDBOX_PROVIDER_NOT_AVAILABLE');
   await markStage55('SANDBOX_FINALIZED_STATE');
   const beforeFinalBlock=await worker.provider.block({finality:'final'});
-  // Stage44's actual NEAR Sandbox proof showed fastForward(8) was not
-  // enough to advance finalized height; Workspaces uses 10,000.
-  await worker.provider.fastForward(10000);
+  // Stage133: the old fastForward(8) was below the current local block,
+  // whereas 10,000 advanced almost 10k blocks and accrued unrelated state.
+  // Advance to a small target based on the ACTUAL finalized block height.
+  const priorFinalizedHeight=beforeFinalBlock?.header?.height;
+  if(!Number.isSafeInteger(priorFinalizedHeight)||priorFinalizedHeight<1||
+   priorFinalizedHeight>Number.MAX_SAFE_INTEGER-64)
+   throw Error('STAGE133_INVALID_INITIAL_FINALIZED_HEIGHT');
+  await worker.provider.fastForward(priorFinalizedHeight+64);
   const afterFinalBlock=await worker.provider.block({finality:'final'});
+  const laterFinalizedHeight=afterFinalBlock?.header?.height;
+  await writeFile('stage133-bounded-finality.json',JSON.stringify({
+   mode:'STAGE133_BOUNDED_AUTHENTIC_SANDBOX_FINALITY',
+   chain:'NEAR_SANDBOX',initialFinalizedHeight:priorFinalizedHeight,
+   requestedTargetHeight:priorFinalizedHeight+64,
+   laterFinalizedHeight:Number.isSafeInteger(laterFinalizedHeight)?
+    laterFinalizedHeight:null,
+   sourcePriceOrBorrowerBytesModified:false,mainnetExecutionEnabled:false,
+  },null,2)+'\n');
+  // A finality proof cannot be based on unchanged height or a hidden
+  // thousands-block advance that can mutate unrelated imported economics.
+  if(!Number.isSafeInteger(laterFinalizedHeight)||
+   laterFinalizedHeight<priorFinalizedHeight+2||
+   laterFinalizedHeight>priorFinalizedHeight+256)
+   throw Error('STAGE133_UNTRUSTED_FINALIZED_HEIGHT_MOVEMENT');
   post=await snapshotAll();
   await writeFile('stage116-after-state.json',JSON.stringify({
    ...post,finalizedBlockBefore:beforeFinalBlock,finalizedBlockAfter:afterFinalBlock,
