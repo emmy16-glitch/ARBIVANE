@@ -23,7 +23,7 @@ test('stage37 builds observed Pyth 3-action route for Sandbox only from vetted p
  assert.equal(p.actions[1].Liquidate.account_id,'example.near');
  assert.equal(p.actions[1].Liquidate.in_assets[0].amount,'100000000000000000000');
  assert.equal(p.actions[2].Withdraw.amount,'110000000000000000000');
- assert.equal(p.depositYocto,'0');assert.equal(p.gasUnits,'300000000000000');
+ assert.equal(p.depositYocto,'1');assert.equal(p.gasUnits,'300000000000000');
  assert.equal(p.executionEnabled,false);assert.equal(p.mayBroadcastMainnet,false);
  assert.equal(p.realContractReplayVerified,false);
 });
