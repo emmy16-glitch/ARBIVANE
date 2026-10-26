@@ -48,7 +48,13 @@ export async function resolveStage124RheaCallbackReceipts({
     new Promise((_,reject)=>{timer=setTimeout(
      ()=>reject(Error('STAGE124_FINAL_RECEIPTS_TIMEOUT')),15000);}),
    ]);
-  }catch{
+  }catch(error){
+   // Stage154: preserve the actual Sandbox RPC/timeout reason in the audit.
+   // This does not change approval: a failed canonical read still fails closed.
+   report.finalReceiptQueryError={
+    name:String(error?.name??'Error').slice(0,80),
+    message:String(error?.message??'UNKNOWN_QUERY_FAILURE').slice(0,500)
+   };
    report.classification='FINAL_RECEIPT_QUERY_FAILED';
    await save();
    throw Error('STAGE124_FINAL_RECEIPT_QUERY_FAILED');

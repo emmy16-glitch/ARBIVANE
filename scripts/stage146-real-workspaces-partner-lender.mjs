@@ -330,6 +330,31 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
      if(!retry||!['STAGE124_FINAL_RECEIPT_QUERY_FAILED',
       'STAGE124_CANONICAL_CALLBACK_RECEIPTS_MISSING'].includes(code)||
       attempt===4)break;
+     // Stage154: nearcore Sandbox may stall FINAL even after successful
+     // Rhea callbacks. Advance ONLY local finalized blocks, then re-query
+     // the SAME signed hash. Never re-broadcast a contract action.
+     if(typeof worker.provider.block==='function'&&
+        typeof worker.provider.fastForward==='function'){
+      try{
+       const before=await worker.provider.block({finality:'final'});
+       const h=before?.header?.height;
+       if(!Number.isSafeInteger(h)||h<1||h>Number.MAX_SAFE_INTEGER-64)
+        throw Error('STAGE154_BAD_SANDBOX_FINAL_BLOCK_HEIGHT');
+       await worker.provider.fastForward(h+64);
+       const after=await worker.provider.block({finality:'final'});
+       const later=after?.header?.height;
+       if(!Number.isSafeInteger(later)||later<h)
+        throw Error('STAGE154_INVALID_FINALITY_ADVANCE');
+       log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCED',
+        originalTransactionHash:receiptHash,beforeFinalBlock:h,
+        requestedBlock:h+64,observedFinalBlock:later,
+        enoughFinalityProgress:later>=h+2});
+      }catch(recoveryError){
+       log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCE_FAILED',
+        originalTransactionHash:receiptHash,
+        error:String(recoveryError?.message??'UNKNOWN').slice(0,240)});
+      }
+     }
      await new Promise(r=>setTimeout(r,1500));
     }
    }
