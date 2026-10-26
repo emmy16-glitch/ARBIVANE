@@ -24,6 +24,7 @@ import {readStage50PinnedRepayReserve} from './stage50-pinned-ft-reserve.mjs';
 import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from './stage51-active-pyth-sandbox-parity.mjs';
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
+import {prefundStage124RheaSupply} from './stage124-rhea-supply-prefund.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
@@ -357,6 +358,14 @@ async function main(){
   throw Error('STAGE49_'+borrowCapacity.status);
  if(!boundedCapacity.actorCoveredByConservativeReference)
   throw Error('STAGE52_ACTOR_REFERENCE_COLLATERAL_INSUFFICIENT');
+ // Actual Borrow sends LiNEAR FT to the actor; it does not create Rhea
+ // 'supplied' balance for Liquidate. Complete and attest a signed local
+ // Borrow -> FT transfer to lending before the settlement transaction.
+ const supplyPrefund=await prefundStage124RheaSupply({
+  actor,lending,repayToken,plan,repayReserve,provider:worker.provider,
+ });
+ await writeFile('stage124-rhea-supplied-prefund.json',
+  JSON.stringify(supplyPrefund,null,2)+'\n');
  const snapshot=()=>Promise.all([
   lending.view('get_account_all_positions',{account_id:actor.accountId}),
   repayToken.view('ft_balance_of',{account_id:actor.accountId}),
@@ -372,7 +381,9 @@ async function main(){
  try{
   sandboxTransactionSubmitted=true;
   await recordStage55(stage55.transactionSubmitted());
-  raw=await actor.callRaw(lending,plan.method,{actions:plan.actions},{
+  // Borrow already settled in the separately attested prefinance receipt.
+  // Re-borrowing inside this call would double the actor's debt.
+  raw=await actor.callRaw(lending,plan.method,{actions:plan.actions.slice(1)},{
    gas:BigInt(plan.gasUnits),attachedDeposit:BigInt(plan.depositYocto),
   });
  }catch(error){
@@ -432,6 +443,7 @@ async function main(){
  await markStage55('SANDBOX_BALANCE_SETTLEMENT');
  const settlement=attestStage41SandboxSettlement({
   plan,positionId:proposal.positionId,receipt:verifiedReport,
+  prefinancing:supplyPrefund,
   borrowerBefore:sandboxBorrower,borrowerAfter:post.borrower,
   actorBefore,actorAfter:post.actor,
   actorRepayFtBefore:repayFtBefore,actorRepayFtAfter:post.repayFt,

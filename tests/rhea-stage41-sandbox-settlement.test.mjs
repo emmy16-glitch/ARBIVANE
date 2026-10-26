@@ -159,3 +159,54 @@ test('Stage71 validates real borrower debt and collateral deltas with same-token
   assert.throws(()=>attestStage41SandboxSettlement({...e,plan:bad}),/STAGE41_/);
  }
 });
+
+test('Stage124 financed same-token settlement requires two authentic local funding receipts and zero residual debt',()=>{
+ const p={...plan(),actions:[
+  {Borrow:{token_id:'usdt.near',amount:'20'}},
+  {Liquidate:{account_id:'account.near',
+   in_assets:[{token_id:'usdt.near',amount:'20'}],
+   out_assets:[{token_id:'usdt.near',amount:'30'}]}},
+  {Repay:{token_id:'usdt.near',amount:'20'}},
+  {Withdraw:{token_id:'usdt.near',amount:'10'}}
+ ]};
+ const positions=(debt,collateral)=>({positions:{REGULAR:{
+  borrowed:debt?[leg('usdt.near',debt)]:[],
+  collateral:collateral?[leg('usdt.near',collateral)]:[],
+ }}});
+ const funding={
+  mode:'STAGE124_AUTHENTIC_BORROW_TO_SUPPLIED_FT_PREFUND',chain:'NEAR_SANDBOX',
+  actorAccountId:'arbivane-replay.test.near',repayTokenId:'usdt.near',
+  borrowAmountInternal:'20',suppliedInternal:'20',
+  actorBorrowDebtAfterSupplyInternal:'20',priorActorBorrowDebtInternal:'0',
+  actualBorrowFtCredited:true,actualFtReturnedToSupply:true,
+  borrowFinalReceiptVerified:true,supplyFinalReceiptVerified:true,
+  borrowTransactionHash:'3'.repeat(43),supplyTransactionHash:'4'.repeat(43),
+  mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
+ };
+ const e={...input(),plan:p,
+  borrowerBefore:positions(100,200),borrowerAfter:positions(80,170),
+  actorBefore:{...actor(20),account_id:'arbivane-replay.test.near'},
+  actorAfter:actor(),
+  actorRepayFtBefore:'0',actorSeizeFtBefore:'0',
+  actorRepayFtAfter:'10',actorSeizeFtAfter:'10',
+  prefinancing:funding,
+ };
+ const ok=attestStage41SandboxSettlement(e);
+ assert.equal(ok.status,'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD');
+ assert.equal(ok.actorOutstandingDebtBeforeInternal,'20');
+ assert.equal(ok.actorOutstandingDebtAfterInternal,'0');
+ assert.equal(ok.positiveNetProfitVerified,false);
+ for(const tampered of [
+  undefined,{...funding,actualFtReturnedToSupply:false},
+  {...funding,borrowAmountInternal:'19'},
+  {...funding,actorBorrowDebtAfterSupplyInternal:'19'},
+  {...funding,borrowTransactionHash:funding.supplyTransactionHash},
+  {...funding,mainnetExecutionEnabled:true},
+  {...funding,priorActorBorrowDebtInternal:'2'},
+ ]){
+  const blocked=attestStage41SandboxSettlement({...e,prefinancing:tampered});
+  assert.equal(blocked.status,'BLOCKED_ACTOR_PRIOR_LIABILITY');
+ }
+ assert.equal(attestStage41SandboxSettlement({...e,actorAfter:actor(20)}).status,
+  'BLOCKED_ACTOR_HAS_LIABILITY');
+});
