@@ -355,7 +355,7 @@ async function main(){
  await markStage55('SANDBOX_BORROW_CAPACITY');
  const boundedCapacity=await attestStage52BorrowCollateralCapacity({
   rpc,contracts,plan,proposal,actorPositions:actorPositionsForFunding,
-  pinnedAssets:assets.value,blockHeight:block,
+  pinnedAssets:assets.value,shareProofAssets:liveSandboxAssets,blockHeight:block,
  });
  await writeFile('stage52-actor-borrow-capacity.json',
   JSON.stringify(boundedCapacity,null,2)+'\n');
