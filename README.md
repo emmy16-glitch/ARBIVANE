@@ -40,13 +40,17 @@ The [complete Stage153 financing diagnosis and scale gate](docs/STAGE153_SCALED_
 
 ## Stage157 — genuinely larger source liquidation search (Sandbox only)
 
-The next experiment screens **new independently attested Rhea borrowers** rather than inflating the loan size against the historically tiny source liquidation. [Stage157](docs/STAGE157_LARGE_SOURCE_LIQUIDATION.md) queries fresh Rhea/Pyth source positions for 320 archived debt-index accounts across four windows and requires **at least $1,000 reference repay value and $10 gross reference spread** before even attempting original-code local Sandbox replay. Passing the sizing gate is **not** evidence of realized net profit, flash liquidity, external lender agreement or actual final settlement. No eligible source means **no transaction**. A fresh source still requires proof of spendable liquidity, original FINAL callbacks and all outstanding financing debt closed to zero. Mainnet spending stays disabled.
+The next experiment screens **new independently attested Rhea borrowers** rather than inflating the loan size against the historically tiny source liquidation. [Stage157](docs/STAGE157_LARGE_SOURCE_LIQUIDATION.md) queries fresh Rhea/Pyth source positions for 320 archived debt-index accounts across four windows. **Stage160 removes the $1,000 repay, $10 gross and 10× prior-size hard minima:** any genuinely source-qualified *positive* amount can be researched in Sandbox. Operators may set optional amount filters, which default to zero. Passing the sizing gate is **not** evidence of realized net profit, flash liquidity, external lender agreement or actual final settlement. No eligible source means **no transaction**. A fresh source still requires proof of spendable liquidity, original FINAL callbacks and all outstanding financing debt closed to zero. Mainnet spending stays disabled.
 
 ## Stage159 — choose executable LiNEAR liquidation sources first
 
 The Stage157/158 larger-borrower search now has an explicit **LiNEAR/LiNEAR-only proposal selection** for the proven local Sandbox execution lane. A higher-gross WNEAR or other unsupported source cannot eclipse a genuine LiNEAR candidate in the same fresh source batch. Unsupported candidates remain recorded in the source evidence as non-executable, not silently discarded. Source admission also requires Rhea-internal repayment at least **10× the prior source size**, a strictly positive same-token liquidation remainder and the unchanged **$1,000 repay / $10 reference-gross** minimums. See [Stage159 implementation and validation boundaries](docs/STAGE159_EXECUTABLE_LINEAR_SOURCE_PRIORITY.md).
 
 This only improves opportunity selection and stops invalid replays: **a larger funded, fully repaid liquidation has not yet been proven**, and an estimated spread is not actual financing-covered profit. Mainnet execution remains disabled.
+
+## Stage160 — any positive source-sized amount, no mandatory minimum
+
+[Stage160](docs/STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md) removes Stage159's arbitrarily fixed size floors in **both** Rhea borrower-discovery lanes. It also fixes the Stage157 regression workflow's Node TypeScript flag; the previous large workflow failed before any market scan. The original borrower, protocol risk rules, LiNEAR asset route, positive same-token remainder, FINAL callback/FT receipts, principal and financing-interest repayment and zero remaining debt still govern real Sandbox success. You cannot select an unsupported loan amount by overriding the source's real debt. **No mainnet signing, wallet spending or payouts.**
 
 ## What works today
 
