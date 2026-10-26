@@ -72,7 +72,9 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   mainnetSourceBlockHeight:e.blockHeight,borrowerAccountId:e.borrowerAccountId,
   lendingContract:'contract.main.burrow.near',method:'execute_with_pyth',
   actions,
-  // Deployed Rhea execute_with_pyth asserts exactly one yoctoNEAR. This is\n  // paid by the disposable Sandbox signer, never a mainnet wallet.\n  depositYocto:'1',gasUnits:'300000000000000',
+  // Deployed Rhea execute_with_pyth asserts exactly one yoctoNEAR. This is
+  // paid by the disposable Sandbox signer, never a mainnet wallet.
+  depositYocto:'1',gasUnits:'300000000000000',
   sourceCodeHash:e.lendingCodeHash,sourceOracleHash:e.pythOracleCodeHash,
   sourceMathOnly:true,realContractReplayVerified:false,fullImportedStateVerified:false,
   realWalletAuthorized:false,executionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false};
