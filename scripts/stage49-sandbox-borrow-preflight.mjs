@@ -55,7 +55,7 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
   !attestStage125ActorBorrowCushion(plan,rawQty,liquidation.in_assets[0]?.amount,
-   liquidation.out_assets[0]?.amount)||
+   liquidation.out_assets[0]?.amount,same)||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
