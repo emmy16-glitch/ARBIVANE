@@ -1,10 +1,20 @@
 # Stage150 — Large-capital genuine local Rhea financing experiment
 
-Status: **implemented, pending real GitHub Actions NEAR Workspaces original receipt proof**.
+Status: **10 whole LiNEAR genuine funded local Sandbox transaction cycle verified** in [run #40353279895](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40353279895). The 100-LiNEAR tier remains unverified.
 
 Target: **10 entire test LiNEAR** of financing, equivalent to `10000000000000000000000000` NEP-141 atomic LiNEAR units (24 decimals), backed by **1,000 entire disposable test NEAR** of the funding partner's own wrapped NEAR collateral. An opt-in 100 LiNEAR ceiling exists for a subsequent larger stress test, **not yet demonstrated or approved for mainnet**.
 
 Why this is larger: Stage148's original fully repaid experiment moved **1858490264605800 atomic LiNEAR**, or approximately 0.00000000185849 LiNEAR. The Stage150 target moves roughly 5.38 **billion times more actual test token principal** through cloned Rhea and NEP-141 contracts. The local partner's collateral is also increased from 1 to 1,000 disposable test NEAR. This increases financing scale but **does not increase the historical liquidatable amount** of original borrower 2579.
+
+## VERIFIED Stage150 genuine large-principal NEAR Sandbox — 26 October 2026
+
+- [GitHub run #40353279895](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40353279895) **passed both jobs**, including its real local NEAR Workspaces execution job. [Original artifact #12664208267](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40353279895/artifacts/12664208267) was independently downloaded and its full `stage150-large-funding-preflight.json`, `stage146-actual-partner-evidence.json`, `stage115-historical-clock.json` and `stage146-process-result.json` inspected.
+- The separately owned **disposable Sandbox partner** wrapped/deposited **1000 test NEAR** in real cloned Rhea. Rhea Borrow/Withdraw actually issued **9999999999999999999999999 atomic LiNEAR** (one atomic unit less than ten whole LiNEAR), with original finalized transaction `Bxe9q7d7PBPCYgAgzqi8LLatGDPC8zUcbYwo9CQvqt3F`. Partner-to-liquidator `ft_transfer` actually delivered all **9999999999999999999999999** atomic LiNEAR in `9PSuhcFX3qTfhF5PC2YZwXyFztrcxMhQ8sWbFoNfpbjZ`. Liquidator deposited the same amount into Rhea and obtained **9997989183417219490673517** genuine supplied shares.
+- Genuine source-capped Rhea `Liquidate` ran as original signed transaction `C6VVu5miaYbBw8fA2HHQ4SjDRPAFiDLKeHHspgj5j8sz`, decreasing the imported borrower's debt by **1848889647386387 shares** and collateral by **1860647237424468 shares**. The borrower opportunity was NEVER magnified to fake an economic return.
+- Real Rhea `Withdraw` `BEVT5mJajtzeCciXNX5F7bP6sFg7aeMHe5FcrR5Ndnjk` recovered **9999999998141509750951193 atomic LiNEAR** of unused large supplied funding; final actor supplied shares were zero.
+- Liquidator repaid the partner exactly **9999999999999999999999999** atomic LiNEAR in `AtFX4ea6B9DUopBHF6Tz879bmRd1mJBVyEQu8LT343id`. Partner original Rhea `Repay` `4m6SkFBemXfVs5XhuP9APJTFGD2ufVopPiLKJDp2w6Yo` left a real **1900856398807-share / 1910726860628-atomic** accrued debt, subsequently cleared via a genuine additional **1910726860660 atomic LiNEAR** from actor proceeds. FINAL partner borrowed shares: **0**. Remaining actor wallet: **620478795205 atomic LiNEAR** (~0.000000000000620479 LiNEAR).
+- Genuine execution succeeds at 10 test LiNEAR, ~5.38 BILLION times more funding principal than Stage148. The **100 test LiNEAR** tier is selectable but has NOT been executed and is likely uneconomic for this extremely small historical borrower because interest scales with funding while liquidation proceeds do not. Do NOT call it verified or commercially profitable.
+- **Historical Sandbox timing is artificially compressed 20×** and original Pyth quotes/contracts are unchanged; `stage115-historical-clock.json` confirms `clockRate:0.05`, `timingPerformanceOnRealMainnetNotProven:true`, `mainnetExecutionEnabled:false`. This is local test liquidity, NOT a live lender, mainnet profit or withdrawable assets. The partner's deposited wNEAR collateral withdrawal was not part of this specific acceptance.
 
 The finance mechanics are real **in a local nearcore Sandbox**:
 1. Create a local disposable partner with extra Sandbox balance.
