@@ -67,10 +67,14 @@ export async function stage124FinalizeSandboxTransaction(raw,provider,actorId,la
 /** Preserve exact observation of genuine local Borrow before any further
  * transaction. A deficit is evidence, not authorization to change funding.
  */
-export function stage127ObservedBorrowFunding({requiredInternal,actualDebt,actualFt,hash}){
+export function stage127ObservedBorrowFunding({requiredInternal,actualDebt,actualFt,actualSupplied,hash}){
  const required=number(requiredInternal,'REQUIRED_REPAY_INTERNAL');
  const debt=number(actualDebt,'ACTOR_DEBT_INTERNAL');
  const ft=number(actualFt,'ACTOR_FT_ATOMIC');
+ // Internal Rhea supplied shares are NOT equivalent to external NEP-141 FT.
+ // Keep null for legacy callers rather than inventing an observed zero.
+ const supplied=actualSupplied===undefined?null:
+  number(actualSupplied,'ACTOR_SUPPLIED_INTERNAL');
  if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(hash??''))
   throw Error('STAGE127_MISSING_SIGNED_BORROW_HASH');
  return {
@@ -79,6 +83,11 @@ export function stage127ObservedBorrowFunding({requiredInternal,actualDebt,actua
   requiredInternal:required.toString(),
   actualActorDebtInternal:debt.toString(),
   actualActorFtAtomic:ft.toString(),
+  actualActorSuppliedInternal:supplied===null?null:supplied.toString(),
+  suppliedAtLeastRequired:supplied===null?null:supplied>=required,
+  observedHoldingType:ft>=required?'EXTERNAL_FT_PRESENT':
+   supplied!==null&&supplied>0n?'INTERNAL_RHEA_SUPPLY_ONLY_OR_PARTIAL':
+   'EXTERNAL_FT_NOT_PROVEN',
   debtShortfallInternal:(required>debt?required-debt:0n).toString(),
   ftShortfallAtomic:(required>ft?required-ft:0n).toString(),
   debtAtLeastRequired:debt>=required,ftAtLeastRequired:ft>=required,
@@ -130,6 +139,7 @@ export async function prefundStage124RheaSupply({
   requiredInternal:amount.toString(),
   actualDebt:borrowedDebt.toString(),
   actualFt:borrowFt,
+  actualSupplied:supply(borrowState,tokenId).toString(),
   hash:borrowFinal.transaction?.hash,
  });
  // Persist real post-Borrow state even when no funded Liquidate is allowed.
