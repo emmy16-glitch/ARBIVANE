@@ -312,8 +312,37 @@ async function main(){
  // Stage51 checks source-pinned quote/ratio parity for the selected route.
  // Stage164 additionally checks ALL other deployed derived-price contracts
  // Rhea may call while valuing unrelated borrower collateral on callback.
+ // Stage166: original Rhea/Pyth pricing view proofs must use archival RPCs
+ // at the SAME original block. The regular head RPC can be rate-limited or
+ // prune historical state after a 62,971-key Meta Pool import. Failover is
+ // allowed ONLY on a transient read error, never price disagreement or panic.
+ const archivePrimary=e.STAGE45_ARCHIVAL_FALLBACK_URL||
+  'https://archival-rpc.mainnet.fastnear.com';
+ const archiveSecondary=archivePrimary==='https://archival-rpc.mainnet.fastnear.com'?
+  'https://archival-rpc.mainnet.near.org':
+  'https://archival-rpc.mainnet.fastnear.com';
+ const archiveOptions={maxRetries:2,initialDelayMs:600,maxDelayMs:5000,
+  maxCachedPinnedViews:24};
+ const stage166Primary=new ResilientNearReadOnlyRpc(
+  new NearReadOnlyRpc(archivePrimary),archiveOptions);
+ const stage166Fallback=new ResilientNearReadOnlyRpc(
+  new NearReadOnlyRpc(archiveSecondary),archiveOptions);
+ const pricingReadDiagnostics=[];
+ const onDiagnostic=async entry=>{
+  pricingReadDiagnostics.push(entry);
+  // Credential-free original record; no RPC URLs, raw errors, or prices.
+  await writeFile('stage166-pinned-pricing-read-diagnostics.json',JSON.stringify({
+   mode:'STAGE166_PINNED_DERIVED_PRICE_READ_DIAGNOSTICS',
+   chain:'NEAR_SANDBOX',sourceBlockHeight:String(block),
+   observations:pricingReadDiagnostics,realMainnetExecuted:false,
+   mainnetExecutionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
+   actualRheaSettlementVerified:false,
+  },null,2)+'\\n',{mode:0o600});
+ };
  const derivedParity=await attestStage164PricingClosure({
-  rpc,contracts,blockHeight:block,dependencies:priceClosure.dependencies,
+  rpc:stage166Primary,fallbackRpc:stage166Fallback,
+  contracts,blockHeight:block,dependencies:priceClosure.dependencies,
+  onDiagnostic,
  });
  await writeFile('stage164-derived-price-parity.json',
   JSON.stringify(derivedParity,null,2)+'\n');
