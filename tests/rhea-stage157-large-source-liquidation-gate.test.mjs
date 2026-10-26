@@ -68,6 +68,20 @@ test('Stage158 rejects even large source gross when deployed NEP141 route is uns
  assert.equal(v.actualMainnetLoan,false);
  assert.equal(v.mayBroadcastMainnet,false);
 });
+test('Stage159 rejects fake large-dollar proposals without 10x internal Rhea repayment or a positive remainder',()=>{
+ const tooSmall=fixture({repay:2000n,gross:50n});
+ tooSmall.bestProposal.repay.amountLendingInternalAtomic='1000000000000000';
+ let result=gate(tooSmall);
+ assert.equal(result.canAttemptSandbox,false);
+ assert.ok(result.blockers.includes('STAGE159_LIQUIDATION_REPAY_NOT_TEN_TIMES_PREVIOUS_SOURCE'));
+ const noRemainder=fixture({repay:2000n,gross:50n});
+ noRemainder.bestProposal.seize.amountLendingInternalAtomic=
+  noRemainder.bestProposal.repay.amountLendingInternalAtomic;
+ result=gate(noRemainder);
+ assert.equal(result.canAttemptSandbox,false);
+ assert.ok(result.blockers.includes('STAGE159_NONPOSITIVE_INTERNAL_SAME_TOKEN_SPREAD'));
+ assert.equal(result.mayBroadcastMainnet,false);
+});
 test('Stage157 hard minimums cannot be weakened by configuration',()=>{
  assert.throws(()=>gate(fixture(),{minRepayUsdE27:(999n*E).toString()}),
   /MINIMUMS_CANNOT_BE_WEAKENED/);
