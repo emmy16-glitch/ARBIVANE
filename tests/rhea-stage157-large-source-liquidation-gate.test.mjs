@@ -48,7 +48,7 @@ test('Stage157 rejects unsigned/adulterated/stale reference matches',()=>{
   v=>{v.bestProposal.borrowerAccountId='wrong.near';},
   v=>{v.bestProposal.blockHeight='221600112';},
   v=>{v.bestProposal.referenceRulesPass=false;},
-  v=>{v.bestProposal.repay.tokenId='linear-protocol.near';},
+  v=>{v.bestProposal.repay.tokenId='wrap.near';},
   v=>{v.bestProposal.repay.fundsAvailabilityVerified=true;},
   v=>{v.bestProposal.gasAndSwapNetProfitVerified=true;},
   v=>{v.bestProposal.paperGrossUsdE27='1.5';},
