@@ -60,7 +60,7 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
    plan.actions[2].Repay.amount!==rawQty||
-   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(rawQty)!==BigInt(withdraw.amount??'0')):
+   BigInt(liquidation.out_assets[0].amount??'0')-BigInt(liquidation.in_assets[0].amount??'0')!==BigInt(withdraw.amount??'0')):
    plan.actions.length!==3)||
   liquidation.account_id!==plan.borrowerAccountId)
   throw Error('STAGE49_PLAN_REPAY_ROUTE_MISMATCH');
