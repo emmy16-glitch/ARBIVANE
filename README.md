@@ -10,7 +10,7 @@ ARBIVANE studies lending positions on NEAR, identifies candidate liquidations, c
 
 The owner has **no starting capital**. ARBIVANE is investigating genuine native NEAR flash liquidity or another independently verifiable, zero-collateral financing route. The successful Rhea Sandbox transaction was **not** a flash loan: it deposited **1 NEAR of disposable Sandbox wNEAR collateral** before Rhea `Borrow`. That was not the owner's money, but it would be a real capital requirement on mainnet.
 
-Stage139 now audits the original successful funding receipts and refuses to mark collateral-backed borrowing as uncollateralized financing. The project has **not yet independently verified a live LiNEAR flash lender**, its safe asynchronous repayment model, or a gas sponsor. **Do not fund your wallet or enable mainnet signing to solve an unverified financing route.** See [Stage139 financing investigation](docs/STAGE139_FLASH_LIQUIDITY_FINANCING.md).
+Stage139 now audits the original successful funding receipts and refuses to mark collateral-backed borrowing as uncollateralized financing. The project has **not yet independently verified a live LiNEAR flash lender**, its safe asynchronous repayment model, or a gas sponsor. **Do not fund your wallet or enable mainnet signing to solve an unverified financing route.** See [Stage139 financing investigation](docs/STAGE139_FLASH_LIQUIDITY_FINANCING.md) and [Stage140 deployed provider discovery](docs/STAGE140_NATIVE_PROVIDER_DISCOVERY.md). Stage140 can inspect Rhea and Ref **deployed NEAR Wasm exports** through read-only RPC, but no compatible LiNEAR flash lender is verified or connected for trade execution.
 
 ## What works today
 
