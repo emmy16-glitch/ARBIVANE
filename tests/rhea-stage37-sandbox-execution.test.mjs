@@ -162,7 +162,8 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.deepEqual(p.actions.map(a=>Object.keys(a)[0]),
   ['Borrow','Liquidate','Repay','Withdraw']);
  assert.equal(p.actions[2].Repay.token_id,'wrap.near');
- assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+ assert.deepEqual(p.actions[2].Repay,{token_id:'wrap.near'});
+ assert.ok(BigInt(p.actions[0].Borrow.amount)>0n);
  assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
  assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
  assert.equal(p.actions[3].Withdraw.amount,undefined);
