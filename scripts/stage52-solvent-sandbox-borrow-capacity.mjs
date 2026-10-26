@@ -79,7 +79,7 @@ export async function attestStage52BorrowCollateralCapacity({
   proposal.blockHeight!==String(blockHeight)||
   !ID.test(plan.actions?.[0]?.Borrow?.token_id)||
   proposal.repay?.tokenId!==plan.actions[0].Borrow.token_id||
-  proposal.repay?.amountLendingInternalAtomic!==plan.actions[0].Borrow.amount)
+  proposal.repay?.amountLendingInternalAtomic!==plan.actions[1]?.Liquidate?.in_assets?.[0]?.amount)
   throw Error('STAGE52_UNTRUSTED_SOURCE_SIZED_SANDBOX_ROUTE');
  const lender=contracts.get(plan.lendingContract);
  const oracle=contracts.get('aggregate-oracle.near');
@@ -147,7 +147,18 @@ export async function attestStage52BorrowCollateralCapacity({
  const collateralUsd=sourceFromBalancePrice(units,price.multiplier,
   price.decimals,extra);
  const adjustedCollateral=sourceMulRatio(collateralUsd,wRatio);
- const rawDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ // Compute collateral sufficiency for the FULL funding borrow, including
+ // the exact local 10-ppm rounding reserve; never size it from the smaller
+ // liquidation input or dilute the required 12500-bps safety buffer.
+ const liquidationUnits=positive(proposal.repay.amountLendingInternalAtomic,
+  'SOURCE_LIQUIDATION_REPAY');
+ const borrowedUnits=positive(plan.actions[0].Borrow.amount,'SANDBOX_FULL_BORROW');
+ const same=proposal.repay.tokenId===proposal.seize?.tokenId;
+ const cushion=same?(liquidationUnits+99999n)/100000n:0n;
+ if(borrowedUnits!==liquidationUnits+cushion)
+  throw Error('STAGE52_UNBOUNDED_BORROW_CUSHION');
+ const sourceDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ const rawDebtUsd=(sourceDebtUsd*borrowedUnits+liquidationUnits-1n)/liquidationUnits;
  const adjustedBorrow=sourceDivRatio(rawDebtUsd,dRatio);
  // Conservative headroom for intermediate Borrow before liquidation
  // (25% extra adjusted collateral), not a deployed contract guarantee.
