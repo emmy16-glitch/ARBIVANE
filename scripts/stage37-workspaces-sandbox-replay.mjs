@@ -328,6 +328,7 @@ async function main(){
  await recordStage55(stage55.fundingAttempted());
  const collateralFunding=await seedSandboxLiquidatorWithWrappedNear({
   actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
+  provider:worker.provider,evidencePath:'stage49-wnear-transfer-receipt.json',
  });
  const actorPositionsForFunding=await lending.view('get_account_all_positions',{
   account_id:actor.accountId,
