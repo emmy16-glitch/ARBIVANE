@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {seedSandboxLiquidatorWithWrappedNear,wrappedNearCollateralShares,settleFundingTransferReceipt} from '../scripts/stage49-sandbox-wrap-funding.mjs';
 const NEAR='1000000000000000000000000';
 const receipt=()=>({result:{
@@ -172,4 +175,28 @@ test('Stage121 never accepts unresolved status even if the provider returns an i
   raw,provider:{txStatus:async()=>raw.result},
   actorAccountId:'arbivane-replay.test.near',
  }),/STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT/);
+});
+
+
+test('Stage123 persists valid JSON for finalized genuine FT transfer without inventing a settlement',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'arbivane-stage123-'));
+ try{
+  const path=join(directory,'funding.json');
+  const raw={result:{
+   final_execution_status:'FINAL',
+   transaction:{hash:'9g8AG4BvikeX5faApR9J7WJ8KS5EwRFmoUzANkMX2h5R'},
+   status:{SuccessValue:''},
+   receipts_outcome:[{outcome:{status:{SuccessValue:''}}}],
+  }};
+  await settleFundingTransferReceipt({
+   raw,actorAccountId:'arbivane-replay.test.near',evidencePath:path,
+  });
+  const body=await readFile(path,'utf8');
+  assert.ok(body.endsWith('\n'));
+  const data=JSON.parse(body);
+  assert.equal(data.mode,'STAGE121_GENUINE_SANDBOX_WNEAR_TRANSFER_RECEIPTS');
+  assert.equal(data.classification,'FINAL_STATUS_OBSERVED');
+  assert.equal(data.actualLiquidationAttempted,false);
+  assert.equal(data.mainnetExecutionEnabled,false);
+ }finally{await rm(directory,{recursive:true,force:true});}
 });
