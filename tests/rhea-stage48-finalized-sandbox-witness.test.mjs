@@ -17,10 +17,12 @@ const raw=(status='EXECUTED_OPTIMISTIC',failed=false)=>({
 });
 const inspected={pinnedConfigMatches:true,pinnedBorrowerMatches:true,
  importedContractCount:5,allStoredKeysAttested:false};
-const before={borrower:{positions:{REGULAR:{borrowed:[{balance:'100'}]}}},
- actor:{positions:{}},repayFt:'0',seizeFt:'0'};
-const after={borrower:{positions:{REGULAR:{borrowed:[{balance:'80'}]}}},
- actor:{positions:{}},repayFt:'0',seizeFt:'30'};
+const before={borrower:{account_id:'borrower.near',supplied:[],positions:{REGULAR:{
+ borrowed:[{token_id:'linear-protocol.near',balance:'100',shares:'100'}],collateral:[]}}},
+ actor:{account_id:'actor.test.near',supplied:[],positions:{}},repayFt:'0',seizeFt:'0'};
+const after={borrower:{account_id:'borrower.near',supplied:[],positions:{REGULAR:{
+ borrowed:[{token_id:'linear-protocol.near',balance:'80',shares:'80'}],collateral:[]}}},
+ actor:{account_id:'actor.test.near',supplied:[],positions:{}},repayFt:'0',seizeFt:'30'};
 function args(receipt=summarizeStage37SandboxOutcome(raw(),inspected)){
  return {receipt,before,immediatelyAfter:after,afterFinalBlock:after,
   finalizedBlockBefore:8,finalizedBlockAfter:10008};
