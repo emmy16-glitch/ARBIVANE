@@ -126,20 +126,55 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
  };
  const snapshot=accountId=>lending.view('get_account_all_positions',{account_id:accountId});
  const ft=accountId=>token.view('ft_balance_of',{account_id:accountId});
+ // The NEAR Workspaces SDK can return EXECUTED with SuccessReceiptId
+ // although later promise callbacks settle successfully. DO NOT reject that
+ // pre-final response or claim it proves lending. Resolve original FINAL
+ // receipts before calling rawReceipt or observing any token credit.
+ const finalFtReceipt=async(raw,signerAccountId,method)=>{
+  const v=raw?.result??raw;
+  const hash=v?.transaction?.hash;
+  if(typeof hash!=='string'||!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(hash)||
+     v?.transaction?.signer_id!==signerAccountId)
+   throw Error('STAGE146_'+method.toUpperCase()+'_BAD_SIGNED_LOCAL_TRANSACTION');
+  let final=v;
+  if(v.final_execution_status!=='FINAL'||!Array.isArray(v.receipts)||
+      v.receipts.length===0){
+   if(typeof worker.provider.txStatusReceipts!=='function')
+    throw Error('STAGE146_LOCAL_FINAL_FT_RECEIPT_PROVIDER_UNAVAILABLE');
+   let timer;
+   try{
+    final=await Promise.race([
+     worker.provider.txStatusReceipts(hash,signerAccountId,'FINAL'),
+     new Promise((_,reject)=>{timer=setTimeout(
+      ()=>reject(Error('STAGE146_FINAL_FT_RECEIPT_QUERY_TIMEOUT')),15000);})
+    ]);
+   }finally{clearTimeout(timer);}
+  }
+  if(final?.final_execution_status!=='FINAL'||
+     final?.transaction?.hash!==hash||
+     final?.transaction?.signer_id!==signerAccountId||
+     !Array.isArray(final.receipts)||final.receipts.length===0||
+     !Array.isArray(final.receipts_outcome)||
+     !v.receipts_outcome.every(x=>
+      final.receipts_outcome.some(y=>y.id===x.id)))
+   throw Error('STAGE146_'+method.toUpperCase()+'_INCOMPLETE_FINAL_FT_RECEIPTS');
+  return {result:final};
+ };
  const call=async(signer,contract,method,args,deposit=1n,gas=MAX_GAS)=>{
   const raw=await signer.callRaw(contract,method,args,{gas,attachedDeposit:deposit});
-  const evidence=rawReceipt(raw,method.toUpperCase());
-  // For Rhea execute_with_pyth, the Stage124 resolver fetches the original
-  // full Rhea callback receipt from local Sandbox; no top-level-only success.
   if(method==='execute_with_pyth'){
+   // This existing Stage124 resolver independently checks the original signed
+   // transaction identity, callback receipt inclusion, finality and failures.
    const final=await resolveStage124RheaCallbackReceipts({
     raw,provider:worker.provider,signerAccountId:signer.accountId,
     evidencePath:null,writeFile
    });
-   return {...evidence,finalStatus:rawReceipt(final,'RHEA_PYTH_CALLBACK'),
-    actualFinalReceipt:final};
+   return {...rawReceipt(final,'RHEA_PYTH_CALLBACK'),
+    finalCallbackReceiptsVerified:true};
   }
-  return evidence;
+  const final=await finalFtReceipt(raw,signer.accountId,method);
+  return {...rawReceipt(final,method.toUpperCase()),
+   finalFtReceiptsVerified:true};
  };
  try{
   const liquidator=await guard('FRESH_ZERO_COLLATERAL_LIQUIDATOR',async()=>{
