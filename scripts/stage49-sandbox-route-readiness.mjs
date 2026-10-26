@@ -1,3 +1,4 @@
+import {attestStage125ActorBorrowCushion} from '../src/rhea/stage125-route-margin.ts';
 /** Stage49 — inspect pinned Rhea asset permissions and register ONLY a fresh
  * disposable NEAR Sandbox actor. Read-only mainnet inspection; no mainnet tx.
  * NEP-145: query storage_balance_bounds / storage_balance_of, then storage_deposit.
@@ -62,9 +63,9 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
  const selfRepayUnits=same?u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
  if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
-  borrowedUnits!==repaidUnits||
-  (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=borrowedUnits||
-    withdrawnUnits!==seizedUnits-borrowedUnits):seizedUnits!==withdrawnUnits))
+  !attestStage125ActorBorrowCushion(plan,borrowedUnits.toString(),repaidUnits.toString(),seizedUnits.toString())||
+  (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=repaidUnits||
+    withdrawnUnits!==seizedUnits-repaidUnits):seizedUnits!==withdrawnUnits))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
  const market=assetMap(assets);
  const debt=market.get(repay),collateral=market.get(seize);
