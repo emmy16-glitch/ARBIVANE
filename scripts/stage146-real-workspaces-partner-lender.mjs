@@ -1,6 +1,7 @@
 import {writeFile} from 'node:fs/promises';
 import {registerStage49SandboxActor} from './stage49-sandbox-route-readiness.mjs';
 import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
+import {stage134AdvanceFinalizedSandbox} from './stage134-finality-fallback.mjs';
 
 /** Stage146: preserve EXACT observed deployed Rhea enum ABI.
  * The inner `Liquidate` parameters ARE NOT a standalone action; the deployed
@@ -330,27 +331,21 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
      if(!retry||!['STAGE124_FINAL_RECEIPT_QUERY_FAILED',
       'STAGE124_CANONICAL_CALLBACK_RECEIPTS_MISSING'].includes(code)||
       attempt===4)break;
-     // Stage154: nearcore Sandbox may stall FINAL even after successful
-     // Rhea callbacks. Advance ONLY local finalized blocks, then re-query
-     // the SAME signed hash. Never re-broadcast a contract action.
+     // Stage155: Stage154 proved a +64 request can leave local FINAL
+     // motionless (observed 74 -> 74). Use the existing Stage134 Sandbox
+     // fallback: 64 first, 10000 only after independently observing a stall.
+     // Never rebroadcast the original signed Borrow/Withdraw transaction.
      if(typeof worker.provider.block==='function'&&
         typeof worker.provider.fastForward==='function'){
       try{
        const before=await worker.provider.block({finality:'final'});
-       const h=before?.header?.height;
-       if(!Number.isSafeInteger(h)||h<1||h>Number.MAX_SAFE_INTEGER-64)
-        throw Error('STAGE154_BAD_SANDBOX_FINAL_BLOCK_HEIGHT');
-       await worker.provider.fastForward(h+64);
-       const after=await worker.provider.block({finality:'final'});
-       const later=after?.header?.height;
-       if(!Number.isSafeInteger(later)||later<h)
-        throw Error('STAGE154_INVALID_FINALITY_ADVANCE');
-       log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCED',
-        originalTransactionHash:receiptHash,beforeFinalBlock:h,
-        requestedBlock:h+64,observedFinalBlock:later,
-        enoughFinalityProgress:later>=h+2});
+       const recovery=await stage134AdvanceFinalizedSandbox(worker.provider,before);
+       log.push({attempt,status:'STAGE155_SANDBOX_FINALITY_RECOVERED',
+        originalTransactionHash:receiptHash,...recovery.witness,
+        syntheticClockAndSourceBorrowerEconomicsUnchanged:true,
+        realProfitVerified:false});
       }catch(recoveryError){
-       log.push({attempt,status:'STAGE154_SANDBOX_FINALITY_ADVANCE_FAILED',
+       log.push({attempt,status:'STAGE155_SANDBOX_FINALITY_RECOVERY_FAILED',
         originalTransactionHash:receiptHash,
         error:String(recoveryError?.message??'UNKNOWN').slice(0,240)});
       }
