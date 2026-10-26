@@ -5,6 +5,14 @@
 
 # Stage 111 handoff
 
+## Stage125 real liquidation/repay completed internally, exact withdrawal reverted
+- Actual Stage93 run 40309174523 on main af1438df failed. Signed Sandbox transaction AHNDQopSVvAu2hHoL8TeeWsGjWoYJJ1kgqskikFJ32Kj; evidence artifact 12644181281. Genuine callback logs include `liquidate` and `repay` Rhea events. Final callback status is FAILED: `Not enough asset balance` after these events, i.e. exact surplus Withdraw not satisfiable. Entire atomic callback reverted, so NO borrower debt decrease / collateral decrease / FT seizure may be claimed.
+- Stage125 changes only same-token Withdraw to `max_amount` equal to the unchanged source-planned seized amount minus the temporary borrowing repayment. This permits Rhea's authentic share conversion to withdraw no more than available, rather than requiring exactly the idealized arithmetic surplus. No extra actor financing, fictional balances, relaxed oracle, fake token, price or borrower modification. All 1 yocto, Pyth and bounded temporal gates remain unchanged.
+- Stage49 (both route and actual actor funding preflight) and Stage41 settlement now require a single valid withdrawal amount mode, `max_amount` for same-token and exact `amount` for cross-token. They independently enforce upper cap <= source sized net surplus, full actor debt repayment, actual later-finalized callback, borrower debt/collateral decline and real seized FT balance increase. Tests cover dual fields, unsourced cap and exact-withdraw rejection.
+- Branch fix/stage125-bounded-withdraw checkpoint SHA 9eb7fe5. Next: open PR, inspect CI, merge ONLY if green, inspect automatically triggered Stage93 signed transaction and receipts. If callback receipts succeed but Workspaces omits receipt definitions, use strict Sandbox-only FINAL txStatusReceipts by same signed hash (dedicated separate patch on safe branch), never synthesize receipts. Mainnet spending/signing DISABLED; verified liquidation NONE.
+
+
+
 ## Stage123 consolidated settlement checkpoint
 - Main `ca7efd1` (PR #173, 1-yocto Rhea ABI) was merged concurrently after successful CI. Previous authentic Stage93 `40305687819` executed signed transaction `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe` with deposit 0; Rhea rejected it. No liquidation or seized FT was verified.
 - Branch `fix/stage123-consolidated-settlement` preserves concurrent Stage122 machine-readable result and native stdout independently, fixes malformed trailing receipt-evidence newline, includes parseability regression, and records Stage37 process JSON in workflow artifact. It also respects source-attested bounded temporal accrual without claiming exact borrower parity: Stage37 classifier requires exact pinned config and either matching borrower or independent Stage104 verified temporal witness. Malformed/forged temporal claims block.
