@@ -1,3 +1,12 @@
+## Stage141 LIVE on-chain six-contract outcome (26 October 2026)
+
+- PR [#215](https://github.com/emmy16-glitch/ARBIVANE/pull/215) merged at `60f14cc94e577f47838a32eaa6a23dc254713c88`; source and dedicated adversarial tests + repository safety/type CI all passed.
+- Actual mainnet read-only [Stage141 run #40334510592](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40334510592) completed both jobs successfully. Original artifact [12655597651](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40334510592/artifacts/12655597651) downloaded and independently inspected.
+- Six **genuine deployed WASM code hashes** verified with same-block finalized account/code reads: Rhea lending `6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa` @ 221697242; Ref AMM `25eNFdfK76NUEZn4cDgq1xQYKjxKCuzgXmPB3SHBRW4Y` @ 221697260; Ref DCL `8FYiayAinMQr5aTLmYuPYNReqeLeLmrz3ceUXgdsuHgE` @ 221697277; LiNEAR FT `5LiDVDd1gh7ofVNbiA9VXrWwkv2m8tw46jZqYeuoC3SG` @ 221697289; NEAR Intents `BtA1BEFNS619KkvXFsgcpQ21Tb5yMm32aaUkn7xNothk` @ 221697300; Intear DEX `5JUhDgnrWbBDcSqJtfivQX4XPXEjzm5reVMjs8A1GJvk` @ 221697320.
+- All six inspected compiled WASM binaries expose **zero matching standard flash loan method names**; on-chain LiNEAR `ft_metadata` at height 221697289 reports `spec=ft-1.0.0, symbol=LINEAR, name=LiNEAR, decimals=24`.
+- **Important:** This is a bounded negative finding about six named contract deployments and standard function names. It does NOT establish that no native NEAR flash-loan provider exists at all, nor validate any custom nonstandard ABI. Available LiNEAR token inventory would not automatically be lendable. **Zero true live loans, no mainnet funds, no signer permission, no owner payout.**
+- [Full table, code hashes, exact limitations](docs/STAGE141_LENDER_QUALIFICATION.md). NEXT: prepare a separated and well-attested external partner escrow versus flash-liquidity financing interface, then attempt independently verifiable **local-only** provider-funded Rhea execution once real external funding terms/protocol are available.
+
 ## Stage141 extended NEAR native lender discovery and admission — 26 October 2026
 
 - **Implemented in branch:** `scripts/stage141-near-lender-qualification.mjs`, CLI, adversarial tests and read-only GitHub Actions workflow. Extends independent deployed WASM SHA256/NEAR-finalized contract export inspection from the two Stage140 accounts to **six source-documented native contracts**: Rhea Lending, Ref AMM, Ref DCL, LiNEAR NEP141, NEAR Intents verifier and Intear DEX.
