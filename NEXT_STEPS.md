@@ -1,3 +1,11 @@
+## Stage148 actual remaining Rhea debt dust — local closure test
+
+Actual Workspaces [run #40345647795](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40345647795) and [artifact #12661771274](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40345647795/artifacts/12661771274) show genuine FINAL separate partner Borrow/Withdraw, partner→zero-collateral liquidator LiNEAR FT transfer, Rhea token supply, real source-borrower Rhea Liquidate→Withdraw, liquidator→partner principal FT return, and the original partner Rhea Repay. Actual borrower debt shares decreased 1848889647386442, collateral shares decreased 1860647237424468, and liquidator withdrew 1861021454704671 atomic LiNEAR; lender received all 1858490264605800 borrowed atomic tokens. **The partner's Rhea debt was NOT zero: 286 borrowed shares remained** after accrued interest and conversion rounding. Earlier income is unsold disposable Sandbox inventory, NOT spendable market profit.
+
+Stage148 now inspects the actual Rhea debt balance (not just shares) and permits at most three supplementary real Sandbox NEP141 transfers and Rhea repayments, financed entirely by bounded actor residual inventory, capped cumulatively at 100000 atomic LiNEAR and requiring every FINAL receipt. It blocks any unclosed debt, spoofed/missing balance, unsafe topup or empty actor residual. The result must pass another authentic Workspaces run before the full local cycle may be claimed complete.
+
+This historical test uses explicitly compressed local time and cannot establish actual mainnet oracle throughput, a real external lender or risk-free profitability.
+
 ## Stage147 historical oracle timing experiment
 
 Actual Stage146 run [40344009735](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735) failed at the Rhea Liquidate callback: Pyth publish_time too stale. The real local partner Borrow, FT transfer and liquidator supply all had finalized receipts.
