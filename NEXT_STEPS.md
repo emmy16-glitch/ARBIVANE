@@ -1,3 +1,9 @@
+## Stage147 historical oracle timing experiment
+
+Actual Stage146 run [40344009735](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735) failed at the Rhea Liquidate callback: Pyth publish_time too stale. The real local partner Borrow, FT transfer and liquidator supply all had finalized receipts.
+
+An explicitly opted-in local Sandbox clock now compresses historical post-import time to 1/20 speed only for the multi-step Stage146 trial. No price, contract bytecode, or oracle freshness configuration is altered. This enables a mechanical test against original genuine Rhea/Pyth WASM, but cannot establish realistic NEAR mainnet execution timing or current price validity. Mainnet signer and profit transfer remain blocked.
+
 ## Stage146 real on-chain financing reaches actual Rhea Liquidate ABI (26 October 2026)
 
 - True local [run #40342808946](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40342808946) used ORIGINAL signed FINAL receipts for separate partner Borrow/Withdraw, partner→zero-collateral liquidator LiNEAR FT, and full LiNEAR `ft_transfer_call` deposit to imported real Rhea. Source: [authentic artifact #12659183550](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40342808946/artifacts/12659183550).
