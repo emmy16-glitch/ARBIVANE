@@ -14,6 +14,7 @@ This page is the starting point for understanding ARBIVANE **as it exists now**,
 | Where do I create a wallet? Can this spend my NEAR? | [Wallet and mainnet](WALLET_AND_MAINNET.md) |
 | What are the serious security gaps? | [Security](SECURITY.md) |
 | What remains to be built next? | [Roadmap](ROADMAP.md) |
+| Can liquidation be done with no capital or a real flash loan? | [Stage139: funding-source verification](STAGE139_FLASH_LIQUIDITY_FINANCING.md) |
 | How do the new light-client and budget-checking prototypes work? | [Stage137 note](STAGE137_OUTCOME_MERKLE_AND_MAINNET_POLICY.md) |
 | What research and third-party code informed the design? | [Reuse](REUSE.md) |
 
