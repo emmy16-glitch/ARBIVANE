@@ -28,6 +28,7 @@ import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-b
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
+import {stage130FinalizeAtomicRheaReceipts} from './stage130-finalized-rhea-receipts.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -396,7 +397,16 @@ async function main(){
  const signedEvidence=signedSandboxEvidence(raw,{signerId:actor.accountId,
   receiverId:plan.lendingContract});
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
- const report=summarizeStage37SandboxOutcome(raw,{
+ // Do NOT count an EXECUTED/no-definition Workspaces response as callback
+ // proof. Query the very SAME signed transaction's FINAL receipt tree from
+ // this disposable Sandbox; all callback and balance gates stay mandatory.
+ const full=await stage130FinalizeAtomicRheaReceipts({
+  raw,provider:worker.provider,actorAccountId:actor.accountId,
+  lendingContractId:plan.lendingContract,network:'sandbox',
+ });
+ await writeFile('stage130-final-atomic-receipts.json',
+  JSON.stringify(full.result,null,2)+'\n');
+ const report=summarizeStage37SandboxOutcome(full,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   temporalAccrualVerified:temporalProof?.verified===true&&
    parityWitness.temporalAccrualVerified===true,
