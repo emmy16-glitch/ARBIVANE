@@ -84,3 +84,13 @@ test('Stage146 implements real local FT transfer, supply, liquidation, repay, de
  assert.match(workflow,/actualFlashLoan == false/);
  assert.doesNotMatch(impl,/\.sendMoney\(/);
 });
+
+test('Stage146 copied authentic Workspaces runner parses before any state import or wallet operation',async()=>{
+ const {spawnSync}=await import('node:child_process');
+ const {fileURLToPath}=await import('node:url');
+ const file=fileURLToPath(new URL('../scripts/stage146-real-funded-workspaces-runner.mjs',import.meta.url));
+ const head=(await readFile(file,'utf8')).slice(0,140);
+ assert.ok(head.startsWith('#!/usr/bin/env node\n'));
+ const run=spawnSync(process.execPath,['--check',file],{encoding:'utf8',timeout:10000});
+ assert.equal(run.status,0,run.stderr);
+});

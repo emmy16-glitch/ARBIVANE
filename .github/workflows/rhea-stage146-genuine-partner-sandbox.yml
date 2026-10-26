@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - run: node --test tests/rhea-stage146-local-partner-loan.test.mjs
+      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs
   genuine_ft_transfer_and_rhea_partner_funding:
     if: github.event_name != 'pull_request'
     needs: local_execution_contract_regressions
@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout --kill-after=10s 20m node --experimental-strip-types scripts/stage146-real-funded-workspaces-runner.mjs > stage146-workspaces-runner.log
+          timeout --kill-after=10s 20m node --experimental-strip-types scripts/stage146-real-funded-workspaces-runner.mjs > stage146-workspaces-runner.log 2> stage146-workspaces-stderr.log
           test -s stage146-actual-partner-evidence.json
           test -s stage146-process-result.json
           jq -e '
@@ -113,6 +113,7 @@ jobs:
             stage146-actual-partner-evidence.json
             stage146-process-result.json
             stage146-workspaces-runner.log
+            stage146-workspaces-stderr.log
             stage37-process-result.json
             stage38-positive-stage35-evidence.json
             stage49-sandbox-funding.json
