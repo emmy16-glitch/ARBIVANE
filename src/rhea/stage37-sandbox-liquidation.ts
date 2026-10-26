@@ -25,6 +25,7 @@ export interface SandboxReplayPlan {
  ];
  depositYocto:'1';gasUnits:'300000000000000';
  sourceCodeHash:string;sourceOracleHash:string;
+ sourceBackedBorrowCushionInternal?:string;
  sourceMathOnly:true;realContractReplayVerified:false;fullImportedStateVerified:false;
  realWalletAuthorized:false;executionEnabled:false;maySignMainnet:false;mayBroadcastMainnet:false;
 }
