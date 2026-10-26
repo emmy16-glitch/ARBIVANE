@@ -33,7 +33,7 @@ test('Stage129 obtains FINAL Rhea callback definitions from original LOCAL signe
  const r=await resolveStage124RheaCallbackReceipts({
   raw:initial(),signerAccountId:actor,
   provider:{txStatusReceipts:async(h,a,finality)=>{
-   assert.deepEqual([h,a,finality],[hash,actor,'FINAL');
+   assert.deepEqual([h,a,finality],[hash,actor,'FINAL']);
    return complete();
   }},
  });
