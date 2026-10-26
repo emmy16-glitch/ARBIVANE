@@ -28,6 +28,7 @@ import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-b
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
+import {stage130ResolveFinalRheaReceipts} from './stage130-final-rhea-receipts.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -396,7 +397,14 @@ async function main(){
  const signedEvidence=signedSandboxEvidence(raw,{signerId:actor.accountId,
   receiverId:plan.lendingContract});
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
- const report=summarizeStage37SandboxOutcome(raw,{
+ // Resolve the SAME signed local Sandbox transaction's complete canonical
+ // receipt definitions at FINAL, without re-sending or assuming callback success.
+ const canonical=await stage130ResolveFinalRheaReceipts({
+  raw,provider:worker.provider,signerAccountId:actor.accountId,
+  onFinalEvidence:async final=>writeFile('stage130-finalized-rhea-transaction.json',
+   JSON.stringify(final,null,2)+'\n'),
+ });
+ const report=summarizeStage37SandboxOutcome(canonical,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   temporalAccrualVerified:temporalProof?.verified===true&&
    parityWitness.temporalAccrualVerified===true,
