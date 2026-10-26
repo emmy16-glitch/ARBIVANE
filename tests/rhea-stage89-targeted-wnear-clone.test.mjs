@@ -79,6 +79,8 @@ test('Stage89 copies only actual pinned wNEAR state and Rhea vault, and verifies
  assert.equal(out.evidence.fullMarketImported,false);
  assert.equal(out.evidence.verifiedLiquidationReceipts,false);
  assert.equal(out.evidence.mainnetMutated,false);
+ assert.equal(out.evidence.wasmImportFallbackUsed,false);
+ assert.equal(out.evidence.wasmImportAttempts,1);
  assert.ok(!f.queries.includes(''));
  assert.deepEqual(f.imports,[{mainnetContract:'wrap.near',blockId:HEIGHT,withData:false}]);
  assert.deepEqual(f.rawPatches.map(x=>x.Data.data_key),[b64('STATE'),b64(acctKey(LENDER))]);
@@ -110,4 +112,66 @@ test('Stage89 one-borrower route keeps original real liquidation method, source 
  assert.ok(runner.indexOf("await cloneMonitor.finish()")<runner.indexOf('actor.callRaw(lending,plan.method'));
  assert.ok(queue.includes('ids.length<1||ids.length>6'));
  assert.ok(!runner.includes('broadcast_tx'));
+});
+
+test('Stage168 retries genuine SDK JSON-RPC -429 only using exact-block independently configured archive',async()=>{
+ const f=fixture(),original=f.args.root.importContract;
+ const old=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ const endpoints=[],options=[];
+ f.args.root.importContract=async input=>{
+  endpoints.push(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL);
+  options.push(input);
+  if(endpoints.length===1)throw Error('{"jsonrpc":"2.0","error":{"code":-429,"message":"Rate limits exceeded"}}');
+  return original(input);
+ };
+ try{
+  const out=await cloneStage89WrappedNear(f.args);
+  assert.deepEqual(endpoints,[old||f.args.endpoint,'https://archival-rpc.mainnet.near.org']);
+  assert.deepEqual(options,Array(2).fill(null).map(()=>({
+   mainnetContract:'wrap.near',blockId:HEIGHT,withData:false
+  })));
+  assert.equal(out.evidence.wasmImportAttempts,2);
+  assert.equal(out.evidence.wasmImportFallbackUsed,true);
+  assert.equal(out.evidence.originalDeployedWasmVerified,true);
+  assert.equal(out.evidence.mainnetMutated,false);
+  assert.equal(f.imports.length,1);
+ }finally{
+  assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,old);
+ }
+});
+test('Stage168 does not retry deterministic SDK import errors on alternate RPC or patch fake state',async()=>{
+ const f=fixture(),old=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let calls=0;
+ f.args.root.importContract=async()=>{calls++;throw Error('INVALID_CONTRACT_CODE_HASH');};
+ await assert.rejects(()=>cloneStage89WrappedNear(f.args),
+  /STAGE168_NONTRANSIENT_WNEAR_WASM_IMPORT_FAILED/);
+ assert.equal(calls,1);
+ assert.equal(f.rawPatches.length,0);
+ assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,old);
+});
+test('Stage168 exhausted rate-limited pinned code providers fail closed, retaining original metadata',async()=>{
+ const f=fixture(),old=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let attempts=0;
+ f.args.root.importContract=async()=>{attempts++;throw Error(
+  '{"jsonrpc":"2.0","error":{"code":-429,"message":"Rate limits exceeded"}}');};
+ await assert.rejects(()=>cloneStage89WrappedNear(f.args),
+  /STAGE168_PINNED_WNEAR_WASM_IMPORT_PROVIDERS_EXHAUSTED/);
+ assert.equal(attempts,2);
+ assert.equal(f.rawPatches.length,0);
+ assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,old);
+});
+test('Stage168 still refuses a wrong imported code hash after successful source fallback',async()=>{
+ const f=fixture(),old=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ let calls=0;
+ f.args.root.importContract=async()=> {
+  if(++calls===1)throw Error('NEAR RPC HTTP 429');
+  return {accountId:'wrap.near',patchStateRecords:async()=>{
+   throw Error('must never patch the wrong deployed code');
+  },accountView:async()=>({code_hash:'E'.repeat(43)}),view:async()=>null};
+ };
+ await assert.rejects(()=>cloneStage89WrappedNear(f.args),
+  /STAGE89_DEPLOYED_WNEAR_CODE_OR_LOCAL_PATCH_MISMATCH/);
+ assert.equal(f.rawPatches.length,0);
+ assert.equal(calls,2);
+ assert.equal(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL,old);
 });
