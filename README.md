@@ -16,6 +16,10 @@ Stage139 now audits the original successful funding receipts and refuses to mark
 
 Stage142 implements an **offline** flash-versus-partner financing intent. Stages143–145 add a strict simulated asynchronous repayment state machine, deterministic third-party capital accounting, an original signed Stage93 proof contrast and a fail-closed production readiness checklist. **The partner-financed scenario has not been executed on NEAR Workspaces** and no genuine uncollateralized lender is connected. All signing, funding and payouts stay disabled. See [Stage142](docs/STAGE142_FINANCING_ADAPTER.md) and [Stages143–145](docs/STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
 
+## Attempting real separate-partner financing (Stage146)
+
+Stage146 extends the original proven Rhea Workspaces imported-state path with a **separate disposable Sandbox partner**, real NEP-141 LiNEAR transfer to a fresh zero-collateral liquidator, source-backed Rhea liquidation and principal repayment checks. [Execution and evidence requirements](docs/STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md). Whether that NEW route succeeds must be established by a complete actual Workspaces run; it is not a live permissionless flash loan or real investor funding. Mainnet keys and spending remain disabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |
