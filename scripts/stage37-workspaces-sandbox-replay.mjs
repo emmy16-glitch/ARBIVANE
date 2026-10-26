@@ -24,6 +24,7 @@ import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mj
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
+import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -79,7 +80,10 @@ async function main(){
  try{pkg=await import('near-workspaces');}catch{
   throw Error('NEAR_WORKSPACES_MUST_BE_INSTALLED_LOCALLY');
  }
- worker=await pkg.Worker.init({network:'sandbox'});
+ const sourceClock=await readSourceClock(e.NEAR_RPC_URL,block);
+ const historical=await initHistoricalSandbox(pkg,sourceClock);
+ worker=historical.worker;
+ await writeFile('stage115-historical-clock.json',JSON.stringify(historical.witness,null,2)+'\n');
  const root=worker.rootAccount;
  if(!root||typeof root.importContract!=='function')throw Error('NO_SANDBOX_IMPORT_API');
  // Reconstruct pinned lending, oracle and NEP-141 storage using bounded native
@@ -265,6 +269,8 @@ async function main(){
  // Reject source/Sandbox quote and derived-token ratio disagreement before
  // funding or attempting any local liquidation transaction.
  await markStage55('SANDBOX_PYTH_PARITY');
+ await writeFile('stage115-historical-clock.json',JSON.stringify(
+  attestReplayClock(sourceClock,(await worker.provider.block({finality:'final'})).header),null,2)+'\n');
  const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block,
   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
    'https://archival-rpc.mainnet.near.org',

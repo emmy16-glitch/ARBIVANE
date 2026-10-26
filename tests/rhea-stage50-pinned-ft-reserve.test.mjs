@@ -82,7 +82,7 @@ test('Stage50 reserves feed the genuine Sandbox runner and prevent mismatched cl
  assert.ok(runner.includes('readStage50PinnedRepayReserve'));
  assert.ok(runner.includes('stage50-pinned-repay-reserve.json'));
  assert.ok(runner.includes('STAGE50_CLONED_FT_VAULT_MISMATCH'));
- assert.ok(runner.indexOf('readStage50PinnedRepayReserve')<runner.indexOf("await pkg.Worker.init"));
+ assert.ok(runner.indexOf('readStage50PinnedRepayReserve')<runner.indexOf("await initHistoricalSandbox("));
  assert.ok(runner.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!runner.includes('broadcast_tx'));
 });
