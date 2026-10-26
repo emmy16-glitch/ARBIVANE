@@ -59,7 +59,13 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
    throw Error('STAGE49_AMBIGUOUS_REPAY_LIMIT');
   const repaidUnits=u128(input.amount??input.max_amount,'INVALID_REPAY_UNITS');
  const seizedUnits=u128(liquidate.out_assets[0].amount,'INVALID_SEIZE_UNITS');
- const withdrawnUnits=u128(withdraw.amount,'INVALID_WITHDRAW_UNITS');
+ // Exactly one Rhea amount mode is permitted. Self-repay routes use only
+ // a source-pinned upper bound (max_amount), not an unpayable minimum.
+ if((withdraw.amount===undefined)===(withdraw.max_amount===undefined)||
+  (same&&withdraw.max_amount===undefined)||
+  (!same&&withdraw.amount===undefined))
+  throw Error('STAGE125_INVALID_WITHDRAW_AMOUNT_MODE');
+ const withdrawnUnits=u128(withdraw.amount??withdraw.max_amount,'INVALID_WITHDRAW_UNITS');
  const selfRepay=same?actions[2]?.Repay:null;
  if(same&&(!selfRepay||selfRepay.token_id!==repay))
   throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
