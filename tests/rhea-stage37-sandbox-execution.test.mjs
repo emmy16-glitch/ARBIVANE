@@ -162,12 +162,13 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.deepEqual(p.actions.map(a=>Object.keys(a)[0]),
   ['Borrow','Liquidate','Repay','Withdraw']);
  assert.equal(p.actions[2].Repay.token_id,'wrap.near');
- assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+ assert.equal(p.actions[2].Repay.max_amount,(BigInt(p.actions[0].Borrow.amount)+8n).toString());
+ assert.equal(p.actions[2].Repay.amount,undefined);
  assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
  assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
  assert.equal(p.actions[3].Withdraw.amount,undefined);
  assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
-  String(BigInt(p.actions[3].Withdraw.max_amount)+BigInt(p.actions[2].Repay.amount)));
+  String(BigInt(p.actions[3].Withdraw.max_amount)+BigInt(p.actions[0].Borrow.amount)));
  assert.equal(p.maySignMainnet,false);assert.equal(p.executionEnabled,false);
 });
 
@@ -176,7 +177,8 @@ test('Stage124 bounded repay preserves source sizing without imposing unpayable 
   const p=buildStage37SandboxPlan(q);
   assert.deepEqual(p.actions[1].Liquidate.in_assets,[{token_id:q.repay.tokenId,max_amount:q.repay.amountLendingInternalAtomic}]);
   assert.equal(p.actions[0].Borrow.amount,q.repay.amountLendingInternalAtomic);
-  assert.equal(p.actions[2].Repay.amount,p.actions[0].Borrow.amount);
+  assert.equal(p.actions[2].Repay.max_amount,(BigInt(p.actions[0].Borrow.amount)+8n).toString());
+ assert.equal(p.actions[2].Repay.amount,undefined);
   assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
  assert.equal(p.actions[3].Withdraw.amount,undefined);
   assert.equal(p.depositYocto,'1');assert.equal(p.maySignMainnet,false);
