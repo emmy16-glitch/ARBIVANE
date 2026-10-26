@@ -1,0 +1,40 @@
+name: Stage137 light-client path and mainnet risk gate (no spending)
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage137-near-outcome-merkle.mjs'
+      - 'scripts/stage138-mainnet-spending-admission.mjs'
+      - 'scripts/stage137-proof-and-policy-cli.mjs'
+      - 'tests/rhea-stage137-merkle-mainnet.test.mjs'
+      - '.github/workflows/rhea-stage137-proof-gate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage137-near-outcome-merkle.mjs'
+      - 'scripts/stage138-mainnet-spending-admission.mjs'
+      - 'scripts/stage137-proof-and-policy-cli.mjs'
+      - 'tests/rhea-stage137-merkle-mainnet.test.mjs'
+      - '.github/workflows/rhea-stage137-proof-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read_only_merkle_proof_and_spending_policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate cryptographic Merkle-path primitives and mainnet fail-closed budget gates
+        run: node --test tests/rhea-stage137-merkle-mainnet.test.mjs
+      - name: Enforce that no mainnet signer/broadcast appears in Stage137
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E '(^|[^a-zA-Z])(broadcast_tx_commit|sendTransaction|signAndSendTransaction|privateKey|MAINNET_PRIVATE_KEY)([^a-zA-Z]|$)' scripts/stage137-near-outcome-merkle.mjs scripts/stage138-mainnet-spending-admission.mjs scripts/stage137-proof-and-policy-cli.mjs
