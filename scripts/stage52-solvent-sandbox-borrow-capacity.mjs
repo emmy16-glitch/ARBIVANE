@@ -152,7 +152,11 @@ export async function attestStage52BorrowCollateralCapacity({
  const collateralUsd=sourceFromBalancePrice(units,price.multiplier,
   price.decimals,extra);
  const adjustedCollateral=sourceMulRatio(collateralUsd,wRatio);
- const rawDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ const sourceDebtUsd=positive(proposal.repay.referenceUsdE27,'UNVERIFIED_SOURCE_REPAY_VALUE');
+ // Scale conservatively by the actual temporarily borrowed financing quantity.
+ const borrowed=BigInt(plan.actions[0].Borrow.amount);
+ const sourceRepay=BigInt(proposal.repay.amountLendingInternalAtomic);
+ const rawDebtUsd=(sourceDebtUsd*borrowed+sourceRepay-1n)/sourceRepay;
  const adjustedBorrow=sourceDivRatio(rawDebtUsd,dRatio);
  // Conservative headroom for intermediate Borrow before liquidation
  // (25% extra adjusted collateral), not a deployed contract guarantee.
