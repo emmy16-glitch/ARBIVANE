@@ -56,6 +56,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage160](docs/STAGE160_ANY_SIZE_SANDBOX_LIQUIDATION.md) removes Stage159's arbitrarily fixed size floors in **both** Rhea borrower-discovery lanes. It also fixes the Stage157 regression workflow's Node TypeScript flag; the previous large workflow failed before any market scan. The original borrower, protocol risk rules, LiNEAR asset route, positive same-token remainder, FINAL callback/FT receipts, principal and financing-interest repayment and zero remaining debt still govern real Sandbox success. You cannot select an unsupported loan amount by overriding the source's real debt. **No mainnet signing, wallet spending or payouts.**
 
+## Stage163 — fair RPC retry for blocked liquidation borrowers
+
+[Stage163](docs/STAGE163_FAIR_RPC_RECOVERY.md) addresses a verified source-discovery issue: the 80-account shard with 11 paper at-risk LiNEAR borrowers recorded 11 RPC timeout/rate-limit blocks. The old recovery budget could retry only its first four accounts. Stage163 spreads retries across all blocked borrowers before second retries, raises the explicit large-shard budget to 40, reduces RPC concurrency, and reports deferred reads without treating them as liquidation failures or successes. **A provider outage remains a blocker, not permission to bypass Rhea rules.** No mainnet spending is enabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |

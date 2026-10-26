@@ -38,7 +38,9 @@ const n=(key:string,def:string)=>{
  const transport=new FailoverNearReadOnlyRpc(endpoints.map(url=>new NearReadOnlyRpc(url)));
  const results=await qualifyStage38Candidates(new PacedNearReadOnlyRpc(transport,Number(e.RHEA_RPC_SPACING_MS??'700')),source,prior,{
   startFinding:n('RHEA_STAGE38_START_FINDING','332'),maxFindings:n('RHEA_STAGE38_MAX_FINDINGS','80'),
-  maxRiskCandidates:80,concurrency:2,
+  maxRiskCandidates:80,
+  concurrency:n('RHEA_STAGE38_CONCURRENCY','2'),
+  maxRecoveryAttempts:n('RHEA_STAGE38_MAX_RECOVERY_ATTEMPTS','8'),
   lendingContract:e.RHEA_LENDING_CONTRACT??'',pythOracle:e.RHEA_ORACLE_CONTRACT??'',
   expectedLendingCodeHash:e.RHEA_EXPECTED_LENDING_CODE_HASH??'',
   expectedPythOracleCodeHash:e.RHEA_EXPECTED_ORACLE_CODE_HASH??'',
