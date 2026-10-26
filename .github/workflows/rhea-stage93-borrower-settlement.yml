@@ -228,6 +228,7 @@ jobs:
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
             stage115-historical-clock.json
+            stage115-native-startup.log
             stage116-raw-transaction.json
             stage116-signed-transaction.json
             stage116-before-state.json

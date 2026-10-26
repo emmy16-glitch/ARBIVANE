@@ -1,6 +1,7 @@
 # Stage 111 handoff
 
 ## Stage 116 execution checkpoint
+- Stage117 continuation: PR #167 contains signed evidence preservation plus bounded Sandbox startup (90 seconds), native startup log preservation and CLI exit after result flush, so SDK port-lock heartbeats cannot hold a failed attempt open. A dedicated native regression workflow tests actual nearcore 2.13.4 startup before merge. Stage93 `40296205306` is still in the same execution step; no liquidation is verified. Its exact internal failure cannot be claimed until logs/artifacts become available.
 - Main `0ed2038`: PR #166 merged after CI `40290746331` passed. Actual Stage93 `40296205306` is in progress; inspect it before another full execution.
 - Direct pinned quote read at execution block `221659693` returns publish time `1793001238`, 29 seconds before source time. Configured age is 60 seconds, so import overhead can exhaust the remaining 31 seconds. No age limit or stored quote may be changed.
 - Branch `fix/stage116-replay-continuation` adds raw signed transaction/receipt preservation and genuine Ed25519 verification against the transaction hash, plus before/after state and finalized headers. It deliberately does not claim independent outcome Merkle verification. Local typecheck and 728 tests pass.

@@ -443,4 +443,15 @@ main().catch(async err=>{
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
  process.exitCode=2;
-}).finally(async()=>{if(worker)await worker.tearDown().catch(()=>{});});
+}).finally(async()=>{
+ if(worker){
+  let timer;
+  await Promise.race([worker.tearDown().catch(()=>{}),new Promise(resolve=>{
+   timer=setTimeout(resolve,10000);
+  })]);
+  clearTimeout(timer);
+ }
+ // Drain the result before exiting; failed SDK initialization may otherwise
+ // leave a port-lock heartbeat alive until the entire CI job times out.
+ process.stdout.write('',()=>process.exit(process.exitCode??0));
+});

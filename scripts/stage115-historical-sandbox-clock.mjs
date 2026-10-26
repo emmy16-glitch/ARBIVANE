@@ -1,4 +1,4 @@
-import {access, mkdtemp, readFile, writeFile, rm} from 'node:fs/promises';
+import {access, mkdtemp, readFile, writeFile, rm, copyFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -44,10 +44,11 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
  await access(library);
  const dir=await mkdtemp(join(tmpdir(),'arbivane-clock-'));
  const Server=pkg.SandboxServer, originalInit=Server.init;
- let worker;
+ let worker,serverRef,timer,expired=false;
  try {
   Server.init=async function(config) {
    const server=await originalInit.call(this,config);
+   serverRef=server;
    const genesisPath=join(server.homeDir,'genesis.json');
    const genesis=JSON.parse(await readFile(genesisPath,'utf8'));
    genesis.genesis_time=clock.startIso;
@@ -59,17 +60,33 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
    const start=server.start;
    server.start=async function() {
     Server.binPath=wrapper;
-    try{return await start.call(this);}finally{Server.binPath=binary;}
+    const debug=process.env.NEAR_WORKSPACES_DEBUG;
+    process.env.NEAR_WORKSPACES_DEBUG='1';
+    try{return await start.call(this);}finally{
+     Server.binPath=binary;
+     if(debug===undefined)delete process.env.NEAR_WORKSPACES_DEBUG;
+     else process.env.NEAR_WORKSPACES_DEBUG=debug;
+    }
    };
    return server;
   };
-  worker=await pkg.Worker.init({network:'sandbox'});
+  const pending=pkg.Worker.init({network:'sandbox'});
+  // The SDK can retain its port-lock heartbeat after an initialization error.
+  // Bound startup and close any native server, including a late successful init.
+  pending.then(w=>{if(expired)return w.tearDown().catch(()=>{});},()=>{});
+  worker=await Promise.race([pending,new Promise((resolve,reject)=>{
+   timer=setTimeout(()=>{expired=true;reject(Error('STAGE117_SANDBOX_STARTUP_TIMEOUT'));},90000);
+  })]);
   const witness=attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header);
   return {worker,witness};
  } catch(error) {
   if(worker)await worker.tearDown().catch(()=>{});
+  else if(serverRef)await serverRef.close().catch(()=>{});
   throw error;
  } finally {
+  clearTimeout(timer);
+  if(serverRef)await copyFile(join(serverRef.homeDir,'sandboxServer.log'),
+   'stage115-native-startup.log').catch(()=>{});
   Server.init=originalInit;
   await rm(dir,{recursive:true,force:true});
  }

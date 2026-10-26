@@ -1,0 +1,32 @@
+name: Native historical Sandbox clock regression
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage115-historical-sandbox-clock.mjs'
+      - 'scripts/stage117-native-clock-smoke.mjs'
+      - '.github/workflows/rhea-historical-clock-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  native-clock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
+      NEAR_WORKSPACES_NETWORK: sandbox
+      EXECUTION_ENABLED: 'false'
+      STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libfaketime
+      - run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - run: timeout --kill-after=10s 120s node scripts/stage117-native-clock-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-clock-startup
+          path: stage115-native-startup.log
+          if-no-files-found: warn
