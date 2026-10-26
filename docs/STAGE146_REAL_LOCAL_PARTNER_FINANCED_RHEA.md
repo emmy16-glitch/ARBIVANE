@@ -2,6 +2,16 @@
 
 **26 October 2026. This is an attempted real *local NEAR Workspaces* transaction route, NOT an uncollateralized mainnet flash loan. Status is determined only by the genuine post-merge [Stage146 GitHub Actions workflow](../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml) and its real receipt artifact, never by tests alone.**
 
+## Genuine run evidence and known blocker (26 October 2026)
+
+The live push-to-main [Stage146 run #40340360901](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40340360901) **failed** after clearing all pinned source imports, Pyth view parity and initial wNEAR collateral funding. Genuine artifact `stage146-real-local-partner-to-rhea-financing-attempt` [#12658428585](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40340360901/artifacts/12658428585) preserves the phase.
+
+The local Sandbox actually registered a new zero-collateral `stage146-liquidator.test.near` and Rhea emitted `borrow`, `withdraw_started`, `withdraw_succeeded` and genuine NEP-141 `ft_transfer` events for **1,858,490,264,605,800** LiNEAR atomic units to the separate `arbivane-replay.test.near` partner. **However, Stage146's initial wrapper prematurely rejected the SDK's EXECUTED asynchronous response before consulting the original FINAL callback receipt.** Therefore the actual Stage146 workflow was **not completed**, and lender-to-liquidator FT transfer, the follow-on Rhea liquidation, lender repayment, and zero final liabilities remain **unverified**.
+
+The next patch resolves each signed Rhea promise chain through the original Stage124 FINAL callback resolver *first* and similarly resolves NEP-141 FT transfers using the local Sandbox `txStatusReceipts(...,'FINAL')` before allowing successful transfer/balance reconciliation. No extra transaction is resubmitted to rescue an uncertain callback. The [Stage146 CI workflow](../.github/workflows/rhea-stage146-genuine-partner-sandbox.yml) must be rerun and the new actual artifact inspected before declaring any completed financed liquidation.
+
+---
+
 ## Why this is different from Stage144
 
 Stage144 modeled money flows in JavaScript memory, but never moved fungible tokens. Stage146 forks the original verified [Stage93 Rhea Sandbox historical replay](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40317139342) to attempt genuine token and contract transactions **inside a disposable NEAR Workspaces chain**.
