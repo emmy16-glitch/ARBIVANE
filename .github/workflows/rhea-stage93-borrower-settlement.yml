@@ -183,6 +183,12 @@ jobs:
             else
               sandbox_exit=$?
             fi
+            # The Workspaces SDK writes lifecycle diagnostics to stdout; keep those
+            # as logs and use the Stage37 atomically persisted JSON result for gates.
+            if test -s stage37-process-result.json; then
+              cp stage69-sandbox-actual.json stage69-sandbox-runner.log
+              cp stage37-process-result.json stage69-sandbox-actual.json
+            fi
             attempt_exit=0
             EXECUTION_ENABLED=false NEAR_NETWORK=mainnet node scripts/stage56-sandbox-attempt-cli.mjs "$sandbox_exit" \
               stage69-sandbox-actual.json stage55-sandbox-phase-evidence.json \
@@ -216,6 +222,7 @@ jobs:
             stage69-qualification-summary.json
             stage38-positive-stage35-evidence.json
             stage69-sandbox-actual.json
+            stage69-sandbox-runner.log
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
             stage46-sandbox-clone-evidence.json
@@ -227,7 +234,7 @@ jobs:
             stage49-sandbox-route-preflight.json
             stage49-sandbox-registration.json
             stage49-sandbox-funding.json
-            stage49-wnear-transfer-receipt.json
+              stage49-wnear-transfer-receipt.json
             stage50-pinned-repay-reserve.json
             stage51-active-pyth-sandbox-parity.json
             stage115-historical-clock.json
