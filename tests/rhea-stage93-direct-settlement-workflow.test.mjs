@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 const s=await readFile(new URL('../.github/workflows/rhea-stage93-borrower-settlement.yml',import.meta.url),'utf8');
 test('Stage93 runs one previously source-qualified borrower in a separate true execution group',()=>{
- assert.ok(s.includes('group: arbivane-stage93-independent-settlement'));
+ assert.ok(s.includes('group: arbivane-stage118-source-clock-settlement'));
  assert.ok(!s.includes('group: arbivane-stage87-single-borrower'));
  assert.ok(s.includes("(.historicalFindingIndex == 2579)"));
  assert.ok(s.includes('sourceDebtAccounts == 7801'));
@@ -15,7 +15,8 @@ test('Stage93 runs one previously source-qualified borrower in a separate true e
  assert.ok(s.includes('RHEA_STAGE38_MAX_FINDINGS: \'1\''));
  assert.ok(s.includes('RHEA_STAGE32_MAX_FINDINGS: \'1\''));
  assert.ok(s.includes("STAGE82_SINGLE_BORROWER: 'true'"));
- assert.ok(s.includes('timeout-minutes: 75'));
+ assert.ok(s.includes('timeout-minutes: 20'));
+ assert.ok(s.includes('timeout --kill-after=10s 12m node'));
 });
 test('Stage93 never treats a mock, a Pyth quote or source plan as a liquidation',()=>{
  assert.ok(s.includes('scripts/stage37-workspaces-sandbox-replay.mjs'));

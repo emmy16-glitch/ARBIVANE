@@ -25,6 +25,7 @@ import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-fundi
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
+import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
 const e=process.env;
 let worker;
 let sandboxTransactionSubmitted=false;
@@ -345,6 +346,10 @@ async function main(){
   seizeToken.view('ft_balance_of',{account_id:actor.accountId}),
  ]);
  const [actorBefore,repayFtBefore,seizeFtBefore]=await snapshot();
+ await writeFile('stage116-before-state.json',JSON.stringify({
+  borrower:sandboxBorrower,actor:actorBefore,repayFt:repayFtBefore,seizeFt:seizeFtBefore,
+  block:await worker.provider.block({finality:'final'}),
+ },null,2)+'\n');
  await markStage55('SANDBOX_LIQUIDATION_TRANSACTION');
  let raw;
  try{
@@ -358,6 +363,12 @@ async function main(){
   throw Error('SANDBOX_CALL_REJECTED_BEFORE_FINAL_RECEIPTS');
  }
  await markStage55('SANDBOX_CALLBACK_RECEIPTS');
+ // Keep the complete canonical RPC outcome, including signature and receipt
+ // proof paths, even when a callback failed. Never archive SDK config or keys.
+ await writeFile('stage116-raw-transaction.json',JSON.stringify(raw?.result??raw,null,2)+'\n');
+ const signedEvidence=signedSandboxEvidence(raw,{signerId:actor.accountId,
+  receiverId:plan.lendingContract});
+ await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
  const report=summarizeStage37SandboxOutcome(raw,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   importedContractCount:contracts.size,allStoredKeysAttested:false,
@@ -385,6 +396,9 @@ async function main(){
   await worker.provider.fastForward(10000);
   const afterFinalBlock=await worker.provider.block({finality:'final'});
   post=await snapshotAll();
+  await writeFile('stage116-after-state.json',JSON.stringify({
+   ...post,finalizedBlockBefore:beforeFinalBlock,finalizedBlockAfter:afterFinalBlock,
+  },null,2)+'\n');
   verifiedReport=attestStage48FinalizedSandboxReplay({
    receipt:report,
    before:{borrower:sandboxBorrower,actor:actorBefore,
@@ -429,4 +443,15 @@ main().catch(async err=>{
   realMainnetExecuted:false,realProfitVerified:false,mayBroadcastMainnet:false,
   blockers:['NO_VERIFIED_END_TO_END_STATEFUL_LIQUIDATION_REPLAY']},null,2));
  process.exitCode=2;
-}).finally(async()=>{if(worker)await worker.tearDown().catch(()=>{});});
+}).finally(async()=>{
+ if(worker){
+  let timer;
+  await Promise.race([worker.tearDown().catch(()=>{}),new Promise(resolve=>{
+   timer=setTimeout(resolve,10000);
+  })]);
+  clearTimeout(timer);
+ }
+ // Drain the result before exiting; failed SDK initialization may otherwise
+ // leave a port-lock heartbeat alive until the entire CI job times out.
+ process.stdout.write('',()=>process.exit(process.exitCode??0));
+});
