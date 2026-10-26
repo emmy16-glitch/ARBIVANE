@@ -313,7 +313,10 @@ async function main(){
  // A sandbox-only disposable signer never derives from or accesses a mainnet key.
  await markStage55('SANDBOX_ACTOR_REGISTRATION');
  const actor=await root.createSubAccount('arbivane-replay',{
-  initialBalance:3n*10n**24n,
+  // The isolated Stage150 partner brings its OWN disposable Sandbox
+  // collateral; no mainnet keys or owner wallet involved.
+  initialBalance:e.STAGE150_LARGE_SANDBOX==='true'?
+   1003n*10n**24n:3n*10n**24n,
  });
  if(!actor||typeof actor.callRaw!=='function'||typeof actor.accountId!=='string')
   throw Error('MISSING_SANDBOX_RAW_RECEIPT_API');
@@ -344,6 +347,8 @@ async function main(){
  const collateralFunding=await seedSandboxLiquidatorWithWrappedNear({
   actor,lending,wrapped:contracts.get('wrap.near'),assetRows:sandboxAssets,
   provider:worker.provider,evidencePath:'stage49-wnear-transfer-receipt.json',
+  sandboxCollateralYocto:e.STAGE150_LARGE_SANDBOX==='true'?
+   1000n*10n**24n:10n**24n,
  });
  const actorPositionsForFunding=await lending.view('get_account_all_positions',{
   account_id:actor.accountId,
@@ -376,6 +381,33 @@ async function main(){
  // collateralized disposable partner fronts actual NEP141 LiNEAR tokens to a
  // fresh zero-collateral actor. Never reinterpret Stage93 as flash-funded.
  if(e.STAGE146_ALLOW_LOCAL_NEAR_LOAN==='true'){
+  if(e.STAGE150_LARGE_SANDBOX==='true'){
+   if(e.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+    e.EXECUTION_ENABLED!=='false'||e.STAGE147_LOCAL_CLOCK_COMPRESSION!=='true')
+    throw Error('STAGE150_LARGE_LOCAL_SANDBOX_ONLY');
+   const selected=e.STAGE150_LARGE_SANDBOX_TOKENS??'10';
+   if(!['10','100'].includes(selected))
+    throw Error('STAGE150_LARGE_TIER_UNSUPPORTED');
+   const n=BigInt(selected),target=n*10n**24n;
+   const baseline=BigInt(plan.actions[0].Borrow.amount),vault=BigInt(localVault);
+   const col=BigInt(boundedCapacity.collateralAdjustedUsdE27);
+   const borrowUsd=BigInt(boundedCapacity.borrowAdjustedUsdE27);
+   const headroom=BigInt(borrowCapacity.poolHeadroomReferenceInternal);
+   if(vault<target*11n/10n||headroom<target*11n/10n||
+    col*4n*baseline<borrowUsd*5n*target)
+    throw Error('STAGE150_LARGE_MARKET_RESERVE_OR_HEALTH_INSUFFICIENT');
+   await writeFile('stage150-large-funding-preflight.json',JSON.stringify({
+    mode:'STAGE150_AUTHENTIC_LARGE_LOCAL_FINANCING_PREFLIGHT',
+    chain:'NEAR_SANDBOX',borrowWholeLinear:selected,
+    loanAtomic:target.toString(),
+    actualLocalPartnerCollateralYocto:collateralFunding.wrappedNativeSandboxYocto,
+    sourceCappedBorrowerLiquidationInternal:baseline.toString(),
+    localClonedRheaVaultAtomic:localVault,
+    nominalHistoricalClockCompressionRatio:20,
+    sourceBorrowerNotArtificiallyEnlarged:true,
+    realProfitOrMainnetFundingVerified:false
+   },null,2)+'\n');
+  }
   const outcome=await stage146AttemptRealPartnerFundedLocalRhea({
    root,partner:actor,contracts,worker,plan,
    pinnedBorrower:sandboxBorrower,

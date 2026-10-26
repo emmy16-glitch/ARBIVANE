@@ -20,6 +20,10 @@ Stage142 implements an **offline** flash-versus-partner financing intent. Stages
 
 Stage146 extends the original proven Rhea Workspaces imported-state path with a **separate disposable Sandbox partner**, real NEP-141 LiNEAR transfer to a fresh zero-collateral liquidator, source-backed Rhea liquidation and principal repayment checks. [Execution and evidence requirements](docs/STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md). Whether that NEW route succeeds must be established by a complete actual Workspaces run; it is not a live permissionless flash loan or real investor funding. Mainnet keys and spending remain disabled.
 
+## Stage150 larger genuine Sandbox principal stress test
+
+A separate fully isolated [Stage150 trial](docs/STAGE150_LARGE_SANDBOX_FINANCING.md) attempts to move **10 whole test LiNEAR tokens** through authentic cloned Rhea and NEP-141 contracts, backed by a separate partner's **1,000 disposable Sandbox NEAR**. Unlike Stage148's 0.00000000185849 test LiNEAR principal, this is a multi-billion-fold increase in actual *test funding*. The source-pinned borrower liquidation remains tiny; we must withdraw the unused supplied tokens and repay the whole larger loan. **Do not claim large-loan success until the new on-chain Workspaces receipts pass.** No mainnet or real-world value.
+
 ## What works today
 
 | Area | Verified capability | Boundary |

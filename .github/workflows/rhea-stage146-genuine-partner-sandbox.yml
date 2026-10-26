@@ -7,6 +7,7 @@ on:
       - 'scripts/stage118-replay-clock.c'
       - 'tests/rhea-stage147-local-oracle-clock.test.mjs'
       - 'tests/rhea-stage148-partner-dust.test.mjs'
+      - 'tests/rhea-stage150-large-sandbox-funding.test.mjs'
       - 'scripts/stage146-real-funded-workspaces-runner.mjs'
       - 'tests/rhea-stage146-local-partner-loan.test.mjs'
       - '.github/workflows/rhea-stage146-genuine-partner-sandbox.yml'
@@ -33,7 +34,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs tests/rhea-stage148-partner-dust.test.mjs
+      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs tests/rhea-stage148-partner-dust.test.mjs tests/rhea-stage150-large-sandbox-funding.test.mjs
   genuine_ft_transfer_and_rhea_partner_funding:
     if: github.event_name != 'pull_request'
     needs: local_execution_contract_regressions

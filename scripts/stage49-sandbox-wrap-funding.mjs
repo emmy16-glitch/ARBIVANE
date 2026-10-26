@@ -158,13 +158,24 @@ async function registerIfNeeded(actor,contract,label){
  return true;
 }
 export async function seedSandboxLiquidatorWithWrappedNear({
- actor,lending,wrapped,assetRows,provider=null,evidencePath=null
+ actor,lending,wrapped,assetRows,provider=null,evidencePath=null,
+ sandboxCollateralYocto=DEPOSIT
 }){
  if(!actor||!ID.test(actor.accountId)||typeof actor.callRaw!=='function'||
   !lending||typeof lending.view!=='function'||!ID.test(lending.accountId)||
   !wrapped||typeof wrapped.view!=='function'||wrapped.accountId!=='wrap.near'||
   !Array.isArray(assetRows))
   throw Error('STAGE49_LOCAL_FUNDING_CONTRACTS_INVALID');
+ const collateral=typeof sandboxCollateralYocto==='bigint'?sandboxCollateralYocto:
+  BigInt(sandboxCollateralYocto);
+ if(collateral!==DEPOSIT&&(
+  process.env.STAGE150_LARGE_SANDBOX!=='true'||
+  process.env.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+  process.env.EXECUTION_ENABLED!=='false'||
+  process.env.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'))
+  throw Error('STAGE150_NON_DEFAULT_COLLATERAL_REQUIRES_LOCAL_OPT_IN');
+ if(collateral<DEPOSIT||collateral>1000n*NEAR)
+  throw Error('STAGE150_COLLATERAL_OUTSIDE_TEST_BOUND');
  const pool=assetRows.find(row=>Array.isArray(row)&&row[0]==='wrap.near');
  if(!pool||pool[1]?.config?.can_use_as_collateral!==true)
   throw Error('STAGE49_WNEAR_IS_NOT_ENABLED_COLLATERAL');
@@ -184,19 +195,19 @@ export async function seedSandboxLiquidatorWithWrappedNear({
   !validFt(vaultWnearBefore))
   throw Error('STAGE53_WRAPPED_TOKEN_PRESTATE_NOT_TRUSTED');
  const rawWrap=await actor.callRaw(wrapped,'near_deposit',{},{
-  gas:MAX_GAS,attachedDeposit:DEPOSIT
+  gas:MAX_GAS,attachedDeposit:collateral
  });
  success(rawWrap,'WNEAR_WRAP');
  const [ftBalance,vaultWnearAfterWrap]=await Promise.all([
   wrapped.view('ft_balance_of',{account_id:actor.accountId}),
   wrapped.view('ft_balance_of',{account_id:lending.accountId}),
  ]);
- if(!validFt(ftBalance)||BigInt(ftBalance)!==DEPOSIT)
+ if(!validFt(ftBalance)||BigInt(ftBalance)!==collateral)
   throw Error('STAGE53_WRAPPED_NATIVE_NEAR_CREDIT_NOT_EXACT');
  if(!validFt(vaultWnearAfterWrap)||vaultWnearAfterWrap!==vaultWnearBefore)
   throw Error('STAGE54_RHEA_VAULT_CHANGED_DURING_ACTOR_WRAP');
  const rawCollateral=await actor.callRaw(wrapped,'ft_transfer_call',{
-  receiver_id:lending.accountId,amount:DEPOSIT.toString(),
+  receiver_id:lending.accountId,amount:collateral.toString(),
   msg:'"OnlyIncreaseCollateral"',
  },{gas:200000000000000n,attachedDeposit:1n});
  await settleFundingTransferReceipt({raw:rawCollateral,provider,
@@ -213,20 +224,21 @@ export async function seedSandboxLiquidatorWithWrappedNear({
  // can convert deposited units through interest-bearing shares. Require
  // at least 99% of the genuine transfer credited specifically as wrapped
  // collateral, not unrelated collateral or a merely positive dust leg.
- if(balance<DEPOSIT*99n/100n||balance>DEPOSIT*101n/100n||
+ if(balance<collateral*99n/100n||balance>collateral*101n/100n||
   totalCollateral<balance||creditedShares===0n)
   throw Error('STAGE53_WRAPPED_COLLATERAL_CREDIT_NOT_RECONCILED');
- if(!validFt(remaining)||BigInt(ftBalance)-BigInt(remaining)!==DEPOSIT)
+ if(!validFt(remaining)||BigInt(ftBalance)-BigInt(remaining)!==collateral)
   throw Error('STAGE53_ACTOR_WRAPPED_TOKEN_DEBIT_NOT_EXACT');
  if(!validFt(vaultWnearAfter)||
-  BigInt(vaultWnearAfter)-BigInt(vaultWnearBefore)!==DEPOSIT)
+  BigInt(vaultWnearAfter)-BigInt(vaultWnearBefore)!==collateral)
   throw Error('STAGE53_RHEA_WRAPPED_TOKEN_VAULT_CREDIT_NOT_EXACT');
  return {
   mode:'ARBIVANE_STAGE49_FUNDED_LOCAL_LIQUIDATOR',
   chain:'NEAR_SANDBOX',
   status:'SANDBOX_WNEAR_COLLATERAL_DEPOSITED_NOT_BORROW_HEALTH_PROOF',
   actorAccountId:actor.accountId,collateralTokenId:'wrap.near',
-  wrappedNativeSandboxYocto:DEPOSIT.toString(),
+  wrappedNativeSandboxYocto:collateral.toString(),
+  extraSandboxCollateralExperiment:collateral!==DEPOSIT,
   observedActorCollateralReferenceInternal:totalCollateral.toString(),
   observedWrappedNearCollateralInternal:balance.toString(),
   observedWrappedNearCollateralShares:creditedShares.toString(),
