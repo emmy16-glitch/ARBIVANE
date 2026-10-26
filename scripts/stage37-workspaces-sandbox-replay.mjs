@@ -388,6 +388,8 @@ async function main(){
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
  const report=summarizeStage37SandboxOutcome(raw,{
   pinnedConfigMatches,pinnedBorrowerMatches,
+  temporalAccrualVerified:temporalProof?.verified===true&&
+   parityWitness.temporalAccrualVerified===true,
   importedContractCount:contracts.size,allStoredKeysAttested:false,
  });
  await writeFile('stage37-sandbox-execution.json',JSON.stringify(report,null,2)+'\n');
