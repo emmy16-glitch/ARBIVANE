@@ -168,10 +168,56 @@ test('Stage166 does not accept mismatched archival ratios, stale heights or prov
 });
 test('Stage166 keeps archival view parity before funding and transaction submission',async()=>{
  const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
- assert.ok(runner.includes("fallbackRpc:new ResilientNearReadOnlyRpc(new NearReadOnlyRpc("));
+ assert.ok(runner.includes('fallbackRpc:stage167Fallback'));
+ assert.ok(runner.includes('new NearReadOnlyRpc(archivePrimary)'));
+ assert.ok(runner.includes('new NearReadOnlyRpc(archiveSecondary)'));
+ assert.ok(runner.includes('stage167-pinned-derived-price-diagnostics.json'));
  assert.ok(runner.indexOf('attestStage164PricingClosure({')<
   runner.indexOf('sandboxTransactionSubmitted=true'));
  assert.ok(runner.indexOf('attestStage164PricingClosure({')<
   runner.indexOf('seedSandboxLiquidatorWithWrappedNear({'));
  assert.ok(!runner.includes('broadcast_tx'));
+});
+
+
+test('Stage167 preserves which genuine derived-price dependency rejected an original source read',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const h=harness();const observed=[];let second=0;
+ h.rpc.view=async(id,method,args,block)=>{
+  if(id==='meta-pool.near'){second++;throw Error('source contract rejected view');}
+  return {blockHeight:String(block),value:'1250000000000000000000000'};
+ };
+ await assert.rejects(()=>attestStage164PricingClosure({...h,dependencies,
+  onDiagnostic:async e=>observed.push(e),
+  fallbackRpc:{view:async()=>{throw Error('unsafe unrequested fallback')}},
+ }),/STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED/);
+ assert.equal(second,1);
+ assert.deepEqual(observed.map(x=>x.status),[
+  'PINNED_SOURCE_CLONE_PARITY_PASS','NONTRANSIENT_PINNED_SOURCE_VIEW_REJECTED']);
+ assert.deepEqual(observed.map(x=>x.contractId),['linear-protocol.near','meta-pool.near']);
+ assert.equal(JSON.stringify(observed).includes('source contract rejected view'),false);
+});
+test('Stage167 retains original pinned price failures and safe fallback accounting',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const h=harness();const events=[];
+ const {NearRpcHttpError}=await import('../src/rhea/rpc.ts');
+ h.rpc.view=async()=>{throw new NearRpcHttpError(429,'0');};
+ const backup={view:async(id,method,args,block)=>({
+  blockHeight:String(block),value:'1250000000000000000000000'})};
+ const proof=await attestStage164PricingClosure({...h,dependencies,
+  fallbackRpc:backup,onDiagnostic:async e=>events.push(e)});
+ assert.equal(proof.sourceFallbackReads,2);
+ assert.deepEqual(events.map(e=>e.status),[
+  'PINNED_SOURCE_CLONE_PARITY_PASS','PINNED_SOURCE_CLONE_PARITY_PASS']);
+ assert.ok(events.every(e=>e.fallbackAttempted));
+ assert.equal(proof.mainnetExecutionEnabled,false);
+});
+test('Stage167 prevents source mismatches being reported as successful oracle parity',async()=>{
+ const {dependencies}=selectStage164PricingClosure(input());
+ const h=harness('12','99');const observed=[];
+ await assert.rejects(()=>attestStage164PricingClosure({...h,dependencies,
+  onDiagnostic:async e=>observed.push(e)}),
+  /STAGE164_DERIVED_PRICE_SOURCE_CLONE_MISMATCH/);
+ assert.deepEqual(observed.map(e=>e.status),['DERIVED_PRICE_SOURCE_CLONE_MISMATCH']);
+ assert.equal(observed[0].fallbackAttempted,false);
 });
