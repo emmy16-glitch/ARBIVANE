@@ -85,7 +85,7 @@ export interface SandboxResult {
  status:'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF'|'SANDBOX_RECEIPT_FAILURE'|
   'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF'|'ISOLATED_CALLBACK_PENDING_FINALIZED_PERSISTENCE';
  attemptedTransaction:boolean;transactionFinal:boolean;
- transactionExecutionStatus?:'FINAL'|'EXECUTED_OPTIMISTIC';
+ transactionExecutionStatus?:'FINAL'|'EXECUTED_OPTIMISTIC'|'EXECUTED';
  persistedAtLaterFinalizedBlock?:boolean;
  finalizedBlockBefore?:number;finalizedBlockAfter?:number;
  receiptCount:number;failedReceiptCount:number;gasBurntGasUnits:string|null;
@@ -138,8 +138,42 @@ export function summarizeStage37SandboxOutcome(
  }
  const failed=[...statuses.values()].filter(st=>Object.prototype.hasOwnProperty.call(st,'Failure')).length;
  const receiptDefs=result.receipts;
- if(!Array.isArray(receiptDefs)||receiptDefs.length===0)
-  throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
+ if(!Array.isArray(receiptDefs)||receiptDefs.length===0){
+  // A real failed receipt must not disappear behind the optional callback
+  // definition list omitted by the Workspaces SDK. NEVER accept success here.
+  const top=result.status;
+  if(!top||typeof top!=='object'||Array.isArray(top))
+   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
+  const variants=['Failure','SuccessValue','SuccessReceiptId'].filter(v=>
+   Object.prototype.hasOwnProperty.call(top,v));
+  if(variants.length!==1)
+   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
+  const finality=result.final_execution_status;
+  if(finality!=='FINAL'&&finality!=='EXECUTED'&&finality!=='EXECUTED_OPTIMISTIC')
+   throw Error('SANDBOX_RECEIPT_FINALITY_CONTRADICTION');
+  if(failed===0&&variants[0]!=='Failure')
+   throw Error('SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT');
+  const gas=receipts.reduce((n,x)=>{
+   const y=(x as {outcome:{gas_burnt:unknown}}).outcome.gas_burnt;
+   if((typeof y!=='string'&&typeof y!=='number')||!/^\\d+$/.test(String(y)))
+    throw Error('INVALID_SANDBOX_GAS');
+   return n+BigInt(y);
+  },0n).toString();
+  return {...base,status:'SANDBOX_RECEIPT_FAILURE' as const,
+   attemptedTransaction:true,transactionFinal:finality==='FINAL',
+   transactionExecutionStatus:finality as 'FINAL'|'EXECUTED'|'EXECUTED_OPTIMISTIC',
+   persistedAtLaterFinalizedBlock:false,receiptCount:receipts.length,
+   failedReceiptCount:failed,callbackReceiptCount:0,
+   failedCallbackReceiptCount:0,topLevelFailureObserved:variants[0]==='Failure',
+   gasBurntGasUnits:gas,blockers:[
+    ...(!inspection.pinnedBorrowerMatches&&inspection.temporalAccrualVerified===true?
+     ['BORROWER_TEMPORAL_ACCRUAL_PROVED_NOT_EXACT_PINNED_VIEW_PARITY']:[]),
+    'SANDBOX_CALLBACK_DEFINITION_UNAVAILABLE',
+    ...(failed>0?['SANDBOX_AUTHENTIC_FAILED_CHILD_RECEIPT']:[]),
+    ...(variants[0]==='Failure'?['SANDBOX_TOP_LEVEL_TRANSACTION_FAILED']:[]),
+    'REAL_RHEA_SANDBOX_SETTLEMENT_NOT_VERIFIED',
+   ]};
+ }
  const callbacks=new Set<string>();
  for(const x of receiptDefs){
   if(!x||typeof x!=='object')continue;
