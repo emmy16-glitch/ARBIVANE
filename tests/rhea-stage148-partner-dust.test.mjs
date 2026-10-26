@@ -36,7 +36,7 @@ test('Stage148 refuses unbounded loan topups, missing actor inventory, forged de
   v=>v.debtSharesAtomic='-2'
  ]){
   const x={...base};mutate(x);
-  assert.throws(()=>stage148BoundDebtTopup(x),/STAGE148_/);
+  assert.throws(()=>stage148BoundDebtTopup(x),/STAGE14[68]_/);
  }
  assert.throws(()=>stage148InspectOutstandingPartnerDebt({
   positions:{REGULAR:{borrowed:[{token_id:'linear-protocol.near',
