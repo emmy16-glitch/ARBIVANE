@@ -35,6 +35,16 @@ export function stage157LargeSourceAdmission({qualification,minRepayUsdE27=(500n
  let admitted=false,blocker='NO_SOURCE_SIZED_ELIGIBLE_PROPOSAL';
  let debtUsd='0',grossUsd='0',accountId=null,sourceBlock=null,tokenId=null;
  if(p!==null&&p!==undefined){
+  if(qualification.status!=='SANDBOX_PLAN_READY_NOT_AUTHORIZED'||
+   qualification.sandboxPlanReady!==true||
+   !Number.isSafeInteger(qualification.positiveSourcePlans)||
+   qualification.positiveSourcePlans<1||
+   !Array.isArray(qualification.rows)||
+   !qualification.rows.some(row=>
+    row.borrowerAccountId===p.borrowerAccountId&&
+    row.status==='FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'&&
+    row.observationBlockHeight===p.blockHeight))
+   throw Error('STAGE157_UNATTESTED_BEST_PROPOSAL');
   if(p.mode!=='RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING'||
    p.chain!=='NEAR_MAINNET'||p.status!=='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'||
    p.referenceRulesPass!==true||p.executionEnabled!==false||
