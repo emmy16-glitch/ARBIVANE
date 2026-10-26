@@ -12,7 +12,7 @@ function plan(){return {
    in_assets:[{token_id:'usdt.near',amount:'20'}],
    out_assets:[{token_id:'wrap.near',amount:'30'}]}},
   {Withdraw:{token_id:'wrap.near',amount:'30'}}
- ],depositYocto:'0',gasUnits:'300000000000000',
+ ],depositYocto:'1',gasUnits:'300000000000000',
  sourceCodeHash:H,sourceOracleHash:H,sourceMathOnly:true,
  realContractReplayVerified:false,fullImportedStateVerified:false,
  realWalletAuthorized:false,executionEnabled:false,
