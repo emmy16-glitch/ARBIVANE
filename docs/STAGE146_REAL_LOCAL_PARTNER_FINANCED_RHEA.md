@@ -1,3 +1,11 @@
+## Stage148 — original local liquidation succeeded; 286 borrowed shares remain to settle
+
+[Real Stage146 run #40345647795](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40345647795) and [original artifact #12661771274](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40345647795/artifacts/12661771274) contain genuine signed FINAL receipts for real Rhea Liquidate→Withdraw, reducing borrower borrowed shares by **1,848,889,647,386,442** and collateral shares by **1,860,647,237,424,468**. The zero-collateral liquidator actually withdrew **1,861,021,454,704,671 atomic LiNEAR** and transferred the entire **1,858,490,264,605,800 principal** back to the separate local partner. The partner's original Rhea `ft_transfer_call` `Execute/Repay` succeeded but left **286 borrowed shares**, due to accrual/conversion rounding across the multi-transaction experiment. **That run failed its zero-debt acceptance gate** and no actual mainnet profit exists.
+
+Stage148 adds limited, original-receipt-verified local token compensation for the remaining partner debt. It derives the amount from the actual `get_account_all_positions` borrowed balance (not a guessed value), uses only verified remaining liquidator LiNEAR inventory, and permits at most three real additional NEP141 transfer/repay sequences with **at most 100,000 atomic LiNEAR total**. Success still requires the original Rhea contract to report zero remaining borrowed shares and a positive local actor inventory. No owner collateral, mainnet signing, exchange swap or real monetary payoff is enabled. The price quote remains original; the test uses the previously disclosed local clock compression and is **not mainnet oracle timing evidence**.
+
+---
+
 ## Stage147 — constrained historical local oracle test
 
 Run [40344009735](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735) and [original evidence](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40344009735/artifacts/12659763226) show the real partner borrow, transfer and Rhea supply succeeded with FINAL Sandbox receipts. The next Rhea Liquidate transaction rejected the original imported Pyth quote: **publish_time is too stale**. No borrower liquidation or partner repayment completed.
