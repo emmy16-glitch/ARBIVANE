@@ -98,6 +98,15 @@ jobs:
           timeout --kill-after=10s 20m node --experimental-strip-types scripts/stage146-real-funded-workspaces-runner.mjs > stage146-workspaces-runner.log 2> stage146-workspaces-stderr.log
           test -s stage146-actual-partner-evidence.json
           test -s stage146-process-result.json
+          # Stage147 is a historical, locally compressed execution proof ONLY.
+          # Its native clock witness must not misleadingly advertise 1x/mainnet.
+          jq -e '.clockRate == 0.05 and
+            .clockPhase == "STAGE147_HISTORICAL_LOCAL_MULTITX_COMPRESSED_TIME" and
+            .nominalTimeCompressionRatio == 20 and
+            .localTimeCompressionEnabled == true and
+            .timingPerformanceOnRealMainnetNotProven == true and
+            .oracleQuoteAndFreshnessRulesUnmodified == true and
+            .mainnetExecutionEnabled == false' stage115-historical-clock.json
           jq -e '
             .mode == "STAGE146_REAL_LOCAL_WORKSPACES_PARTNER_FINANCING_ATTEMPT"
             and .chain == "NEAR_SANDBOX"
