@@ -76,7 +76,7 @@ jobs:
             .zeroSchemaErrors == true and (.findings | length) == 7801 and
             .lendingCodeHash == "6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa"' \
             "$STAGE157_VERIFIED_INDEX_PATH" >/dev/null
-      - name: Refresh up to twelve genuine historical LiNEAR debt accounts against current Pyth/Rhea
+      - name: Refresh source LiNEAR borrowers of any positive size against current Pyth/Rhea
         shell: bash
         run: |
           set -euo pipefail
@@ -87,11 +87,12 @@ jobs:
             and .maySignMainnet == false and .mayBroadcastMainnet == false
             and .realizedEconomicProfitVerified == false and
             .reviewed <= 12 and
-            .minimumRepayLendingInternalAtomic == "18584902646058010"' \
+            .minimumRepayLendingInternalAtomic == "0" and
+            .arbitraryTransactionSizeFloorEnabled == false \
             stage157-large-discovery-report.json >/dev/null
           jq -c '{batch,shard,status,reviewed,qualifiedLargerSourceAccounts,
             bestSourceRepayLendingInternalAtomic}' stage157-large-discovery-report.json >> "$GITHUB_STEP_SUMMARY"
-      - name: Real isolated contract replay ONLY when larger CURRENT source liquidation verified
+      - name: Real isolated contract replay ONLY when CURRENT source liquidation verified
         if: ${{ hashFiles('stage157-large-source-evidence.json') != '' }}
         shell: bash
         env:
