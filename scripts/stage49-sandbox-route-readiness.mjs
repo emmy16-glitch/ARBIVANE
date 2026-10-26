@@ -71,7 +71,9 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
  if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
   borrowedUnits!==repaidUnits||
-  (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=borrowedUnits||
+  (same?((!selfRepayFull&&selfRepayUnits!==borrowedUnits)||
+    (selfRepayFull&&Object.keys(selfRepay).length!==1)||
+    seizedUnits<=borrowedUnits||
     withdrawnUnits!==seizedUnits-borrowedUnits):seizedUnits!==withdrawnUnits))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
  const market=assetMap(assets);
