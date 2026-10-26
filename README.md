@@ -36,6 +36,10 @@ The [complete Stage153 financing diagnosis and scale gate](docs/STAGE153_SCALED_
 
 **None of this is mainnet financing.** The Sandbox partner's collateral is disposable test NEAR; it is *not* a committed third-party investor, a permissionless flash loan, mainnet economic profit or money that can be withdrawn. Mainnet keys, wallet spending and owner payouts remain disabled.
 
+## Stage157: next genuinely larger liquidation (new borrower required)
+
+The old 100-LiNEAR test increased **borrowed financing**, not the liquidatable borrower's debt, and its original Rhea financing interest exceeded the proceeds. Stage157 therefore starts a new **read-only mainnet borrower discovery and isolated Sandbox-only execution** lane rather than inflating that failed loan. It uses the independently archived 7,801-borrower source registry, searches four high-density windows (320 historical accounts), refreshes active Pyth health/eligibility and admits only a different source-sized LiNEAR/LiNEAR liquidation with **at least $500 of actual source-referenced repay and $5 of paper gross**. These are screening thresholds, **not guarantees of profit**, because fees and funding can still exceed the discount. Any admitted candidate must pass authentic final Rhea receipts, source borrower debt/collateral deltas and genuine actor settlement in NEAR Workspaces before it can be described as a successful Sandbox liquidation. If no candidate qualifies, it records the failure and **does not invent a large trade**. Mainnet spending and owner signing remain disabled. See [Stage157 workflow](.github/workflows/rhea-stage157-large-source-liquidation.yml) and [Stage157 evidence rules](docs/STAGE157_LARGE_SOURCE_LIQUIDATION.md).
+
 ## What works today
 
 | Area | Verified capability | Boundary |
