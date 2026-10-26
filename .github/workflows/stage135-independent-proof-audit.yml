@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'scripts/stage135-independent-proof.mjs'
+      - 'scripts/stage136-near-borsh-preimage.mjs'
       - 'scripts/stage116-signed-sandbox-evidence.mjs'
       - '.github/workflows/stage135-independent-proof-audit.yml'
   push:
@@ -35,7 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/stage135-independent-proof.mjs evidence audit
-          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .outcomeMerkleProofIndependentlyVerified == false and .actorOutstandingDebtAfterInternal == "0" and .finalReceiptCount == 12 and .callbackCount == 1 and .mainnetExecutionEnabled == false' audit/stage135-independent-proof.json
+          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .outcomeMerkleProofIndependentlyVerified == false and .actorOutstandingDebtAfterInternal == "0" and .hashBorshPreimageIndependentlyVerified == true and .finalReceiptCount == 12 and .callbackCount == 1 and .mainnetExecutionEnabled == false' audit/stage135-independent-proof.json
+          jq -e '.mode == "STAGE136_INDEPENDENT_NEAR_V0_BORSH_TRANSACTION_PREIMAGE" and .reconstructedBorshHashMatchesSignedTransaction == true and .ed25519SignatureOverComputedHashVerified == true' audit/stage136-borsh-preimage.json
       - name: Prove tampered state and forged success cannot pass independently
         shell: bash
         run: |
@@ -53,11 +55,19 @@ jobs:
             echo 'FORGED_FINALITY_INCORRECTLY_PASSED' >&2
             exit 1
           fi
-          echo 'Both genuine-proof tamper regressions correctly rejected'
+          cp evidence/stage129-finalized-transaction.json tampered/
+          node -e "const fs=require('node:fs');const p='tampered/stage116-before-state.json';let j=JSON.parse(fs.readFileSync(p));j.block.header.hash='11111111111111111111111111111111';fs.writeFileSync(p,JSON.stringify(j))"
+          if node scripts/stage135-independent-proof.mjs tampered audit-tampered; then
+            echo 'FORGED_BORSH_REFERENCE_BLOCK_INCORRECTLY_PASSED' >&2
+            exit 1
+          fi
+          echo 'All three genuine-proof tamper regressions correctly rejected'
       - name: Publish standalone independent local-proof witness
         uses: actions/upload-artifact@v4
         with:
           name: stage135-independent-sandbox-proof
-          path: audit/stage135-independent-proof.json
+          path: |
+            audit/stage135-independent-proof.json
+            audit/stage136-borsh-preimage.json
           retention-days: 90
           if-no-files-found: error
