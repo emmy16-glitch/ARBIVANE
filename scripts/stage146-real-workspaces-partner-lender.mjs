@@ -249,6 +249,9 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   mainnetExecution:false,ownerFunded:false,mainnetWalletsTouched:false,
   actualFlashLoan:false,realizedNetEconomicProfitVerified:false,
   maySignMainnet:false,mayBroadcastMainnet:false,ownerPayoutPermitted:false,
+  stage153SandboxOnlyOriginalFinalityReadRetries:
+   process.env.STAGE152_ULTRA_SHORT_LOCAL_CLOCK==='true',
+  stage153NeverResubmitTransaction:true,
   receiptProofs:{},blockers:[],
  };
  const save=()=>writeFile(stageReportPath,JSON.stringify(result,null,2)+'\n');
@@ -257,7 +260,8 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
   try{return await fn();}
   catch(e){
    result.status='LOCAL_NEAR_TRANSACTION_OR_EVIDENCE_BLOCKED';
-   result.blockers.push(typeof e?.message==='string'&&e.message.startsWith('STAGE146_')?
+   result.blockers.push(typeof e?.message==='string'&&
+     /^(STAGE146_|STAGE124_|STAGE153_)/.test(e.message)?
      e.message:'STAGE146_'+name+'_RPC_OR_CONTRACT_EXECUTION_FAILED');
    await save();
    throw Error(result.blockers.at(-1));
@@ -302,12 +306,40 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
  const call=async(signer,contract,method,args,deposit=1n,gas=MAX_GAS)=>{
   const raw=await signer.callRaw(contract,method,args,{gas,attachedDeposit:deposit});
   if(method==='execute_with_pyth'){
-   // This existing Stage124 resolver independently checks the original signed
-   // transaction identity, callback receipt inclusion, finality and failures.
-   const final=await resolveStage124RheaCallbackReceipts({
-    raw,provider:worker.provider,signerAccountId:signer.accountId,
-    evidencePath:null,writeFile
-   });
+   // Requery only STATUS of the already submitted original transaction,
+   // never resend an action. Errors or failed callbacks are NOT recoverable.
+   const retry=process.env.STAGE152_ULTRA_SHORT_LOCAL_CLOCK==='true'&&
+    process.env.STAGE146_ALLOW_LOCAL_NEAR_LOAN==='true'&&
+    process.env.NEAR_WORKSPACES_NETWORK==='sandbox'&&
+    process.env.EXECUTION_ENABLED==='false';
+   let final,last;
+   const log=[];
+   const receiptHash=raw?.result?.transaction?.hash??raw?.transaction?.hash??null;
+   for(let attempt=1;attempt<=(retry?4:1);attempt++){
+    try{
+     final=await resolveStage124RheaCallbackReceipts({
+      raw,provider:worker.provider,signerAccountId:signer.accountId,
+      evidencePath:retry?'stage153-last-original-finality.json':null,writeFile
+     });
+     log.push({attempt,status:'CANONICAL_FINAL',transactionHash:receiptHash});
+     break;
+    }catch(e){
+     last=e;
+     const code=typeof e?.message==='string'?e.message:'STAGE153_FINALITY_UNCLASSIFIED';
+     log.push({attempt,status:code,transactionHash:receiptHash});
+     if(!retry||!['STAGE124_FINAL_RECEIPT_QUERY_FAILED',
+      'STAGE124_CANONICAL_CALLBACK_RECEIPTS_MISSING'].includes(code)||
+      attempt===4)break;
+     await new Promise(r=>setTimeout(r,1500));
+    }
+   }
+   if(retry){
+    result.receiptProofs.stage153OriginalFinalityQueryAttempts=
+     [...(result.receiptProofs.stage153OriginalFinalityQueryAttempts??[]),
+      ...log];
+    await save();
+   }
+   if(!final)throw last??Error('STAGE153_ORIGINAL_FINALITY_UNAVAILABLE');
    return {...rawReceipt(final,'RHEA_PYTH_CALLBACK'),
     finalCallbackReceiptsVerified:true};
   }
