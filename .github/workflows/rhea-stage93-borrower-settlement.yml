@@ -15,6 +15,7 @@ on:
       - 'scripts/stage76-bounded-clone-queue.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'scripts/stage134-finality-fallback.mjs'
+      - 'scripts/stage135-independent-proof.mjs'
       - 'scripts/stage124-rhea-supply-prefund.mjs'
       - 'scripts/stage124-final-rhea-receipts.mjs'
       - 'scripts/stage115-historical-sandbox-clock.mjs'
@@ -269,6 +270,10 @@ jobs:
     if: always() && needs.select.outputs.count != '0'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/download-artifact@v4
         with:
           pattern: stage93-authentic-borrower-*
@@ -306,6 +311,14 @@ jobs:
               chain:"NEAR_SANDBOX",mainnetExecutionEnabled:false,sourceRun:"40128285853",
               executionRun:$run,borrower:$proposal[0].borrowerAccountId,
               sourceBlock:$proposal[0].blockHeight,transaction:$receipt[0],settlement:$settlement[0]}' > verified/execution-evidence.json
+      - name: Stage135 independently verify signed source-sized FINAL receipts and persisted balance deltas
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find verified -name stage37-sandbox-execution.json -print -quit)"
+          node scripts/stage135-independent-proof.mjs "$verified" verified
+          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .chain == "NEAR_SANDBOX" and .finalReceiptCount > 0 and .callbackCount == 1 and .actorOutstandingDebtAfterInternal == "0" and .mainnetExecutionEnabled == false and .outcomeMerkleProofIndependentlyVerified == false' verified/stage135-independent-proof.json
+
       - name: Publish successful actual liquidation proof
         if: success()
         uses: actions/upload-artifact@v4
