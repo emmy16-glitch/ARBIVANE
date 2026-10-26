@@ -1,5 +1,12 @@
 # Stage 111 handoff
 
+## Stage122 confirmed real Sandbox action refusal (26 October 2026)
+- PR #170 merged at `06302cd2709fce4da802cf9394f271d0071410bb`. Actual Stage93 run `40305687819` FAILED in `SANDBOX_FINALIZED_STATE`, `STAGE48_UNTRUSTED_OR_FAILED_CALLBACK_REPORT`. Genuine isolated wNEAR collateral funding succeeded; actual signed Sandbox transaction hash `6chwvSmtSWowu7Qtwi5jfQiLoxFNYheGKcZgKjYkrcGe` was submitted, but receipt failed. Artifact `12642846079` and `stage116-raw-transaction.json` prove Rhea's `execute_with_pyth` top-level call attached deposit `0` and returned `Smart contract panicked: Requires attached deposit of exactly 1 yoctoNEAR` with a failed receipt; no borrower debt or seized FT increase.
+- A documented Rhea SDK defaults to `defaultDepositYocto=1` for `execute_with_pyth` borrowing (rhea-finance/lending-near-intents-solver-golang). Stage122 changes only this Sandbox action deposit from `0` to **exactly `1` yoctoNEAR**, preserving genuine oracle limits, source borrower, loan sizing, callback and economic checks. It also prevents a validated temporal-accrual borrower read from making the real transaction's receipt summary falsely read as a state-import failure, while keeping strict parity admission.
+- New regression on the funding receipt JSON and Stage37 deposit declaration; keep Stage122 PR CI green before merging. Actual NEAR Sandbox liquidation **not yet verified**. Do not classify signed transaction submission, failed contract receipt, genuine collateral funding, or passing CI as success.
+- Next: examine Stage122 PR checks; merge after pass; inspect the automatically triggered Stage93 run's `stage37-sandbox-execution.json`, `stage116-raw-transaction.json`, `stage41-sandbox-balance-settlement.json`, `stage55-sandbox-phase-evidence.json`. Verify callback receipts, borrower debt and collateral decrease, seized FT actor balance increase. Mainnet spending and signing disabled.
+
+
 ## Stage122 actual execution checkpoint (26 October 2026)
 - Base main `06302cd2709fce4da802cf9394f271d0071410bb` merged PR #170. Actual Stage93 run `40305687819` was in progress at this checkpoint (borrower 2579); inspect its final jobs, failure enum and `stage49-wnear-transfer-receipt.json` before further edits. No verified liquidation yet.
 - Previous actual Stage93 `40304412267` failed at `SANDBOX_COLLATERAL_FUNDING` / `STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT`. A genuine WNEAR/Rhea transfer event alone does not verify the final callback, borrower deltas or liquidation.
