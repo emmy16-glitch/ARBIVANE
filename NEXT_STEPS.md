@@ -1,3 +1,11 @@
+## Stages143–145 offline recovery, partner accounting and production qualification (26 October 2026)
+
+- Stage143 `scripts/stage143-async-financing-journal.mjs`: immutable hash-chained event journal and permitted financing transitions. Rejects duplicated receipt references, out-of-order callbacks, forged/suppressed debt; preserves principal owed if settlement fails; never authorizes payouts.
+- Stage144 `scripts/stage144-partner-financing-simulation.mjs`: deterministic **in-memory** partner escrow and Rhea liquidation accounting for zero owner collateral; simulates issuance, repayment, fees, residual proceeds and failure injection. `scripts/stage144-authentic-bridge-cli.mjs` reads the ORIGINAL signed Stage93 funding/settlement/source artifacts and explicitly classifies the genuine NEAR Workspaces liquidation as **collateralized**, not partner/flash-funded.
+- Stage145 `scripts/stage145-production-qualification.mjs`: ten independently attested production prerequisites. Even all operator claims = true do not permit signing. No signer connected. See [technical doc](docs/STAGE143_145_ASYNC_FINANCING_AND_RELEASE.md).
+- **Critical limitation:** Stage144 has NOT performed a NEW externally funded Rhea Workspaces transaction. The scenario's capital/receipts are synthetic, clearly tagged. Stage145 cannot pass with the current lack of provider liquidity, gas sponsorship, real external token transfers and lender callback recovery. Preserve this explicit blocker and do not claim completed external financing or realized trading profit.
+- Next: obtain independently verifiable external capital terms / native lender ABI and build provider-funded local Workspaces integration with actual NEP141 transfer and repayment traces, then reassess independently validated release gates.
+
 ## Stage142 offline financing intent adapter — 26 October 2026
 
 - Added `scripts/stage142-financing-intent.mjs` with two mutually exclusive financing modes: `EXTERNAL_FLASH_LOAN` vs `AUTHORIZED_PARTNER_ESCROW`; a canonical SHA256 fingerprint (not a signature), strict U128 NEP-141 atomic accounting, max five-minute quote, zero owner contribution, no fake escrow, explicit sponsor/debt blockers and absolute mainnet broadcast refusal.
