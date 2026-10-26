@@ -234,7 +234,7 @@ test('Stage122 permits only attested temporal accrual when authentic source view
 test('Stage122 deploy call always uses exact Rhea one-yocto deposit, without mainnet signing',async()=>{
  const {readFile}=await import('node:fs/promises');
  const replay=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
- assert.match(replay,/attachedDeposit:BigInt\\(plan.depositYocto\\)/);
+ assert.ok(replay.includes('attachedDeposit:BigInt(plan.depositYocto)'));
  const p=buildStage37SandboxPlan(proposal());
  assert.equal(p.depositYocto,'1');
  assert.equal(p.maySignMainnet,false);
