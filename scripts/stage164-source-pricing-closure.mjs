@@ -7,6 +7,7 @@
  * Clone exact deployed code/state at the SAME source block; never fabricate
  * prices, use a mock contract or allow mainnet signing.
  */
+import {isTransientNearRpcError} from '../src/rhea/resilient-readonly-rpc.ts';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const KNOWN_EXTRA=new Set(['get_st_near_price','get_nearx_price','ft_price',
  'get_high_precision_virtual_price']);
@@ -56,34 +57,74 @@ export function selectStage164PricingClosure({baseIds,priceInfos,borrowerPositio
   throw Error('STAGE164_UNSUPPORTED_DEPENDENCY_CLOSURE_SIZE');
  return {ids,dependencies,borrowerPositionScoped:true};
 }
-export async function attestStage164PricingClosure({rpc,contracts,blockHeight,dependencies}){
+export async function attestStage164PricingClosure({
+ rpc,contracts,blockHeight,dependencies,fallbackRpc=null,onDiagnostic=null
+}){
  if(!rpc||typeof rpc.view!=='function'||!contracts||
   typeof contracts.get!=='function'||!Number.isSafeInteger(blockHeight)||
-  blockHeight<1||!Array.isArray(dependencies)||dependencies.length>6)
+  blockHeight<1||!Array.isArray(dependencies)||dependencies.length>6||
+  (fallbackRpc!==null&&typeof fallbackRpc.view!=='function')||
+  (onDiagnostic!==null&&typeof onDiagnostic!=='function'))
   throw Error('STAGE164_UNTRUSTED_PINNED_PARITY_CONTEXT');
- let checks=0;
+ let checks=0,transientFallbacks=0;
  for(const dep of dependencies){
   if(!dep||!ID.test(dep.contractId)||!KNOWN_EXTRA.has(dep.method))
    throw Error('STAGE164_INVALID_PINNED_CROSSCALL');
   const clone=contracts.get(dep.contractId);
   if(!clone||clone.accountId!==dep.contractId||typeof clone.view!=='function')
    throw Error('STAGE164_DERIVED_PRICE_DEPENDENCY_NOT_CLONED');
+  // Stage166: the original historical source block can be pruned or rate
+  // limited by regular RPCs. Runner supplies independent *archival* readers.
+  // Only a transient transport failure may switch providers; protocol panic,
+  // forged pinned height, zero value or source/clone mismatch MUST fail closed.
   let source,local;
+  let sourceStatus='PRIMARY_PINNED_SOURCE';
   try{source=await rpc.view(dep.contractId,dep.method,{},blockHeight);}
-  catch{throw Error('STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED');}
-  if(source?.blockHeight!==String(blockHeight))
+  catch(error){
+   const transient=isTransientNearRpcError(error);
+   if(!transient||!fallbackRpc){
+    if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+     method:dep.method,status:transient?'TRANSIENT_SOURCE_UNAVAILABLE':
+      'NONTRANSIENT_SOURCE_VIEW_REJECTED',fallbackAttempted:false});
+    throw Error('STAGE164_PINNED_SOURCE_RATIO_VIEW_FAILED');
+   }
+   sourceStatus='TRANSIENT_ARCHIVAL_FALLBACK';transientFallbacks++;
+   try{source=await fallbackRpc.view(dep.contractId,dep.method,{},blockHeight);}
+   catch{
+    if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+     method:dep.method,status:'PINNED_ARCHIVAL_FALLBACK_FAILED',fallbackAttempted:true});
+    throw Error('STAGE166_PINNED_ARCHIVAL_RATIO_FALLBACK_FAILED');
+   }
+  }
+  if(source?.blockHeight!==String(blockHeight)){
+   if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+    method:dep.method,status:'PINNED_SOURCE_BLOCK_DRIFT',
+    fallbackAttempted:sourceStatus==='TRANSIENT_ARCHIVAL_FALLBACK'});
    throw Error('STAGE164_PINNED_SOURCE_RATIO_BLOCK_DRIFT');
+  }
   try{local=await clone.view(dep.method,{});}
-  catch{throw Error('STAGE164_CLONED_SOURCE_RATIO_VIEW_FAILED');}
+  catch{
+   if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+    method:dep.method,status:'CLONED_RATIO_VIEW_FAILED',
+    fallbackAttempted:sourceStatus==='TRANSIENT_ARCHIVAL_FALLBACK'});
+   throw Error('STAGE164_CLONED_SOURCE_RATIO_VIEW_FAILED');
+  }
   const s=String(source.value);
   if(!UNITS.test(s)||typeof source.value!=='string'&&
-    typeof source.value!=='number'||String(local)!==s)
+    typeof source.value!=='number'||String(local)!==s){
+   if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+    method:dep.method,status:'DERIVED_RATIO_PARITY_MISMATCH',
+    fallbackAttempted:sourceStatus==='TRANSIENT_ARCHIVAL_FALLBACK'});
    throw Error('STAGE164_DERIVED_PRICE_SOURCE_CLONE_MISMATCH');
+  }
+  if(onDiagnostic)await onDiagnostic({contractId:dep.contractId,
+   method:dep.method,status:'PINNED_RATIO_PARITY_PASS',
+   fallbackAttempted:sourceStatus==='TRANSIENT_ARCHIVAL_FALLBACK'});
   checks++;
  }
  return {mode:'STAGE164_PINNED_RHEA_DERIVED_PRICE_CLOSURE',
   chain:'NEAR_SANDBOX',blockHeight:String(blockHeight),
-  clonedPricingDependencyCount:checks,
+  clonedPricingDependencyCount:checks,transientPinnedFallbacks:transientFallbacks,
   sourceAndSandboxDerivedPricesMatch:true,
   mutablePricesOrOracleRulesOverridden:false,
   actualLiquidationVerified:false,financingRepaidVerified:false,
