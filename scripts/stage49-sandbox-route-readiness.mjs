@@ -63,7 +63,7 @@ export function inspectStage49RheaAssets(plan,assets,blockHeight){
   throw Error('STAGE49_SAME_TOKEN_SELF_REPAY_REQUIRED');
  const selfRepayUnits=same?u128(selfRepay.amount,'INVALID_SELF_REPAY_UNITS'):0n;
  if(borrowedUnits===0n||repaidUnits===0n||seizedUnits===0n||withdrawnUnits===0n||
-  !attestStage125ActorBorrowCushion(plan,borrowedUnits.toString(),repaidUnits.toString(),seizedUnits.toString())||
+  !attestStage125ActorBorrowCushion(plan,borrowedUnits.toString(),repaidUnits.toString(),seizedUnits.toString(),same)||
   (same?(selfRepayUnits!==borrowedUnits||seizedUnits<=repaidUnits||
     withdrawnUnits!==seizedUnits-repaidUnits):seizedUnits!==withdrawnUnits))
   throw Error('STAGE49_ACTION_AMOUNT_OR_ROUTE_CONTRADICTION');
