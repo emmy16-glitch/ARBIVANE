@@ -88,7 +88,7 @@ export function stage148BoundDebtTopup({debtSharesAtomic,debtBalanceAtomic,
   throw Error('STAGE148_DUST_BUDGET_OR_ACTOR_RESIDUAL_EXCEEDED');
  return add.toString();
 }
-/** Large financing test: 100 genuine disposable LiNEAR token units (24
+/** Large financing test: 10 or 100 genuine disposable LiNEAR token units (24
  * decimals). The source-authenticated borrower liquidation stays tiny and
  * unchanged, while all unused supplied principal must be withdrawn.
  */
@@ -101,10 +101,36 @@ export function stage150ChooseLargeLocalPrincipal({env,sourceBorrowAmountInterna
   env?.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'||
   env?.NEAR_PRIVATE_KEY||env?.MAINNET_PRIVATE_KEY||env?.NEAR_ACCOUNT_ID)
   throw Error('STAGE150_NON_LOCAL_BORROW_FORBIDDEN');
- const target=100n*10n**24n;
+ const tokens=env?.STAGE150_LARGE_SANDBOX_TOKENS==='100'?100n:
+  env?.STAGE150_LARGE_SANDBOX_TOKENS===undefined||
+  env?.STAGE150_LARGE_SANDBOX_TOKENS==='10'?10n:null;
+ if(tokens===null)throw Error('STAGE150_UNAPPROVED_TEST_AMOUNT');
+ const target=tokens*10n**24n;
  if(baseline===0n||baseline>=target)
   throw Error('STAGE150_SOURCE_BORROW_NOT_SMALLER_THAN_LARGE_TEST');
  return {enabled:true,borrowInternalAtomic:target.toString()};
+}
+/** Larger local principal can accrue more than the tiny Stage148 100k
+ * atomic-unit threshold. Allow only genuine debt balance plus 32 units, capped
+ * at 0.1% of independently observed, real locally borrowed principal.
+ * This cannot invent extra tokens: the liquidator must still possess them.
+ */
+export function stage150BoundLargeDebtClosure({
+ debtSharesAtomic,debtBalanceAtomic,actorBalanceAtomic,alreadySentAtomic,
+ realBorrowedPrincipalAtomic
+}){
+ const shares=balance(debtSharesAtomic,'LARGE_DEBT_SHARES'),
+  due=balance(debtBalanceAtomic,'LARGE_DEBT_BALANCE'),
+  actor=balance(actorBalanceAtomic,'LARGE_ACTOR_FT'),
+  spent=balance(alreadySentAtomic,'LARGE_ALREADY_SPENT'),
+  principal=balance(realBorrowedPrincipalAtomic,'LARGE_PRINCIPAL');
+ if(shares===0n||due===0n||principal<10n**24n||
+  principal>100n*10n**24n)
+  throw Error('STAGE150_INVALID_REAL_DEBT_OR_LOAN');
+ const cap=principal/1000n,amount=due+32n;
+ if(spent+amount>cap||actor<=amount)
+  throw Error('STAGE150_ACCRUED_INTEREST_EXCEEDS_REAL_LIQUIDATION_PROCEEDS');
+ return amount.toString();
 }
 function hasZeroCollateral(account){
  const positions=account?.positions;
@@ -324,7 +350,7 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
    result.observedPartnerIssuedLiNEARAtomic=(now-partnerFtBefore).toString();
    if(large.enabled){
     const actual=now-partnerFtBefore;
-    if(actual<100n*10n**24n-10n**20n||actual>100n*10n**24n)
+    if(actual<BigInt(chosenBorrow)-10n**20n||actual>BigInt(chosenBorrow))
      throw Error('STAGE150_LARGE_RHEA_BORROW_FT_NOT_DELIVERED');
     result.stage150BorrowedFtLargeAmountVerified=true;
    }
@@ -433,12 +459,17 @@ export async function stage146AttemptRealPartnerFundedLocalRhea({
    result.receiptProofs.stage148DebtDust=[];result.receiptProofs.stage148DebtDustTransfers=[];
    for(let round=0;round<3&&BigInt(observed.sharesAtomic)>0n;round++){
     const actorSpendable=balance(await ft(liquidator.accountId),'ACTOR_DUST_SOURCE');
-    const topup=BigInt(stage148BoundDebtTopup({
+    const bound={
      debtSharesAtomic:observed.sharesAtomic,
      debtBalanceAtomic:observed.balanceAtomic,
      actorBalanceAtomic:actorSpendable.toString(),
      alreadySentAtomic:total.toString()
-    }));
+    };
+    const topup=BigInt(large.enabled?
+     stage150BoundLargeDebtClosure({
+      ...bound,realBorrowedPrincipalAtomic:principal.toString()
+     }):
+     stage148BoundDebtTopup(bound));
     const partnerBefore=balance(await ft(partner.accountId),'PARTNER_BEFORE_DUST');
     const actualTransfer=await call(liquidator,token,'ft_transfer',{
      receiver_id:partner.accountId,amount:topup.toString(),
