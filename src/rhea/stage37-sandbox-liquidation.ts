@@ -20,7 +20,7 @@ export interface SandboxReplayPlan {
   {Borrow:{token_id:string;amount:string}},
   {Liquidate:{account_id:string;in_assets:Array<{token_id:string;amount?:string;max_amount?:string}>;
    out_assets:Array<{token_id:string;amount:string}>}},
-  {Repay:{token_id:string;amount:string}},
+  {Repay:{token_id:string;amount?:string;max_amount?:string}},
   {Withdraw:{token_id:string;amount?:string;max_amount?:string}}
  ];
  depositYocto:'1';gasUnits:'300000000000000';
