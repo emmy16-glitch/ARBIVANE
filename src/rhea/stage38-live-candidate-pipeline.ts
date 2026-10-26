@@ -151,12 +151,15 @@ export async function qualifyStage38Candidates(
    const positive=evidence.status==='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'&&
     evidence.referenceRulesPass===true;
    if(positive){
-    buildStage37SandboxPlan(evidence);
     if(o.requiredSameTokenId!==undefined&&
        (evidence.repay?.tokenId!==o.requiredSameTokenId||
         evidence.seize?.tokenId!==o.requiredSameTokenId)){
+     // Still a genuine source observation, but not an executable asset route.
      rejectedByRequiredRoute++;
-    }else proposals.push(evidence);
+    }else{
+     buildStage37SandboxPlan(evidence);
+     proposals.push(evidence);
+    }
    }
    row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
     observationBlockHeight:evidence.blockHeight,reasonCode:null,
