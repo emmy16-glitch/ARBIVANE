@@ -1,0 +1,63 @@
+name: Stage135 independent offline Rhea Sandbox proof audit
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage135-independent-proof.mjs'
+      - 'scripts/stage116-signed-sandbox-evidence.mjs'
+      - '.github/workflows/stage135-independent-proof-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage135-independent-proof.mjs'
+      - '.github/workflows/stage135-independent-proof-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download genuine prior signed successful Stage93 artifact
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40317139342'
+          name: stage93-authentic-borrower-2579
+          path: evidence
+          github-token: ${{ github.token }}
+      - name: Independently validate Ed25519, original source-sized route, FINAL receipts and balances
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/stage135-independent-proof.mjs evidence audit
+          jq -e '.mode == "STAGE135_INDEPENDENT_OFFLINE_RHEA_SANDBOX_PROOF" and .outcomeMerkleProofIndependentlyVerified == false and .actorOutstandingDebtAfterInternal == "0" and .finalReceiptCount == 12 and .callbackCount == 1 and .mainnetExecutionEnabled == false' audit/stage135-independent-proof.json
+      - name: Prove tampered state and forged success cannot pass independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tampered
+          cp evidence/*.json tampered/
+          node -e "const fs=require('node:fs');const p='tampered/stage41-sandbox-balance-settlement.json';let j=JSON.parse(fs.readFileSync(p));j.actorSeizeFtIncreaseAtomic=(BigInt(j.actorSeizeFtIncreaseAtomic)+1n).toString();fs.writeFileSync(p,JSON.stringify(j))"
+          if node scripts/stage135-independent-proof.mjs tampered audit-tampered; then
+            echo 'FORGED_SETTLEMENT_INCORRECTLY_PASSED' >&2
+            exit 1
+          fi
+          cp evidence/stage41-sandbox-balance-settlement.json tampered/
+          node -e "const fs=require('node:fs');const p='tampered/stage129-finalized-transaction.json';let j=JSON.parse(fs.readFileSync(p));j.final_execution_status='EXECUTED';fs.writeFileSync(p,JSON.stringify(j))"
+          if node scripts/stage135-independent-proof.mjs tampered audit-tampered; then
+            echo 'FORGED_FINALITY_INCORRECTLY_PASSED' >&2
+            exit 1
+          fi
+          echo 'Both genuine-proof tamper regressions correctly rejected'
+      - name: Publish standalone independent local-proof witness
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage135-independent-sandbox-proof
+          path: audit/stage135-independent-proof.json
+          retention-days: 90
+          if-no-files-found: error
