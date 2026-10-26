@@ -25,6 +25,7 @@ on:
       - 'scripts/stage89-targeted-wnear-clone.mjs'
       - 'scripts/stage91-targeted-linear-token.mjs'
       - 'src/rhea/stage41-sandbox-settlement.ts'
+      - 'src/rhea/stage131-self-repay-cap.ts'
 permissions:
   contents: read
   actions: read
