@@ -122,7 +122,29 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
  const liquidationRepay=uint(plan.actions[1].Liquidate.in_assets[0].amount,'LIQUIDATION_REPAY');
  const liquidationSeize=uint(plan.actions[1].Liquidate.out_assets[0].amount,'LIQUIDATION_SEIZE');
  const withdrawn=uint(withdrawAmount,'WITHDRAW');
- if(borrowed===0n||liquidationRepay!==borrowed||
+ // For same-token replay, actor loan share rounding may require a strictly
+ // positive, conservatively bounded REAL additional borrow; source borrower
+ // liquidation repayment is never increased. Stage49/Stage52 separately
+ // recompute the source-approved witness against the actual Sandbox pool.
+ const w=plan.stage124ShareFunding;
+ let matchingActorLoan=borrowed===liquidationRepay&&w===undefined;
+ if(w!==undefined){
+  const base=uint(w.sourceLiquidationRepayInternal,'SOURCE_REPAY');
+  const seized=uint(w.sourceLiquidationSeizeInternal,'SOURCE_SEIZE');
+  const delta=uint(w.incrementalBorrowInternal,'BORROW_DELTA');
+  const bound=uint(w.maxExtraBorrowInternal,'BORROW_BOUND');
+  const minted=uint(w.mintedBorrowShares,'BORROW_SHARES');
+  const required=uint(w.roundedUpRequiredLiquidationShares,'REPAY_SHARES');
+  const expectedRemain=uint(w.expectedRemainingAfterSelfRepayInternal,'EXPECTED_SURPLUS');
+  matchingActorLoan=same&&w.mode==='STAGE124_REAL_POOL_SHARE_ROUNDING_FINANCING'&&
+   w.chain==='NEAR_SANDBOX'&&w.repaymentTokenId===repay&&
+   w.borrowerStateModified===false&&w.oraclePriceModified===false&&
+   w.mainnetExecutionEnabled===false&&base===liquidationRepay&&
+   seized===liquidationSeize&&delta>0n&&delta<=bound&&
+   bound<=(seized-base)/4n&&borrowed===base+delta&&
+   minted>=required+2n&&expectedRemain===seized-borrowed;
+ }
+ if(borrowed===0n||!matchingActorLoan||
   (same?(!selfRepay||selfRepay.token_id!==repay||
     uint(selfRepay.amount,'ACTOR_REPAY')!==borrowed||
     liquidationSeize<=borrowed||withdrawn!==liquidationSeize-borrowed):
