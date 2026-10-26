@@ -39,6 +39,17 @@ test('Rhea borrows only current pinned can_borrow tokens and keeps pool liquidit
  assert.equal(r.mainnetExecutionEnabled,false);
  assert.equal(r.status,'PINNED_PERMISSIONS_PASS_LIQUIDITY_UNVERIFIED');
 });
+test('Stage124 permits a capped supplied-share repayment but forbids ambiguous or inflated repayment',()=>{
+  const bounded=plan();
+  delete bounded.actions[1].Liquidate.in_assets[0].amount;
+  bounded.actions[1].Liquidate.in_assets[0].max_amount='100';
+  assert.equal(inspectStage49RheaAssets(bounded,assets(),221433162).repayCanBorrow,true);
+  const dual=structuredClone(bounded);dual.actions[1].Liquidate.in_assets[0].amount='100';
+  assert.throws(()=>inspectStage49RheaAssets(dual,assets(),221433162),/STAGE49_/);
+  const inflated=structuredClone(bounded);inflated.actions[1].Liquidate.in_assets[0].max_amount='101';
+  assert.throws(()=>inspectStage49RheaAssets(inflated,assets(),221433162),/STAGE49_/);
+});
+
 test('disabled Borrow, disabled Withdraw, missing asset, empty pool, or forged pin block',()=>{
  for(const data of [
   assets({config:{can_borrow:false}}),
