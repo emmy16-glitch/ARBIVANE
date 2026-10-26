@@ -21,7 +21,7 @@ export interface Stage38Options extends Omit<SweepOptions,'batchSize'> {
 }
 export interface Stage38Row {
  borrowerAccountId:string;historicalFindingIndex:number;
- status:'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'|'NO_CURRENT_SOURCE_SCENARIO'|'BLOCKED_FRESH_READ';
+ status:'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY'|'FRESH_SOURCE_UNSUPPORTED_SANDBOX_ROUTE'|'NO_CURRENT_SOURCE_SCENARIO'|'BLOCKED_FRESH_READ';
  observationBlockHeight:string|null;reasonCode:string|null;
  referenceInitialHealthBps:string|null;paperGrossUsdE27:string|null;
  sizingStatus:SourceLiquidationSizing['status']|null;
@@ -150,10 +150,11 @@ export async function qualifyStage38Candidates(
     throw Error('STAGE38_UNTRUSTED_SIZING_EVIDENCE');
    const positive=evidence.status==='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'&&
     evidence.referenceRulesPass===true;
+   const unsupportedRoute=positive&&o.requiredSameTokenId!==undefined&&
+    (evidence.repay?.tokenId!==o.requiredSameTokenId||
+     evidence.seize?.tokenId!==o.requiredSameTokenId);
    if(positive){
-    if(o.requiredSameTokenId!==undefined&&
-       (evidence.repay?.tokenId!==o.requiredSameTokenId||
-        evidence.seize?.tokenId!==o.requiredSameTokenId)){
+    if(unsupportedRoute){
      // Still a genuine source observation, but not an executable asset route.
      rejectedByRequiredRoute++;
     }else{
@@ -161,7 +162,8 @@ export async function qualifyStage38Candidates(
      proposals.push(evidence);
     }
    }
-   row={...row,status:positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
+   row={...row,status:unsupportedRoute?'FRESH_SOURCE_UNSUPPORTED_SANDBOX_ROUTE':
+    positive?'FRESH_SOURCE_PLAN_FOR_SANDBOX_ONLY':'NO_CURRENT_SOURCE_SCENARIO',
     observationBlockHeight:evidence.blockHeight,reasonCode:null,
     referenceInitialHealthBps:evidence.referenceInitialHealthBps,
     paperGrossUsdE27:positive?evidence.paperGrossUsdE27:null,
