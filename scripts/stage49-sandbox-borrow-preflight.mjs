@@ -1,3 +1,4 @@
+import {stage124ValidateShareSafeBorrow} from './stage124-supplied-shares-safe-borrow.mjs';
 /** Stage49: compare a genuine Stage37 plan to pinned Rhea pool limits and
  * the disposable local liquidator's actually observed collateral.
  * This is a SANDBOX borrow preflight, not deployed borrowing parity.
@@ -50,10 +51,14 @@ export function inspectStage49SandboxBorrow({plan,assets,actorAccountId,actorPos
  const liquidation=plan.actions[1]?.Liquidate;
  const withdraw=plan.actions.at(-1)?.Withdraw;
  const same=liquidation?.out_assets?.[0]?.token_id===token;
+ // Only a freshly recomputed genuine Sandbox pool share witness can change
+ // Borrow amount relative to the unchanged source-approved liquidation debt.
+ const borrowedDiffers=rawQty!==liquidation?.in_assets?.[0]?.amount;
+ if(borrowedDiffers)stage124ValidateShareSafeBorrow(plan,assets);
  if(!ID.test(token)||!liquidation||liquidation.in_assets?.length!==1||
   liquidation.out_assets?.length!==1||
   liquidation.in_assets[0]?.token_id!==token||
-  liquidation.in_assets[0]?.amount!==rawQty||
+  (borrowedDiffers&&!same)||
   !withdraw||withdraw.token_id!==liquidation.out_assets[0].token_id||
   (same?(plan.actions.length!==4||
    plan.actions[2]?.Repay?.token_id!==token||
