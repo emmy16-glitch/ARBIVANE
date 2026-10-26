@@ -39,11 +39,17 @@ export function inspectStage50RepayReserve({
  const liquidation=plan.actions?.[1]?.Liquidate;
  if(!repay||!ID.test(repay.token_id)||!liquidation||
   liquidation.in_assets?.length!==1||
-  liquidation.in_assets[0]?.token_id!==repay.token_id||
-  liquidation.in_assets[0]?.amount!==repay.amount)
+  liquidation.in_assets[0]?.token_id!==repay.token_id)
   throw Error('STAGE50_REPAY_ROUTE_MISMATCH');
  const requiredInternal=amount(repay.amount,'INVALID_REPAY_INTERNAL_UNITS');
- if(requiredInternal===0n)throw Error('STAGE50_ZERO_REPAY');
+ const liquidationInternal=amount(liquidation.in_assets[0].amount,'INVALID_LIQUIDATION_INTERNAL_UNITS');
+ const same=plan.actions?.at(-1)?.Withdraw?.token_id===repay.token_id;
+ const expectedBuffer=liquidationInternal/10000n+2n;
+ if(requiredInternal===0n||liquidationInternal===0n)
+  throw Error('STAGE50_ZERO_REPAY');
+ if(same?requiredInternal!==liquidationInternal+expectedBuffer:
+  requiredInternal!==liquidationInternal)
+  throw Error('STAGE50_REPAY_ROUTE_MISMATCH');
  const pool=matchedPool(pinnedAssets,repay.token_id);
  const config=record(pool.config,'MISSING_ASSET_CONFIG');
  if(config.can_borrow!==true)throw Error('STAGE50_REPAY_BORROW_DISABLED');
