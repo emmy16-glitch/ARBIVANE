@@ -1,3 +1,9 @@
+## Stage156 genuine stalled FINAL receipt recovery after Stage154 verified height 74 (26 October 2026)
+
+- Original [100-LiNEAR ultra-short-clock run #40363964271](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40363964271) FAILED at partner Borrow/Withdraw; archive #12669618713 shows original Rhea Borrow/Withdraw events, `STAGE124_FINAL_RECEIPTS_TIMEOUT` on four status queries, and actual nearcore finalized height **74** unchanged after three `fastForward(138)` attempts. No liquidator funding/repay or zero debt verified.
+- Merged [Stage156 bounded original FINAL recovery](docs/STAGE156_SANDBOX_FINALITY_RECOVERY.md) reuses proven Stage134 64→10,000 local-block fallback, no repeated actions, no altered oracle/borrower, no mainnet signing. Genuine [post-merge rerun #40366390552](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40366390552) must be inspected for complete original FINAL evidence; do not infer settlement from CI regression success.
+- Even with a synthetically successful receipt recovery, observed real-timing 100-token net financing remains **-22,332,800,301,607 atomic LiNEAR** using same source-sized borrower. Maintain the 10-token verified zero-debt achievement, block larger loan amounts on this historical candidate, and keep `EXECUTION_ENABLED=false`.
+
 ## Post-repair direct Workspaces replay: 10 LiNEAR settled, 100 LiNEAR failed (26 October 2026)
 
 - [Stage150 run #40363964469](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40363964469), original artifact #12669397778: actually transferred 9,999,999,999,999,999,999,999,999 atomic local LiNEAR principal and returned the exact same principal, paid 1,910,726,860,660 additional atomic LiNEAR, successfully reclaimed unused supply, finished with `observedPartnerRemainingRheaDebtShares="0"`, `partnerAccruedDebtDustClosed=true`, and residual 620,478,795,205 atomic test inventory. This is **not realized financial profit**, flash liquidity or mainnet funding.
