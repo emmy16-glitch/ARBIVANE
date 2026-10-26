@@ -25,6 +25,7 @@ import {attestStage51PythParity,selectPinnedActivePythSandboxDependencies} from 
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
+import {resolveStage124RheaCallbackReceipts} from './stage124-final-rhea-receipts.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
@@ -386,7 +387,16 @@ async function main(){
  const signedEvidence=signedSandboxEvidence(raw,{signerId:actor.accountId,
   receiverId:plan.lendingContract});
  await writeFile('stage116-signed-transaction.json',JSON.stringify(signedEvidence.manifest,null,2)+'\n');
- const report=summarizeStage37SandboxOutcome(raw,{
+ // Workspaces callRaw can return EXECUTED without the actual async receipt
+ // definitions. Read FINAL receipts from this disposable Sandbox ONLY and
+ // require exact signed transaction identity. Never resend a transaction.
+ const finalized=await resolveStage124RheaCallbackReceipts({
+  raw,provider:worker.provider,signerAccountId:actor.accountId,
+  evidencePath:'stage124-final-rhea-receipts.json',writeFile,
+ });
+ await writeFile('stage124-finalized-rhea-transaction.json',
+  JSON.stringify(finalized.result,null,2)+'\n');
+ const report=summarizeStage37SandboxOutcome(finalized,{
   pinnedConfigMatches,pinnedBorrowerMatches,
   temporalAccrualVerified:temporalProof?.verified===true&&
    parityWitness.temporalAccrualVerified===true,
