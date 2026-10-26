@@ -8,3 +8,9 @@
 - Next command: `gh run view 40286675745 --json status,conclusion,jobs && gh api repos/emmy16-glitch/ARBIVANE/actions/runs/40286675745/logs > /tmp/stage111-run.zip` (after completion). Then inspect the candidate log for `observedFailureCode`.
 - Next implementation: establish the oracle's actual local rejection reason by a bounded, sanitized diagnostic; compare source quote publish time, pinned source block timestamp, and Sandbox block timestamp without exposing feed/account/secret values. Implement source authenticated time coherent replay or fresh authentic feed import as required, with a meaningful regression test. Keep quote freshness enforcement and all settlement gates intact.
 - After each tested fix: commit, push branch, PR, wait checks, merge, run Stage 93, inspect receipts and borrower debt/collateral and seized FT changes. Continue until real settlement is verified.
+
+## Stage 113 execution update
+- PRs #162, #163, #164 merged. Runtime fix commit `0eed145` pins Sandbox nearcore 2.13.4 instead of Workspaces default 2.6.2.
+- Actual run `40288079004` proves the oracle view now executes: prior deserialization rejection is gone. Current failure is `STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT`, before any liquidation call.
+- Next command: `gh api repos/emmy16-glitch/ARBIVANE/actions/runs/40288079004/logs > /tmp/stage113.zip`.
+- Next fix: distinguish a null expired local quote from a changed non-null quote. Source quote freshness and Sandbox clock must remain enforced. Investigate authentic historical clock configuration or fresh authenticated oracle updates; do not raise the age bound or modify stored prices.
