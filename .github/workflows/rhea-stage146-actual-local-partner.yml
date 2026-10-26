@@ -1,0 +1,123 @@
+name: Stage146 actual local partner-funded Rhea liquidation test
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage146-actual-local-partner-funding.mjs'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'tests/rhea-stage146-local-partner.test.mjs'
+      - '.github/workflows/rhea-stage146-actual-local-partner.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage146-actual-local-partner-funding.mjs'
+      - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'tests/rhea-stage146-local-partner.test.mjs'
+      - '.github/workflows/rhea-stage146-actual-local-partner.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: arbivane-stage146-authentic-local-financed-rhea
+  cancel-in-progress: false
+jobs:
+  strict_partner_financing_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      EXECUTION_ENABLED: 'false'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: node --test tests/rhea-stage146-local-partner.test.mjs
+  actually_transfer_partner_tokens_and_liquidate_in_near_sandbox:
+    if: github.event_name != 'pull_request'
+    needs: strict_partner_financing_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    env:
+      EXECUTION_ENABLED: 'false'
+      NEAR_NETWORK: mainnet
+      NEAR_WORKSPACES_NETWORK: sandbox
+      STAGE37_ALLOW_SANDBOX_MUTATION: 'true'
+      STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true'
+      STAGE146_SANDBOX_PARTNER_FINANCING: 'true'
+      ARBIVANE_ALLOW_MAINNET_SIGNING: 'false'
+      ARBIVANE_ALLOW_MAINNET_BROADCAST: 'false'
+      STAGE82_SINGLE_BORROWER: 'true'
+      SANDBOX_ARTIFACT_URL: https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz
+      NEAR_RPC_URL: https://archival-rpc.mainnet.fastnear.com
+      NEAR_CLI_MAINNET_RPC_SERVER_URL: https://archival-rpc.mainnet.fastnear.com
+      RHEA_LENDING_CONTRACT: contract.main.burrow.near
+      RHEA_ORACLE_CONTRACT: aggregate-oracle.near
+      RHEA_EXPECTED_LENDING_CODE_HASH: 6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa
+      RHEA_EXPECTED_ORACLE_CODE_HASH: 9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Download ORIGINAL successful pinned borrower 2579 and Rhea plan
+        uses: actions/download-artifact@v4
+        with:
+          run-id: '40317139342'
+          name: stage93-authentic-borrower-2579
+          github-token: ${{ github.token }}
+          path: source
+      - name: Verify no owner's wallet keys and only authentic source plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s source/stage38-positive-stage35-evidence.json
+          jq -e '.mode=="RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING" and .chain=="NEAR_MAINNET" and .borrowerAccountId != "arbivane-replay.test.near" and .maySign==false and .mayBroadcast==false and .repay.tokenId=="linear-protocol.near" and .seize.tokenId=="linear-protocol.near"' source/stage38-positive-stage35-evidence.json
+          echo "STAGE37_STAGE35_EVIDENCE_PATH=source/stage38-positive-stage35-evidence.json" >> "$GITHUB_ENV"
+      - name: Install sandbox-only NEAR Workspaces, no production signing packages
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund near-workspaces@5.0.0
+      - name: Execute actual partner Borrow and signed local token/Rhea receipts
+        shell: bash
+        env:
+          STAGE45_ARCHIVAL_FALLBACK_URL: ${{ secrets.ARBIVANE_LARGE_STATE_ARCHIVAL_RPC_URL || 'https://archival-rpc.mainnet.near.org' }}
+        run: |
+          set -euo pipefail
+          timeout --kill-after=10s 18m node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage146-runner.log
+          jq -e '
+            .mode=="STAGE146_ACTUAL_PARTNER_FINANCED_SANDBOX_LIQUIDATION"
+            and .network=="NEAR_SANDBOX"
+            and .fundingClassification=="PARTNER_COLLATERALIZED_SANDBOX_RHEA_BORROW_NOT_FLASH_LOAN"
+            and .partnerSandboxWnearCollateralYocto=="1000000000000000000000000"
+            and .actorOwnerCollateralAtomic=="0"
+            and .actualFtPartnerToActorObserved==true
+            and .actualFtActorSuppliedToRheaObserved==true
+            and .realLocalRheaLiquidationFinalized==true
+            and .realLocalLoanPrincipalReturnedToPartner==true
+            and .partnerRheaBorrowDebtAfterInternal=="0"
+            and (.actorFinalResidualLinearFtAtomic|tonumber)>0
+            and .realUncollateralizedFlashLoanUsed==false
+            and .verifiedMainnetProfit==false
+            and .canSignMainnet==false
+            and .canBroadcastMainnet==false
+          ' stage146-actual-partner-funded-result.json
+          for step in partner-borrow partner-to-actor actor-rhea-deposit actor-real-liquidation actor-to-partner partner-return-to-rhea partner-repay-borrow; do
+            test -s "stage146-$step-final.json"
+            jq -e '.final_execution_status=="FINAL" and (.status|has("SuccessValue")) and (.receipts_outcome|length)>0 and (.receipts_outcome|all(.outcome.status|has("Failure")|not))' "stage146-$step-final.json"
+          done
+      - name: Always preserve actual local traces or failure reason
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage146-genuine-partner-finance-or-failure
+          retention-days: 90
+          if-no-files-found: warn
+          path: |
+            stage146-*.json
+            stage37-process-result.json
+            stage55-sandbox-phase-evidence.json
+            stage46-sandbox-clone-evidence.json
+            stage96-rhea-view-parity.json
+            stage49-sandbox-registration.json
+            stage51-active-pyth-sandbox-parity.json
+            stage146-runner.log
