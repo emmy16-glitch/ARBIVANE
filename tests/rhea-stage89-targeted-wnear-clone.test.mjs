@@ -121,7 +121,7 @@ test('Stage168 retries genuine SDK JSON-RPC -429 only using exact-block independ
  f.args.root.importContract=async input=>{
   endpoints.push(process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL);
   options.push(input);
-  if(endpoints.length===1)throw Error('{"jsonrpc":"2.0","error":{"code":-429,"message":"Rate limits exceeded"}}');
+  if(endpoints.length===1)throw Error('{"jsonrpc":"2.0","error":{"code":-429}}');
   return original(input);
  };
  try{
