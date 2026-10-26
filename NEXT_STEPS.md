@@ -1,3 +1,8 @@
+## Stage124 — capped supplied-share repayment (2026-10-26)
+- Main at investigation: `ce96a1c5a1506cd2fae65964eb774426c89398df` (PR #174). Stage93 run `40307339734` FAILED; artifact `12643138316`; genuine local tx `4dirNb3uUowy1f8TPmrZ7k3ByFh9ejX9fBskW2WNvY82` showed a successful temporary Borrow event followed by Rhea `Not enough supplied balance` on liquidation repayment. No settlement or seized FT.
+- Archived Rhea source shows `AssetAmount.amount` acts as exact minimum while `max_amount` caps repayment by available supplied shares. Same-sized Borrow may incur lending share rounding. Branch `fix/stage124-bounded-liquida-repay` changes ONLY isolated Sandbox liquidation `in_assets` to a `max_amount` equal to the original source-pinned repay amount; Borrow/self-Repay/out-assets/Withdraw, oracle/parity and finality/delta gates remain unchanged. Adversarial cap mismatch/dual-field plans fail closed.
+- Next: require CI green, merge and inspect ONE auto-triggered actual Stage93 run, genuine signed receipts, borrower debt/collateral and seized FT; identify real next failure without altering historical eligibility. Mainnet signing/spending disabled. NO verified liquidation.
+
 # Stage 111 handoff
 
 ## Stage123 consolidated settlement checkpoint
