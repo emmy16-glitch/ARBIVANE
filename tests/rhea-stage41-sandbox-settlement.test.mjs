@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {attestStage41SandboxSettlement} from '../src/rhea/stage41-sandbox-settlement.ts';
+import {stage124PrepareShareSafeBorrow} from '../scripts/stage124-supplied-shares-safe-borrow.mjs';
 const H='2'.repeat(43);
 function plan(){return {
  mode:'ARBIVANE_STAGE37_ISOLATED_SANDBOX_LIQUIDATION_PLAN',chain:'NEAR_SANDBOX',
@@ -157,5 +158,38 @@ test('Stage71 validates real borrower debt and collateral deltas with same-token
  ]){
   const bad=structuredClone(route);mutation(bad);
   assert.throws(()=>attestStage41SandboxSettlement({...e,plan:bad}),/STAGE41_/);
+ }
+});
+
+test('Stage124 settlement admits only independently sourced bounded SAME-TOKEN actor financing',()=>{
+ const route={...plan(),actions:[
+  {Borrow:{token_id:'usdt.near',amount:'20'}},
+  {Liquidate:{account_id:'account.near',
+   in_assets:[{token_id:'usdt.near',amount:'20'}],
+   out_assets:[{token_id:'usdt.near',amount:'30'}]}},
+  {Repay:{token_id:'usdt.near',amount:'20'}},
+  {Withdraw:{token_id:'usdt.near',amount:'10'}}
+ ]};
+ const {plan:funded,witness}=stage124PrepareShareSafeBorrow(route,[
+  ['usdt.near',{supplied:{balance:'1000',shares:'1000'}}]
+ ]);
+ const original=input();
+ const borrower=(d,c)=>({positions:{REGULAR:{
+  borrowed:[leg('usdt.near',d)],collateral:[leg('usdt.near',c)]
+ }}});
+ const e={...original,plan:funded,
+  borrowerBefore:borrower(100,200),borrowerAfter:borrower(80,170),
+  actorRepayFtBefore:'0',actorRepayFtAfter:funded.actions[3].Withdraw.amount,
+  actorSeizeFtBefore:'0',actorSeizeFtAfter:funded.actions[3].Withdraw.amount};
+ assert.equal(attestStage41SandboxSettlement(e).status,'POSITION_AND_FT_DELTAS_OBSERVED_UNSOLD');
+ assert.ok(witness.incrementalBorrowInternal!=='0');
+ for(const changed of [
+  {...funded,stage124ShareFunding:undefined},
+  {...funded,stage124ShareFunding:{...witness,incrementalBorrowInternal:'0'}},
+  {...funded,stage124ShareFunding:{...witness,mainnetExecutionEnabled:true}},
+  {...funded,stage124ShareFunding:{...witness,sourceLiquidationRepayInternal:'21'}},
+  {...funded,stage124ShareFunding:{...witness,maxExtraBorrowInternal:'1000'}},
+ ]){
+  assert.throws(()=>attestStage41SandboxSettlement({...e,plan:changed}),/STAGE41_/);
  }
 });
