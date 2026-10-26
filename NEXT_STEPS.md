@@ -19,6 +19,14 @@
 
 # Stage 111 handoff
 
+## Stage130 real Rhea withdraw succeeded; strict FINAL callback receipt hydration (26 Oct 2026)
+- PR #199 merged main e1d113d after green CI; Stage93 actual run 40312272525 failed ONLY at SANDBOX_CALLBACK_RECEIPTS with SANDBOX_CALLBACK_RECEIPT_NOT_PRESENT. Actor index 2579 requalified; auth oracle parity and full 4-leg atomic action ran. Genuine Sandbox signed tx pm9jp8wGomZTRXZNLfEvayG7ebD36zSmazsUrHQgrkX (artifact 12645102916) has final_execution_status EXECUTED, receipts=[] but 11 AUTHENTIC SUCCESS receipt outcomes. Rhea emitted Borrow, Liquidate, Repay, Withdraw_started and Withdraw_succeeded; authentic linear-protocol.near emitted NEP141 ft_transfer of 2531189815427 LiNEAR atomic units from imported contract.main.burrow.near to arbivane-replay.test.near. NO failed receipt outcomes. DO NOT CLAIM FINAL settlement until independent finality + balance deltas are verified.
+- Branch fix/stage130-canonical-atomic-receipts separately keeps original raw full signed transaction and validated Ed25519 evidence. It then requests LOCAL worker.provider.txStatusReceipts(hash,actorId,'FINAL') for the exact same signed hash/signer/lending receiver; rejects finality mismatch, missing any original child receipt, failed original/final outcome or missing receipt definitions; does not sign or rebroadcast. Existing Stage37 callback_execute_with_pyth receipt-definition verifier, Stage48 later-finalized state and Stage41 borrower debt/collateral decreases + FT seizure + zero actor debt still govern success. Writes stage130-final-atomic-receipts.json, uploaded by Stage93.
+- Next: run branch CI and merge when green; inspect ONE auto-triggered authentic Stage93, and compare full receipt tree, debt/collateral and seized LiNEAR FT. If no FINAL receipts, inspect Sandbox RPC precise failure and fix without bypassing any economic/oracle gate. Mainnet spending/signing remains disabled.
+- Latest branch checkpoint SHA 8e48ea6. Verified finalized liquidation: NONE (as of this checkpoint).
+
+
+
 ## Stage129 execution path correction — 26 October 2026
 - Latest completed authentic Stage93 40310497704 failed at STAGE124_BORROW_NOT_FUNDED_IN_REAL_FT BEFORE Liquidate, although separate genuine Borrow signed tx 6Sq4VHBUvh96zkKP5AnY8J5vSzp5U6fs7tHw5uweYqc9 had FINAL successful callbacks (artifact 12643993207). Source assets were not fabricated or source quote changed.
 - Earlier run 40309174523 on main af1438df had an ATOMIC Borrow → Liquidate → Repay → Withdraw sequence; genuine Rhea Liquidate and Repay events were emitted before only the exact minimum Withdraw failed Not enough asset balance. No finalized settlement. Merged PR #186 subsequently changed same-token Withdraw to source-capped max_amount, but PR #182 later changed Stage37 execution to standalone Borrow + mandatory external FT prefund and actions.slice(1). Therefore the four-leg atomic route with BOTH source-capped Liquidate AND Withdraw has never actually been run.
