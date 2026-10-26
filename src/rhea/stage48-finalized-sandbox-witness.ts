@@ -44,11 +44,45 @@ export function attestStage48FinalizedSandboxReplay(input:{
   input.finalizedBlockAfter<input.finalizedBlockBefore+2||
   !valid(before)||!valid(immediatelyAfter)||!valid(afterFinalBlock))
   throw Error('STAGE48_INCOMPLETE_FINALIZED_STATE_EVIDENCE');
- const canonical=(s:Stage48PositionSnapshot)=>JSON.stringify(s);
- // Require at least actual borrower mutation; Stage41 additionally demands
- // positive debt/collateral deltas, actor solvency and seized FT proceeds.
- if(JSON.stringify(before.borrower)===JSON.stringify(immediatelyAfter.borrower)||
-  canonical(immediatelyAfter)!==canonical(afterFinalBlock))
+ // Rhea's balance and APR are time-derived and change when a Sandbox
+ // fastForward advances 9,000+ blocks. Farm metadata can also change. Those
+ // are NOT a position mutation. The immutable on-chain position SHARES,
+ // asset IDs and externally held NEP-141 FT balances must remain identical.
+ // Never replace real state reads with cached, patched or synthetic values.
+ const immutable=(account:unknown)=>{
+  if(!plain(account))throw Error('STAGE131_INVALID_REAL_ACCOUNT_SNAPSHOT');
+  const a=account as {account_id?:unknown;positions?:{REGULAR?:{
+   collateral?:unknown;borrowed?:unknown}}};
+  if(typeof a.account_id!=='string'||!a.account_id)
+   throw Error('STAGE131_INVALID_ACCOUNT_ID');
+  const selected=a.positions?.REGULAR;
+  if(!selected)throw Error('STAGE131_MISSING_REGULAR_POSITION');
+  const shares=(rows:unknown)=>{
+   if(!Array.isArray(rows)||rows.length>256)
+    throw Error('STAGE131_INVALID_POSITION_SHARE_ROWS');
+   const seen=new Set<string>();
+   return rows.map(x=>{
+    if(!x||typeof x!=='object')
+     throw Error('STAGE131_INVALID_POSITION_SHARE_ROW');
+    const v=x as {token_id?:unknown;shares?:unknown};
+    if(typeof v.token_id!=='string'||!v.token_id||
+     seen.has(v.token_id)||!balance(v.shares))
+     throw Error('STAGE131_UNATTESTED_POSITION_SHARES');
+    seen.add(v.token_id);
+    return [v.token_id,v.shares];
+   }).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+  };
+  return {id:a.account_id,borrowed:shares(selected.borrowed),
+   collateral:shares(selected.collateral)};
+ };
+ const economic=(snap:Stage48PositionSnapshot)=>JSON.stringify({
+  borrower:immutable(snap.borrower),actor:immutable(snap.actor),
+  repayFt:snap.repayFt,seizeFt:snap.seizeFt,
+ });
+ const beforeBorrower=JSON.stringify(immutable(before.borrower));
+ const immediateBorrower=JSON.stringify(immutable(immediatelyAfter.borrower));
+ if(beforeBorrower===immediateBorrower||
+  economic(immediatelyAfter)!==economic(afterFinalBlock))
   throw Error('STAGE48_STATE_CHANGE_OR_LATER_PERSISTENCE_NOT_VERIFIED');
  return {...receipt,
   status:'ISOLATED_CALLBACK_SUCCESS_NOT_MAINNET_PROOF',
