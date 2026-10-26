@@ -24,6 +24,17 @@ function decode(v){
  return Buffer.from(v,'base64');
 }
 function exactEq(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+/** Workspaces SDK can reject a pinned code-only import with a JSON-RPC -429
+ * envelope instead of a typed HTTP error. Only transport failures permit
+ * trying the independent archive at the SAME pinned block.
+ */
+function transientWasmImport(error){
+ const m=String(error instanceof Error?error.message:'').slice(0,2000);
+ return /rate limits exceeded|too many requests|NEAR RPC HTTP (?:429|5\d\d)|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|AbortError|TimeoutError|"code"\s*:\s*-(?:429|500|502|503|504)\b/i.test(m)||
+  /^(?:AbortError|TimeoutError)$/.test(error?.name??'')||
+  [429,500,502,503,504,-429,-500,-502,-503,-504].includes(error?.code);
+}
+
 function positiveU128(v){
  return typeof v==='string'&&/^(0|[1-9][0-9]{0,38})$/.test(v)&&
   BigInt(v)<=U128;
@@ -122,9 +133,36 @@ export async function cloneStage89WrappedNear({
  }
  if(balances[0].value==='0'||balances[1].value===null)
   throw Error('STAGE89_RHEA_WNEAR_VAULT_NOT_REGISTERED_OR_EMPTY');
- const contract=await root.importContract({
-  mainnetContract:contractId,blockId:blockHeight,withData:false,
- });
+ // Stage168: observed Stage93 run #40400219939 reached the original SDK
+ // import and failed on JSON-RPC -429. Try independent archival code import
+ // ONLY for transient RPC/transport errors. Both attempts read the original
+ // unchanged pinned block and deployed wrap.near bytecode.
+ const previousImportRpc=process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+ const importEndpoints=[previousImportRpc||endpoint,fallbackEndpoint]
+  .filter((url,i,all)=>all.indexOf(url)===i);
+ let contract,wasmImportAttempts=0,wasmImportFallbackUsed=false;
+ try{
+  for(let i=0;i<importEndpoints.length;i++){
+   process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=importEndpoints[i];
+   wasmImportAttempts++;
+   try{
+    contract=await root.importContract({
+     mainnetContract:contractId,blockId:blockHeight,withData:false,
+    });
+    wasmImportFallbackUsed=i>0;
+    break;
+   }catch(error){
+    // Contract/schema errors never become a fallback authorization.
+    if(!transientWasmImport(error))throw Error('STAGE168_NONTRANSIENT_WNEAR_WASM_IMPORT_FAILED');
+    if(i===importEndpoints.length-1)break;
+   }
+  }
+ }finally{
+  if(previousImportRpc===undefined)
+   delete process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL;
+  else process.env.NEAR_CLI_MAINNET_RPC_SERVER_URL=previousImportRpc;
+ }
+ if(!contract)throw Error('STAGE168_PINNED_WNEAR_WASM_IMPORT_PROVIDERS_EXHAUSTED');
  if(contract?.accountId!==contractId||
   typeof contract.patchStateRecords!=='function'||
   typeof contract.accountView!=='function'||typeof contract.view!=='function'||
@@ -164,6 +202,7 @@ export async function cloneStage89WrappedNear({
   recordsRead:storage.length,recordsPatched:storage.length,
   patchWriteCalls:storage.length,alternateSingleEntryReads:recoveries,
   sourceStorageDigest:hash.digest('hex'),
+  wasmImportAttempts,wasmImportFallbackUsed,
   relevantAccountViewParityVerified:true,
   originalFtSupplyVerified:true,originalDeployedWasmVerified:true,
   // A deliberately selective clone cannot claim full-account keyspace parity.
