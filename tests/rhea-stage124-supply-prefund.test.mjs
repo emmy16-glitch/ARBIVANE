@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {prefundStage124RheaSupply} from '../scripts/stage124-rhea-supply-prefund.mjs';
 
-function replay(supplied='999990'){
+function replay(supplied='999990',received='1000000'){
  const tokenId='linear-protocol.near',actorAccountId='arbivane-replay.test.near';
  const amount='1000000';
  let borrowed=false, deposited=false;
@@ -25,7 +25,7 @@ function replay(supplied='999990'){
    borrowed=true;
    return raw('2'.repeat(43));
   }
-  if(method==='ft_transfer_call'&&args.amount===amount&&args.msg===''&&borrowed){
+  if(method==='ft_transfer_call'&&args.amount===received&&args.msg===''&&borrowed){
    assert.equal(contract.accountId,tokenId);
    assert.equal(args.receiver_id,'contract.main.burrow.near');
    deposited=true;
@@ -42,7 +42,7 @@ function replay(supplied='999990'){
  const repayToken={accountId:tokenId,async view(name,args){
   assert.equal(name,'ft_balance_of');
   assert.equal(args.account_id,actorAccountId);
-  return deposited?'0':borrowed?amount:'0';
+  return deposited?'0':borrowed?received:'0';
  }};
  const plan={chain:'NEAR_SANDBOX',method:'execute_with_pyth',
   executionEnabled:false,maySignMainnet:false,mayBroadcastMainnet:false,
@@ -77,4 +77,22 @@ test('Stage125 fails closed if real supplied balance falls below bounded 10 ppm 
  wrong.args.repayReserve.requiredFtAtomicRoundedUp='1000001';
  await assert.rejects(prefundStage124RheaSupply(wrong.args),
   /STAGE124_REPAY_FT_UNITS_OR_ROUTE_UNATTESTED/);
+});
+
+test('Stage128 deposits only genuine received LiNEAR within 10ppm, never adds fictional FT units',async()=>{
+ const {args,calls}=replay('999990','999995');
+ const result=await prefundStage124RheaSupply(args);
+ assert.equal(result.actualBorrowFtCredited,true);
+ assert.equal(result.actualFtReturnedToSupply,true);
+ assert.equal(calls[1].method,'ft_transfer_call');
+ assert.equal(calls[1].args.amount,'999995');
+ assert.equal(calls[1].opts.attachedDeposit,1n);
+});
+test('Stage128 rejects observed LiNEAR FT shortfall beyond 10ppm and cannot call deposit',async()=>{
+ for(const observed of ['999989','0','1000001']){
+  const {args,calls}=replay('999990',observed);
+  await assert.rejects(prefundStage124RheaSupply(args),
+   /STAGE128_BORROW_FT_OR_DEBT_BEYOND_ROUNDING_BOUND/);
+  assert.equal(calls.length,1);
+ }
 });
