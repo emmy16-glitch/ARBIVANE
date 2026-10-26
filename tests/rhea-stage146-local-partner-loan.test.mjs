@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {stage146AttemptRealPartnerFundedLocalRhea,stage146FindLegShares}
+import {stage146AttemptRealPartnerFundedLocalRhea,stage146FindLegShares,stage146BuildPartnerFundedLiquidationActions}
  from '../scripts/stage146-real-workspaces-partner-lender.mjs';
 
 const originalKeys=[
@@ -133,4 +133,27 @@ test('Stage146 matches exact get_account_all_positions layout from genuine Stage
   /STAGE146_BAD_ACCOUNT_SUPPLIED_LEGS/);
  assert.throws(()=>stage146FindLegShares(snapshot,'invented','linear-protocol.near'),
   /STAGE146_UNKNOWN_POSITION_LEG_KIND/);
+});
+
+test('Stage146 deployed Rhea Liquidate action requires exact enum wrapper and source-sized withdrawal',()=>{
+ const actions=stage146BuildPartnerFundedLiquidationActions(pinned);
+ assert.deepEqual(actions,[{
+  Liquidate:{
+   account_id:'borrower.test.near',
+   in_assets:[{token_id:'linear-protocol.near',max_amount:'10000'}],
+   out_assets:[{token_id:'linear-protocol.near',amount:'11000'}]
+  }
+ },{
+  Withdraw:{token_id:'linear-protocol.near',max_amount:'11000'}
+ }]);
+ assert.equal(Object.keys(actions[0])[0],'Liquidate');
+ assert.equal(actions[0].account_id,undefined);
+ const wrong=structuredClone(pinned);
+ wrong.actions[1].Liquidate.account_id='other.test.near';
+ assert.throws(()=>stage146BuildPartnerFundedLiquidationActions(wrong),
+  /STAGE146_UNTRUSTED_SOURCE_LIQUIDATION_ABI/);
+ const bad=structuredClone(pinned);
+ bad.actions[1].Liquidate.out_assets[0].amount='nonsense';
+ assert.throws(()=>stage146BuildPartnerFundedLiquidationActions(bad),
+  /STAGE146_UNTRUSTED_SOURCE_LIQUIDATION_ABI/);
 });
