@@ -39,6 +39,9 @@ async function local(contract,method,args,viewClass){
    ['GAS',/GasExceeded|gas limit|Exceeded the prepaid gas/i],
    ['PROHIBITED_VIEW',/ProhibitedInView|prohibited.*view/i],
    ['MISSING_METHOD',/MethodNotFound|method.*not found/i],
+   ['STATE_DESERIALIZATION',/deserialize.*(?:contract state|state)|state.*deserializ/i],
+   ['INPUT_DESERIALIZATION',/deserialize.*input|input.*deserializ/i],
+   ['VALUE_DESERIALIZATION',/deserialize.*value|value.*deserializ/i],
    ['DESERIALIZATION',/deserialize|deserialization/i],
    ['CONTRACT_PANIC',/Smart contract panicked|GuestPanic/i]];
   if(viewClass==='ORACLE_FRESH_QUOTE'){
