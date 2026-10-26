@@ -14,6 +14,8 @@ on:
       - 'tests/rhea-stage146-local-partner-loan.test.mjs'
       - 'tests/rhea-stage153-original-finality-retries.test.mjs'
       - 'tests/rhea-stage154-bounded-finality.test.mjs'
+      - 'tests/rhea-stage156-proven-finality-fallback.test.mjs'
+      - 'scripts/stage134-finality-fallback.mjs'
       - 'scripts/stage124-final-rhea-receipts.mjs'
       - '.github/workflows/rhea-stage152-100-ultrashort-sandbox.yml'
   push:
@@ -24,6 +26,8 @@ on:
       - 'tests/rhea-stage146-local-partner-loan.test.mjs'
       - 'tests/rhea-stage153-original-finality-retries.test.mjs'
       - 'tests/rhea-stage154-bounded-finality.test.mjs'
+      - 'tests/rhea-stage156-proven-finality-fallback.test.mjs'
+      - 'scripts/stage134-finality-fallback.mjs'
       - 'scripts/stage124-final-rhea-receipts.mjs'
       - '.github/workflows/rhea-stage152-100-ultrashort-sandbox.yml'
   workflow_dispatch:
@@ -42,7 +46,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs tests/rhea-stage148-partner-dust.test.mjs tests/rhea-stage150-large-sandbox-funding.test.mjs tests/rhea-stage152-ultrashort-timing.test.mjs tests/rhea-stage153-original-finality-retries.test.mjs tests/rhea-stage154-bounded-finality.test.mjs
+      - run: node --check scripts/stage146-real-funded-workspaces-runner.mjs && node --test tests/rhea-stage146-local-partner-loan.test.mjs tests/rhea-stage147-local-oracle-clock.test.mjs tests/rhea-stage118-clock-adapter.test.mjs tests/rhea-stage148-partner-dust.test.mjs tests/rhea-stage150-large-sandbox-funding.test.mjs tests/rhea-stage152-ultrashort-timing.test.mjs tests/rhea-stage153-original-finality-retries.test.mjs tests/rhea-stage154-bounded-finality.test.mjs tests/rhea-stage156-proven-finality-fallback.test.mjs
   genuine_ft_transfer_and_rhea_partner_funding:
     if: github.event_name != 'pull_request'
     needs: local_execution_contract_regressions
