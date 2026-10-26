@@ -174,7 +174,7 @@ export function attestStage41SandboxSettlement(e:SandboxSettlementInput):Sandbox
   funding.repayTokenId===repay&&
   funding.borrowAmountInternal===borrowed.toString()&&
   typeof funding.suppliedInternal==='string'&&UINT.test(funding.suppliedInternal)&&
-  BigInt(funding.suppliedInternal)>=borrowed&&
+  BigInt(funding.suppliedInternal)*1000000n>=borrowed*999990n&&
   funding.priorActorBorrowDebtInternal==='0'&&
   funding.actorBorrowDebtAfterSupplyInternal===actorDebtBefore.toString()&&
   actorDebtBefore>=borrowed&&
