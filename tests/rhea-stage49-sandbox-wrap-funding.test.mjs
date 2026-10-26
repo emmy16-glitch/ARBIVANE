@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {seedSandboxLiquidatorWithWrappedNear,wrappedNearCollateralShares} from '../scripts/stage49-sandbox-wrap-funding.mjs';
+import {seedSandboxLiquidatorWithWrappedNear,wrappedNearCollateralShares,settleFundingTransferReceipt} from '../scripts/stage49-sandbox-wrap-funding.mjs';
 const NEAR='1000000000000000000000000';
 const receipt=()=>({result:{
  final_execution_status:'EXECUTED_OPTIMISTIC',status:{SuccessValue:''},
@@ -124,4 +124,52 @@ test('Stage54 token-specific collateral-share parser rejects malformed, duplicat
    {token_id:'wrap.near',shares:NEAR,balance:NEAR}]}},
   {REGULAR:{collateral:[{token_id:'wrap.near',shares:(1n<<128n).toString(),balance:NEAR}]}},
  ])assert.throws(()=>wrappedNearCollateralShares({positions}),/STAGE54_/);
+});
+
+test('Stage121 resolves real asynchronous FT SuccessReceiptId using finalized local Sandbox tx status',async()=>{
+ const hash='9g8AG4BvikeX5faApR9J7WJ8KS5EwRFmoUzANkMX2h5R';
+ const pending={result:{
+  final_execution_status:'EXECUTED_OPTIMISTIC',
+  transaction:{hash},status:{SuccessReceiptId:hash},
+  receipts_outcome:[{id:hash,outcome:{status:{SuccessReceiptId:hash}}}],
+ }};
+ const finalized={final_execution_status:'FINAL',transaction:{hash},
+  status:{SuccessValue:'dHJ1ZQ=='},
+  receipts_outcome:[
+   {id:hash,outcome:{status:{SuccessReceiptId:hash}}},
+   {id:'callback',outcome:{status:{SuccessValue:''}}}
+  ]};
+ const calls=[];
+ const provider={txStatus:async(...args)=>{calls.push(args);return finalized;}};
+ const r=await settleFundingTransferReceipt({
+  raw:pending,provider,actorAccountId:'arbivane-replay.test.near',
+ });
+ assert.equal(r.result,finalized);
+ assert.deepEqual(calls,[[hash,'arbivane-replay.test.near','FINAL']]);
+});
+test('Stage121 refuses pending FT receipt without a final Sandbox status provider',async()=>{
+ const hash='9g8AG4BvikeX5faApR9J7WJ8KS5EwRFmoUzANkMX2h5R';
+ await assert.rejects(()=>settleFundingTransferReceipt({
+  raw:{result:{transaction:{hash},final_execution_status:'EXECUTED_OPTIMISTIC',
+   status:{SuccessReceiptId:hash},receipts_outcome:[]}},
+  actorAccountId:'arbivane-replay.test.near',
+ }),/STAGE49_WNEAR_COLLATERAL_TRANSFER_FINAL_STATUS_UNAVAILABLE/);
+});
+test('Stage121 never accepts successful top-level status with failed callback',async()=>{
+ const hash='9g8AG4BvikeX5faApR9J7WJ8KS5EwRFmoUzANkMX2h5R';
+ await assert.rejects(()=>settleFundingTransferReceipt({
+  raw:{result:{transaction:{hash},final_execution_status:'FINAL',
+   status:{SuccessValue:''},
+   receipts_outcome:[{outcome:{status:{Failure:'panic'}}}]}},
+  actorAccountId:'arbivane-replay.test.near',
+ }),/STAGE49_WNEAR_COLLATERAL_TRANSFER_FAILED_CALLBACK/);
+});
+test('Stage121 never accepts unresolved status even if the provider returns an incomplete outcome',async()=>{
+ const hash='9g8AG4BvikeX5faApR9J7WJ8KS5EwRFmoUzANkMX2h5R';
+ const raw={result:{transaction:{hash},final_execution_status:'EXECUTED_OPTIMISTIC',
+  status:{SuccessReceiptId:hash},receipts_outcome:[]}};
+ await assert.rejects(()=>settleFundingTransferReceipt({
+  raw,provider:{txStatus:async()=>raw.result},
+  actorAccountId:'arbivane-replay.test.near',
+ }),/STAGE49_WNEAR_COLLATERAL_TRANSFER_UNVERIFIED_RECEIPT/);
 });
