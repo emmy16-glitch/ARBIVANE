@@ -1,3 +1,10 @@
+## Stage146 — genuine local NEAR Workspaces financed Rhea liquidation experiment (26 October 2026)
+
+- Added `scripts/stage146-real-workspaces-partner-lender.mjs`, independent imported-state runner `scripts/stage146-real-funded-workspaces-runner.mjs`, negative guardrails and a dedicated 2-job GitHub Action. The separate partner uses **disposable Sandbox wNEAR collateral** to source wallet-level LiNEAR, then must transfer real FT principal to a **fresh zero-collateral local liquidator**. The liquidator must deposit FT on cloned real Rhea, execute the source-authenticated liquidation and repay principal with real NEP-141 `ft_transfer`; partner then repays its original Rhea debt.
+- Enforce original promise receipts, exact actual token/balance deltas, borrower collateral/debt decreases, zero liquidator debt and zero final partner debt before declaring local success. Record failure phase if a borrow/callback/transfer/settlement fails, rather than faking a flash-loan win.
+- This is **local partner credit, not atomic flash liquidity**. NEAR async failure may strand capital. No real partner funded a mainnet wallet, no owner funds, no signed mainnet calls, no validated real net profit.
+- [Stage146 experiment details](docs/STAGE146_REAL_LOCAL_PARTNER_FINANCED_RHEA.md). Real GitHub Actions run (not PR unit tests) determines whether it is achieved. Stage145 production gate stays blocked.
+
 ## Stages143–145 offline recovery, partner accounting and production qualification (26 October 2026)
 
 - Stage143 `scripts/stage143-async-financing-journal.mjs`: immutable hash-chained event journal and permitted financing transitions. Rejects duplicated receipt references, out-of-order callbacks, forged/suppressed debt; preserves principal owed if settlement fails; never authorizes payouts.
