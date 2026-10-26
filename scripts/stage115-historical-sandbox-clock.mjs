@@ -94,10 +94,26 @@ export async function initHistoricalSandbox(pkg, clock, env=process.env) {
   const tearDown=worker.tearDown.bind(worker);
   worker.tearDown=async()=>{try{return await tearDown();}finally{await rm(dir,{recursive:true,force:true});}};
   ready=true;
-  return {worker,witness,startReplayClock:async()=>{
-   await writeFile(phaseFile,'1');
+  return {worker,witness,startReplayClock:async({localPartnerTimeCompression=false}={})=>{
+   if(localPartnerTimeCompression && (
+     env.STAGE146_ALLOW_LOCAL_NEAR_LOAN!=='true'||
+     env.STAGE147_LOCAL_CLOCK_COMPRESSION!=='true'||
+     env.NEAR_WORKSPACES_NETWORK!=='sandbox'||
+     env.EXECUTION_ENABLED!=='false'))
+    throw Error('STAGE147_REALTIME_OR_MAINNET_TIME_COMPRESSION_FORBIDDEN');
+   // A deliberate and bounded historical-Sandbox ONLY test. Without this
+   // explicit opt-in Stage93 keeps its old 1x/normal-time replay semantics.
+   // Real Pyth quote bytes and freshness contract configuration are unchanged.
+   await writeFile(phaseFile,localPartnerTimeCompression?'2':'1');
    return {...attestReplayClock(clock,(await worker.provider.block({finality:'final'})).header),
-    clockPhase:'HISTORICAL_EXECUTION',reconstructionClockRate:0.01};
+    clockPhase:localPartnerTimeCompression?
+     'STAGE147_HISTORICAL_LOCAL_MULTITX_COMPRESSED_TIME':'HISTORICAL_EXECUTION',
+    reconstructionClockRate:0.01,clockRate:localPartnerTimeCompression?0.05:1,
+    localTimeCompressionEnabled:localPartnerTimeCompression,
+    nominalTimeCompressionRatio:localPartnerTimeCompression?20:1,
+    oracleQuoteAndFreshnessRulesUnmodified:true,
+    timingPerformanceOnRealMainnetNotProven:localPartnerTimeCompression,
+    fullLenderRepaymentNotYetProven:true};
   }};
  } catch(error) {
   if(worker)await worker.tearDown().catch(()=>{});

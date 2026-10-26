@@ -216,7 +216,9 @@ async function main(){
  // Copying a historical snapshot must not consume the market's quote window.
  // Resume normal, forward-only chain time before source parity and all actions.
  await writeFile('stage115-historical-clock.json',JSON.stringify(
-  await historical.startReplayClock(),null,2)+'\n');
+  await historical.startReplayClock({
+   localPartnerTimeCompression:e.STAGE147_LOCAL_CLOCK_COMPRESSION==='true'
+  }),null,2)+'\n');
  for(let i=0;i<dependencyIds.length;i++){
   contracts.set(dependencyIds[i],clones[i].contract);
   cloneEvidence.push(clones[i].evidence);
