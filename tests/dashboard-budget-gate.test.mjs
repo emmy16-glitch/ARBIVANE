@@ -11,7 +11,7 @@ const proposal=()=>({
  paperGrossUsdE27:(7550927865296268892306603n).toString(),
 });
 test('Stage171 prices arbitrary entered dollars correctly and rejects malformed limits',()=>{
- assert.equal(stage171UsdE27('10000.00','AMOUNT'),(10000n*E).toString()&&10000n*E);
+ assert.equal(stage171UsdE27('10000.00','AMOUNT'),10000n*E);
  assert.equal(stage171UsdE27('0.01','AMOUNT',{allowZero:true}),E/100n);
  for(const bad of ['-1','0','1e5','Infinity','1.001',' 5','001','1000000000']){
   assert.throws(()=>stage171UsdE27(bad,'AMOUNT'),/STAGE171_INVALID_AMOUNT/);
