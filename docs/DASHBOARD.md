@@ -11,9 +11,11 @@ The dashboard is an authenticated operations surface around the existing Rhea en
 | Start automation | Genuine Workspaces runner, when evidence and RPC are configured | Unavailable pending a supported adapter and test wallet | Disabled server-side |
 | Wallet transfers | Not exposed | Not configured | Not exposed |
 | Signing/spending | Disposable local Sandbox actor only | Not configured | Disabled |
-| Financial credit | Only after a future evidence importer verifies settlement | Same rule | Same rule |
+| Financial credit | Unsold token inventory only after four independent evidence gates | Not configured | Not configured |
 
-The verified historical Stage93 Sandbox evidence documented in [STATUS_AND_EVIDENCE.md](STATUS_AND_EVIDENCE.md) is not silently imported as a current wallet balance or current-session profit.
+The verified historical Stage93 Sandbox evidence documented in [STATUS_AND_EVIDENCE.md](STATUS_AND_EVIDENCE.md) is not silently imported as a current wallet balance or current-session profit. A completed dashboard-run Sandbox session is admitted only when Stage37 callback evidence, Stage41 debt/collateral/FT deltas, the terminal Stage55 phase witness, the original FINAL transaction, and the source proposal all agree. The importer hashes this bundle, deduplicates by transaction ID, and records the final token inventory as non-transferable outside Sandbox.
+
+Unsold token inventory is never converted into USD or P&L. Gross proceeds, financing fees, gas, swap costs, and cumulative net P&L remain empty until a future settlement route supplies independently verifiable same-denomination evidence for every field.
 
 ## Running locally
 
@@ -47,7 +49,8 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 - [x] Durable environment state and append-only events.
 - [x] Authenticated commands and replayable SSE.
 - [x] Existing genuine Sandbox runner adapter with mainnet-signing denial.
-- [ ] Evidence importer for receipt identities, balance deltas, and accounting journal.
+- [x] Fail-closed evidence importer for original receipt identity, source block, callback, balance deltas, actor debt, and unsold token inventory.
+- [ ] Sale/settlement importer for realized proceeds, financing fees, gas, swap costs, and net P&L.
 - [ ] Supported Testnet wallet/transfer adapter.
 - [ ] Deposit/withdrawal custody adapters with authorization and audit trails.
 - [ ] Mainnet readiness adapter; execution remains disabled.
