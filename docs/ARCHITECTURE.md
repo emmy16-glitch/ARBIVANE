@@ -66,7 +66,7 @@ A future Rust policy treasury, Shade-attested worker and NEAR Intents route are 
 
 Dashboard data is physically separated into Sandbox, Testnet, and Mainnet state/event directories. Browser commands map to fixed server adapters and cannot submit arbitrary commands. SSE event IDs are monotonic and persisted for reconnect replay. The current Sandbox adapter launches the existing genuine Workspaces runner while explicitly disabling mainnet execution and clearing signing variables. Testnet execution remains unavailable until a supported wallet/contract adapter is implemented; Mainnet has no signing route.
 
-Accounting fields remain empty until a receipt and balance evidence importer independently reconciles them. Historical success documentation is never treated as the current session's wallet balance or realized profit.
+Stage37, Stage41, Stage55, the original FINAL transaction, and the pinned Stage35 source proposal must all agree before the dashboard records a transaction or token inventory. The evidence bundle is SHA-256 fingerprinted and deduplicated by original transaction ID. Unsold inventory does not populate USD proceeds or P&L. Historical success documentation is never treated as the current session's wallet balance or realized profit.
 
 ## Production gaps
 

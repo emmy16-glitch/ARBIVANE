@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {resolve} from 'node:path';
 import {createInterface} from 'node:readline';
+import {reconcileImportedSandboxEvidence} from './evidence.mjs';
 
 const MONEY = /^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/;
 
@@ -88,15 +89,27 @@ export class AutomationManager {
   }
 
   async #finish(environment, code, signal) {
+    let evidenceFailure = null;
+    let imported = null;
+    if (code === 0 && environment === 'sandbox') {
+      try { imported = await reconcileImportedSandboxEvidence(this.store,
+        resolve(this.store.root, environment), resolve(process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH)); }
+      catch (error) { const code = error instanceof Error ? error.message : '';
+        evidenceFailure = /^DASHBOARD_[A-Z0-9_]{1,120}$/.test(code) ? code : 'DASHBOARD_EVIDENCE_IMPORT_FAILED'; }
+    }
     await this.store.update(environment, (state) => {
-      const paused = state.session?.pauseRequested && code === 0;
-      state.session.status = paused ? 'paused' : code === 0 ? 'completed' : 'failed';
+      const paused = state.session?.pauseRequested && code === 0 && !evidenceFailure;
+      state.session.status = paused ? 'paused' : code === 0 && !evidenceFailure ? 'completed' : 'failed';
       state.session.endedAt = new Date().toISOString(); state.session.pid = null;
-      state.session.failure = code === 0 ? null : {code, signal}; return state;
+      state.session.failure = code === 0 && !evidenceFailure ? null : {code, signal, evidenceFailure}; return state;
     });
-    await this.#emit(environment, {stage: 'system', status: code === 0 ? 'success' : 'failure',
-      message: code === 0 ? 'Sandbox workflow completed. Values remain uncredited until reconciliation.'
-        : `Sandbox workflow exited with code ${code ?? 'unknown'}.`, evidence: {exitCode: code, signal}});
+    await this.#emit(environment, {stage: imported ? 'settlement' : 'system',
+      status: code === 0 && !evidenceFailure ? 'success' : 'failure',
+      message: imported ? 'Sandbox receipts and balance deltas independently reconciled; unsold token inventory recorded.'
+        : evidenceFailure ? `Sandbox process completed but evidence admission failed: ${evidenceFailure}.`
+        : `Sandbox workflow exited with code ${code ?? 'unknown'}.`,
+      evidence: imported ? {transactionId:imported.record.id, evidenceDigestSha256:imported.record.evidenceDigestSha256,
+        monetaryPnlVerified:false} : {exitCode: code, signal, evidenceFailure}});
   }
 
   async #fail(environment, error) {
