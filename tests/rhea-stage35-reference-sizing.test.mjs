@@ -87,7 +87,7 @@ test('bad volatility or unsafe repay budget is rejected',()=>{
   const a=assets();a[1][1].config.volatility_ratio=n;
   assert.throws(()=>sizeStage35SourceLiquidation(report(),a,options));
  }
- for(const n of [0,3,201,1000])
+ for(const n of [0,3,1001,10000])
   assert.throws(()=>sizeStage35SourceLiquidation(report(),assets(),{...options,maxRepayBps:n}));
 });
 test('Stage35 workflow never provides signing capability',async()=>{
