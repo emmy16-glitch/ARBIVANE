@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome} from '../src/rhea/stage37-sandbox-liquidation.ts';
+import {buildStage37SandboxPlan,summarizeStage37SandboxOutcome,stage169CappedSameTokenSeizure} from '../src/rhea/stage37-sandbox-liquidation.ts';
 const HASH='2'.repeat(43),PYTH='3'.repeat(43);
 function proposal(){
  return {mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',chain:'NEAR_MAINNET',
@@ -8,9 +8,9 @@ function proposal(){
   pythOracleCodeHash:PYTH,status:'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE',
   positionId:'REGULAR',referenceInitialHealthBps:'8908',referenceRulesPass:true,
   repay:{tokenId:'wrap.near',amountLendingInternalAtomic:'100000000000000000000',
-   referenceUsdE27:'1',shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
+   referenceUsdE27:'1000000000000000000000000000',shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
   seize:{tokenId:'meta-pool.near',amountLendingInternalAtomic:'110000000000000000000',
-   referenceUsdE27:'2',shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
+   referenceUsdE27:'1100000000000000000000000000',shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
   contractRouteParityVerified:false,rawTokenDenominationsVerified:false,
   sandboxStateReplaySucceeded:false,gasAndSwapNetProfitVerified:false,
   walletCapitalVerified:false,mainnetWalletApproved:false,executionEnabled:false,
@@ -165,7 +165,8 @@ test('Stage71 authentic same-token liquidation repays actor in one isolated call
  assert.deepEqual(p.actions[2].Repay,{token_id:'wrap.near'});
  assert.ok(BigInt(p.actions[0].Borrow.amount)>0n);
  assert.equal(p.actions[3].Withdraw.token_id,'wrap.near');
- assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
+ assert.ok(BigInt(p.actions[3].Withdraw.max_amount)>0n);
+ assert.ok(BigInt(p.actions[3].Withdraw.max_amount)<10000000000000000000n);
  assert.equal(p.actions[3].Withdraw.amount,undefined);
  assert.equal(p.actions[1].Liquidate.out_assets[0].amount,
   String(BigInt(p.actions[3].Withdraw.max_amount)+BigInt(p.actions[0].Borrow.amount)));
@@ -179,7 +180,8 @@ test('Stage124 bounded repay preserves source sizing without imposing unpayable 
   assert.equal(p.actions[0].Borrow.amount,q.repay.amountLendingInternalAtomic);
   assert.equal(p.actions[2].Repay.amount,undefined);
   assert.equal(p.actions[2].Repay.max_amount,undefined);
-  assert.equal(p.actions[3].Withdraw.max_amount,'10000000000000000000');
+  assert.ok(BigInt(p.actions[3].Withdraw.max_amount)>0n);
+ assert.ok(BigInt(p.actions[3].Withdraw.max_amount)<10000000000000000000n);
  assert.equal(p.actions[3].Withdraw.amount,undefined);
   assert.equal(p.depositYocto,'1');assert.equal(p.maySignMainnet,false);
 });
@@ -244,5 +246,54 @@ test('Stage122 permits only attested temporal accrual when authentic source view
   const blocked=summarizeStage37SandboxOutcome(raw,bad);
   assert.equal(blocked.status,'BLOCKED_STATE_IMPORT_OR_INCOMPLETE_PROOF');
   assert.equal(blocked.attemptedTransaction,false);
+ }
+});
+
+test('Stage169 reproduces actual Stage157 Rhea rounding rejection and preserves source repayment cap',()=>{
+ // Original run #40402755800, shard 0, borrower fukaih.near.
+ const q={
+  ...proposal(),borrowerAccountId:'fukaih.near',blockHeight:'221744041',
+  referenceInitialHealthBps:'9601',
+  repay:{...proposal().repay,tokenId:'linear-protocol.near',
+   amountLendingInternalAtomic:'5964184212617548702842',
+   referenceUsdE27:'37959646839625650474108193'},
+  seize:{...proposal().seize,tokenId:'linear-protocol.near',
+   amountLendingInternalAtomic:'6085410172613453180470',
+   referenceUsdE27:'38731201584615584112419362'}
+ };
+ const p=buildStage37SandboxPlan(q);
+ const original=BigInt(q.seize.amountLendingInternalAtomic);
+ const capped=BigInt(p.actions[1].Liquidate.out_assets[0].amount);
+ assert.ok(capped<original);
+ assert.equal(p.actions[0].Borrow.amount,q.repay.amountLendingInternalAtomic);
+ assert.equal(p.actions[1].Liquidate.in_assets[0].max_amount,q.repay.amountLendingInternalAtomic);
+ assert.deepEqual(p.actions[2].Repay,{token_id:'linear-protocol.near'});
+ assert.equal(BigInt(p.actions[3].Withdraw.max_amount),
+  capped-BigInt(q.repay.amountLendingInternalAtomic));
+ const failedDiscountedUsd=37959128341869451899819931n;
+ const actualRepaidUsd=37959050421204388719231544n;
+ assert.ok(failedDiscountedUsd>actualRepaidUsd);
+ // This is a conservative projection, NOT proof of a new actual receipt.
+ assert.ok(failedDiscountedUsd*capped/original<actualRepaidUsd);
+ assert.equal(p.executionEnabled,false);
+ assert.equal(p.mayBroadcastMainnet,false);
+});
+test('Stage169 handles small or large source-positive repayment without fixed minimum',()=>{
+ const small=stage169CappedSameTokenSeizure('100','105','1000000','1060000');
+ const large=stage169CappedSameTokenSeizure('100000000000000','105000000000000',
+  '1000000000000000000000','1060000000000000000000');
+ assert.ok(BigInt(small.seizeInternal)>100n);
+ assert.ok(BigInt(large.seizeInternal)>100000000000000n);
+ assert.ok(BigInt(large.seizeInternal)<105000000000000n);
+ assert.equal(small.seizureReserveUsdE27,'1000');
+});
+test('Stage169 rejects underfunded rounding margins and forged reference USD values',()=>{
+ for(const q of [
+  ['100','101','10000000000','10000000100'],
+  ['100','110','0','1'],
+  ['100','110','123','123'],
+  ['100','110','foo','133'],
+ ]){
+  assert.throws(()=>stage169CappedSameTokenSeizure(...q),/STAGE169_/);
  }
 });
