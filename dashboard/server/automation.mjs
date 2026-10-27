@@ -99,7 +99,8 @@ export class AutomationManager {
     }
     await this.store.update(environment, (state) => {
       const paused = state.session?.pauseRequested && code === 0 && !evidenceFailure;
-      state.session.status = paused ? 'paused' : code === 0 && !evidenceFailure ? 'completed' : 'failed';
+      const stopped = state.session?.stopRequested && code === 0 && !evidenceFailure;
+      state.session.status = stopped ? 'stopped' : paused ? 'paused' : code === 0 && !evidenceFailure ? 'completed' : 'failed';
       state.session.endedAt = new Date().toISOString(); state.session.pid = null;
       state.session.failure = code === 0 && !evidenceFailure ? null : {code, signal, evidenceFailure}; return state;
     });

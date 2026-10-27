@@ -48,6 +48,8 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 
 - [x] Responsive dashboard shell matching the supplied desktop reference.
 - [x] Working navigation, environments, financing validation, operation filters, and diagnostics drawer.
+- [x] Environment-backed Live Ops, Opportunities, Performance, Wallet, Transactions, Analytics, and Settings pages with real search filtering.
+- [x] Production access-token prompt; tokens stay in session storage and are exchanged for HttpOnly same-site sessions.
 - [x] Durable environment state and append-only events.
 - [x] Authenticated commands and replayable SSE.
 - [x] Existing genuine Sandbox runner adapter with mainnet-signing denial.
