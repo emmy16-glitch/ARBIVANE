@@ -10,6 +10,7 @@ test('dashboard data is durable and strictly separated by environment', async (t
   const root = await mkdtemp(join(tmpdir(), 'arbivane-dashboard-'));
   t.after(() => rm(root, {recursive:true, force:true}));
   const first = new DashboardStore(root); await first.init();
+  assert.equal((await first.state('sandbox')).settings.minimumNetProfitUsd,'0.00');
   await first.update('sandbox', (state) => { state.wallet.status = 'sandbox_only'; return state; });
   const event = await first.event('sandbox', {stage:'scan', status:'success', message:'real event'});
   const second = new DashboardStore(root); await second.init();

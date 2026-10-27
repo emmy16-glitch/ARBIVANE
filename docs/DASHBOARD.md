@@ -18,7 +18,7 @@ The verified historical Stage93 Sandbox evidence documented in [STATUS_AND_EVIDE
 
 Unsold token inventory is never converted into USD or P&L. Gross proceeds, financing fees, gas, swap costs, and cumulative net P&L remain empty until a future settlement route supplies independently verifiable same-denomination evidence for every field.
 
-## Running locally
+**Stage173 streaming UX:** [Incremental event updates](STAGE173_DASHBOARD_EVENT_STREAM.md) deliver actual events immediately, merge authenticated replay without duplicate rows, throttle full backend refresh, discard obsolete responses after network-mode switches, and distinguish reconnection from confirmed live streaming. Recent client history is intentionally capped; old events remain in the backend store.\n\n## Running locally
 
 Use two terminals:
 
