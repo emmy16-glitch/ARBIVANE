@@ -8,7 +8,7 @@ const initialState = (environment) => ({
   environment,
   revision: 0,
   session: null,
-  settings: {maxFinancingUsd: '1000.00', minimumNetProfitUsd: '1.00'},
+  settings: {maxFinancingUsd: '1000.00', minimumNetProfitUsd: '0.00'},
   accounting: {
     currency: 'USD', available: null, pending: null, grossProceeds: null,
     financingFees: null, gasFees: null, swapCosts: null, realizedProfit: null,
