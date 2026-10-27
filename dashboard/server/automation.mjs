@@ -17,9 +17,15 @@ export function validateSettings(value) {
 export class AutomationManager {
   constructor({store, repoRoot, publish}) {
     this.store = store; this.repoRoot = repoRoot; this.publish = publish;
+    this.startingEnvironments = new Set();
   }
 
   async start(environment, rawSettings) {
+    // An atomic in-process start guard closes the race between concurrent
+    // HTTP requests reading idle state and both spawning Sandbox children.
+    if (this.startingEnvironments.has(environment)) throw new Error('SESSION_ALREADY_ACTIVE');
+    this.startingEnvironments.add(environment);
+    try {
     const settings = validateSettings(rawSettings);
     const current = await this.store.state(environment);
     if (current.session && ['starting', 'running', 'pause_requested', 'stopping'].includes(current.session.status))
@@ -40,6 +46,7 @@ export class AutomationManager {
         NEAR_WORKSPACES_NETWORK: 'sandbox', STAGE37_ALLOW_SANDBOX_MUTATION: 'true',
         STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true', STAGE37_STAGE35_EVIDENCE_PATH: resolve(evidence),
         ARBIVANE_MAX_FINANCING_USD: settings.maxFinancingUsd,
+        ARBIVANE_MINIMUM_NET_PROFIT_USD:settings.minimumNetProfitUsd,
         NEAR_PRIVATE_KEY: '', MAINNET_PRIVATE_KEY: '', NEAR_ACCOUNT_ID: ''},
     });
     await this.store.update(environment, (state) => { state.session.status = 'running';
@@ -52,6 +59,7 @@ export class AutomationManager {
     child.once('exit', (code, signal) => void this.#finish(environment, code, signal));
     child.once('error', (error) => void this.#fail(environment, error));
     return (await this.store.state(environment)).session;
+    } finally { this.startingEnvironments.delete(environment); }
   }
 
   async pause(environment) {

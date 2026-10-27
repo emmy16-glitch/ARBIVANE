@@ -26,6 +26,7 @@ import {selectStage164PricingClosure,attestStage164PricingClosure} from './stage
 import {inspectStage49SandboxBorrow} from './stage49-sandbox-borrow-preflight.mjs';
 import {seedSandboxLiquidatorWithWrappedNear} from './stage49-sandbox-wrap-funding.mjs';
 import {attestStage52BorrowCollateralCapacity} from './stage52-solvent-sandbox-borrow-capacity.mjs';
+import {stage171VerifyDashboardSourceBudget} from './stage171-dashboard-source-budget.mjs';
 import {createStage55PhaseLedger} from './stage55-sandbox-execution-ledger.mjs';
 import {readSourceClock,initHistoricalSandbox,attestReplayClock} from './stage115-historical-sandbox-clock.mjs';
 import {signedSandboxEvidence} from './stage116-signed-sandbox-evidence.mjs';
@@ -58,6 +59,18 @@ async function main(){
   throw Error('LOCAL_SANDBOX_ONLY_EXPLICIT_REPLAY_GATE_REQUIRED');
  const proposal=JSON.parse(await readFile(e.STAGE37_STAGE35_EVIDENCE_PATH,'utf8'));
  const plan=buildStage37SandboxPlan(proposal);
+ // Dashboard limits apply to the ORIGINAL source-evidenced amounts, before
+ // cloning, funding, or invoking a contract. Legacy CI runs without these
+ // variables retain their established isolated Sandbox behavior.
+ if(e.ARBIVANE_MAX_FINANCING_USD!==undefined||
+  e.ARBIVANE_MINIMUM_NET_PROFIT_USD!==undefined){
+  const gate=stage171VerifyDashboardSourceBudget(proposal,{
+   maxFinancingUsd:e.ARBIVANE_MAX_FINANCING_USD,
+   minimumNetProfitUsd:e.ARBIVANE_MINIMUM_NET_PROFIT_USD,
+  });
+  await writeFile('stage171-dashboard-budget-admission.json',
+   JSON.stringify(gate,null,2)+'\n');
+ }
  const block=Number(plan.mainnetSourceBlockHeight);
  const rpc=new ResilientNearReadOnlyRpc(new NearReadOnlyRpc(e.NEAR_RPC_URL));
  await markStage55('PINNED_SOURCE_VIEWS');
