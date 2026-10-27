@@ -40,6 +40,7 @@ export class AutomationManager {
         NEAR_WORKSPACES_NETWORK: 'sandbox', STAGE37_ALLOW_SANDBOX_MUTATION: 'true',
         STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING: 'true', STAGE37_STAGE35_EVIDENCE_PATH: resolve(evidence),
         ARBIVANE_MAX_FINANCING_USD: settings.maxFinancingUsd,
+        ARBIVANE_MINIMUM_NET_PROFIT_USD:settings.minimumNetProfitUsd,
         NEAR_PRIVATE_KEY: '', MAINNET_PRIVATE_KEY: '', NEAR_ACCOUNT_ID: ''},
     });
     await this.store.update(environment, (state) => { state.session.status = 'running';
