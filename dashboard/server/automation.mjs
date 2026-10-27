@@ -17,9 +17,15 @@ export function validateSettings(value) {
 export class AutomationManager {
   constructor({store, repoRoot, publish}) {
     this.store = store; this.repoRoot = repoRoot; this.publish = publish;
+    this.startingEnvironments = new Set();
   }
 
   async start(environment, rawSettings) {
+    // An atomic in-process start guard closes the race between concurrent
+    // HTTP requests reading idle state and both spawning Sandbox children.
+    if (this.startingEnvironments.has(environment)) throw new Error('SESSION_ALREADY_ACTIVE');
+    this.startingEnvironments.add(environment);
+    try {
     const settings = validateSettings(rawSettings);
     const current = await this.store.state(environment);
     if (current.session && ['starting', 'running', 'pause_requested', 'stopping'].includes(current.session.status))
@@ -53,6 +59,7 @@ export class AutomationManager {
     child.once('exit', (code, signal) => void this.#finish(environment, code, signal));
     child.once('error', (error) => void this.#fail(environment, error));
     return (await this.store.state(environment)).session;
+    } finally { this.startingEnvironments.delete(environment); }
   }
 
   async pause(environment) {
