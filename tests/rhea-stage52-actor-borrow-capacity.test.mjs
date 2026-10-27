@@ -143,3 +143,16 @@ test('Stage172 actual changed oracle price still fails before liquidation',async
  x.contracts.get(O).view=async()=>changed;
  await assert.rejects(()=>attestStage52BorrowCollateralCapacity(x),/STAGE52_WRAPPED_PYTH_FEED_CLONE_MISMATCH/);
 });
+
+test('Stage172 archive and bounded continuation preserve genuine failed Sandbox evidence',async()=>{
+ const workflow=await readFile(new URL('../.github/workflows/rhea-stage157-larger-source-sandbox.yml',import.meta.url),'utf8');
+ assert.ok(workflow.includes('stage172-wnear-pyth-parity-diagnostics.json'));
+ assert.ok(workflow.includes("stage52-solvent-sandbox-borrow-capacity.mjs"));
+ assert.ok(workflow.includes('actualRheaSettlementVerified == true'));
+ assert.ok(workflow.includes("contains(fromJSON("));
+ assert.ok(workflow.includes('settled > 0 || STAGE157_BATCH >= 3'));
+ const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(runner.includes("diagnosticPath:'stage172-wnear-pyth-parity-diagnostics.json'"));
+ assert.ok(runner.indexOf('attestStage52BorrowCollateralCapacity')<
+  runner.indexOf('sandboxTransactionSubmitted=true'));
+});
