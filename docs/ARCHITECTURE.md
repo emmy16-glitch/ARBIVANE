@@ -30,8 +30,9 @@ The public source chain is NEAR mainnet, but the execution is **only inside isol
 | Signed proof | scripts/stage116-signed-sandbox-evidence.mjs, scripts/stage135-independent-proof.mjs, scripts/stage136-near-borsh-preimage.mjs | Authenticity and cross-file accounting |
 | Merkle and budget previews | scripts/stage137-near-outcome-merkle.mjs, scripts/stage138-mainnet-spending-admission.mjs | Read-only path consistency and spend-policy rejection |
 | Accounting / proposed settlement | src/reconciliation/profit.ts, src/settlement/intents.ts | Pure validation, **not** live swaps |
+| Operations dashboard | dashboard/server, dashboard/web | Authenticated controls, isolated state, SSE events, and evidence-only presentation |
 
-These are modules inside the repository, not running services. A source file or GitHub Actions workflow alone does not imply a deployed application.
+The dashboard service is runnable but not deployed by this repository. A source file or GitHub Actions workflow alone does not imply a deployed application. See [Dashboard operations](DASHBOARD.md) for configuration and the exact supported environment boundaries.
 
 ## Finalized source data and amounts
 
@@ -61,9 +62,15 @@ The generic SAFE_DEFAULT_POLICY has execution disabled and an empty contract all
 
 A future Rust policy treasury, Shade-attested worker and NEAR Intents route are design proposals, not deployed or audited components.
 
+## Dashboard security boundary
+
+Dashboard data is physically separated into Sandbox, Testnet, and Mainnet state/event directories. Browser commands map to fixed server adapters and cannot submit arbitrary commands. SSE event IDs are monotonic and persisted for reconnect replay. The current Sandbox adapter launches the existing genuine Workspaces runner while explicitly disabling mainnet execution and clearing signing variables. Testnet execution remains unavailable until a supported wallet/contract adapter is implemented; Mainnet has no signing route.
+
+Accounting fields remain empty until a receipt and balance evidence importer independently reconciles them. Historical success documentation is never treated as the current session's wallet balance or realized profit.
+
 ## Production gaps
 
-The repository does not have a production wallet-connect UI, dashboard, funded mainnet signer, audited treasury, durable job/outbox database, deployed Shade/TEE runtime, autonomous trade agent, verified swap executor, realized profit transfer or validator-authenticated canonical outcome proof.
+The repository does not have a production wallet-connect adapter, funded mainnet signer, audited treasury, transactional job/outbox database, deployed Shade/TEE runtime, verified swap executor, realized profit transfer or validator-authenticated canonical outcome proof. The dashboard provides durable local state and event logs, not a distributed database or deployed service.
 
 Stage137 checks supplied outcome Merkle paths and lite-header hashes, but its head root is not independently authenticated with NEAR validator approvals. Imported local contract state has not been proved equivalent to the **entire** historic mainnet state trie.
 
