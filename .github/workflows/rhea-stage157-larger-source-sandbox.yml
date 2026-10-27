@@ -14,6 +14,8 @@ on:
       - 'tests/rhea-stage89-targeted-wnear-clone.test.mjs'
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
+      - 'src/rhea/stage37-sandbox-liquidation.ts'
+      - 'tests/rhea-stage37-sandbox-execution.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
@@ -54,6 +56,7 @@ jobs:
             tests/rhea-stage35-reference-sizing.test.mjs \
             tests/rhea-stage162-source-diagnostics.test.mjs \
             tests/rhea-stage164-pricing-closure.test.mjs \
+            tests/rhea-stage37-sandbox-execution.test.mjs \
             tests/rhea-stage89-targeted-wnear-clone.test.mjs \
             tests/rhea-stage119-clone-failure.test.mjs
       - name: Validate discovery-report jq gate before any source rechecks
