@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {stage171UsdE27,stage171VerifyDashboardSourceBudget}
  from '../scripts/stage171-dashboard-source-budget.mjs';
+import {AutomationManager} from '../dashboard/server/automation.mjs';
 const E=10n**27n;
 const proposal=()=>({
  mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',
@@ -51,4 +52,17 @@ test('Stage171 runner gate occurs before source RPC and before any Workspaces co
  assert.ok(gate>0&&rpc>gate&&deposit>rpc);
  assert.ok(s.includes('ARBIVANE_MINIMUM_NET_PROFIT_USD'));
  assert.ok(s.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
+});
+
+test('Stage171 concurrency: two start requests cannot both enter admission',async()=>{
+ let release;
+ const awaiting=new Promise(resolve=>{release=resolve});
+ const store={state:async()=>{await awaiting;return {session:null}}};
+ const manager=new AutomationManager({store,repoRoot:'.',publish:()=>{}});
+ const settings={maxFinancingUsd:'10000.00',minimumNetProfitUsd:'0.00'};
+ const first=manager.start('sandbox',settings);
+ await assert.rejects(()=>manager.start('sandbox',settings),/SESSION_ALREADY_ACTIVE/);
+ release();
+ await assert.rejects(()=>first,/SANDBOX_EVIDENCE_NOT_CONFIGURED/);
+ assert.equal(manager.startingEnvironments.size,0);
 });
