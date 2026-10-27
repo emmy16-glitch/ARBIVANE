@@ -16,6 +16,8 @@ on:
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage52-solvent-sandbox-borrow-capacity.mjs'
+      - 'tests/rhea-stage52-actor-borrow-capacity.test.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
   push:
@@ -35,6 +37,8 @@ on:
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage52-solvent-sandbox-borrow-capacity.mjs'
+      - 'tests/rhea-stage52-actor-borrow-capacity.test.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
   workflow_dispatch:
@@ -57,8 +61,9 @@ jobs:
           set -euo pipefail
           node --check scripts/stage157-large-source-liquidation-gate.mjs
           node --check scripts/stage164-source-pricing-closure.mjs
+          node --check scripts/stage52-solvent-sandbox-borrow-capacity.mjs
           node --check scripts/stage89-targeted-wnear-clone.mjs
-          node --experimental-strip-types --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs tests/rhea-stage164-pricing-closure.test.mjs tests/rhea-stage89-targeted-wnear-clone.test.mjs tests/rhea-stage119-clone-failure.test.mjs
+          node --experimental-strip-types --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs tests/rhea-stage164-pricing-closure.test.mjs tests/rhea-stage52-actor-borrow-capacity.test.mjs tests/rhea-stage89-targeted-wnear-clone.test.mjs tests/rhea-stage119-clone-failure.test.mjs
   source_attested_large_candidates:
     if: github.event_name != 'pull_request'
     needs: source_gate_regression
@@ -203,6 +208,7 @@ jobs:
             stage157-sandbox-runner.json
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
+            stage172-wnear-pyth-parity-diagnostics.json
             stage55-sandbox-phase-evidence.json
             stage49-sandbox-funding.json
             stage51-active-pyth-sandbox-parity.json

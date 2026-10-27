@@ -15,6 +15,8 @@ on:
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
+      - 'scripts/stage52-solvent-sandbox-borrow-capacity.mjs'
+      - 'tests/rhea-stage52-actor-borrow-capacity.test.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-larger-source-sandbox.yml'
       - 'scripts/stage157-large-source-candidates.mjs'
@@ -47,6 +49,7 @@ jobs:
           node --check scripts/stage157-large-source-discovery-cli.mjs
           node --check scripts/stage162-source-rejection-diagnostics.mjs
           node --check scripts/stage164-source-pricing-closure.mjs
+          node --check scripts/stage52-solvent-sandbox-borrow-capacity.mjs
           node --check scripts/stage89-targeted-wnear-clone.mjs
           node --experimental-strip-types --test \
             tests/rhea-stage157-larger-source.test.mjs \
@@ -54,6 +57,7 @@ jobs:
             tests/rhea-stage35-reference-sizing.test.mjs \
             tests/rhea-stage162-source-diagnostics.test.mjs \
             tests/rhea-stage164-pricing-closure.test.mjs \
+            tests/rhea-stage52-actor-borrow-capacity.test.mjs \
             tests/rhea-stage89-targeted-wnear-clone.test.mjs \
             tests/rhea-stage119-clone-failure.test.mjs
       - name: Validate discovery-report jq gate before any source rechecks
@@ -196,6 +200,7 @@ jobs:
             stage167-pinned-derived-price-diagnostics.json
             stage88-sandbox-clone-witness.json
             stage52-actor-borrow-capacity.json
+            stage172-wnear-pyth-parity-diagnostics.json
             stage55-sandbox-phase-evidence.json
             stage56-sandbox-attempt-evidence.json
             stage116-raw-transaction.json
@@ -203,7 +208,10 @@ jobs:
 
   continue_remaining_historical_cohorts:
     needs: independently_reprice_large_historical_liNear_debt
-    if: ${{ always() && needs.independently_reprice_large_historical_liNear_debt.result == 'success' }}
+    # A single honest local Sandbox failure must not suppress source rechecks
+    # for the remaining independent borrower cohorts. Original artifacts stay
+    # failed and are never presented as a successful liquidation.
+    if: ${{ always() && contains(fromJSON('["success","failure"]'), needs.independently_reprice_large_historical_liNear_debt.result) }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     env:
@@ -237,9 +245,20 @@ jobs:
           total=$(jq -s '[.[].qualifiedLargerSourceAccounts] | add' "${files[@]}")
           echo "qualified=$total" >> "$GITHUB_OUTPUT"
           echo "Batch $STAGE157_BATCH: $total genuinely source-qualified larger accounts." >> "$GITHUB_STEP_SUMMARY"
-          if (( total > 0 || STAGE157_BATCH >= 3 )); then
+          # Count ONLY original local settlement-phase witnesses: source-positive
+          # plans and failed actor/callback attempts are not executions.
+          mapfile -d '' witnesses < <(find reports -type f -name stage55-sandbox-phase-evidence.json -print0)
+          settled=0
+          if (( ${#witnesses[@]} > 0 )); then
+            settled=$(jq -s '[.[] | select(.chain == "NEAR_SANDBOX" and
+              .actualRheaSettlementVerified == true and
+              .localLiquidationCallInvoked == true and
+              .status == "LOCAL_RHEA_BALANCE_AND_CALLBACK_VERIFIED_NOT_PROFIT")] | length' "${witnesses[@]}")
+          fi
+          echo "Original Sandbox settlement witnesses: $settled (NOT net profit)." >> "$GITHUB_STEP_SUMMARY"
+          if (( settled > 0 || STAGE157_BATCH >= 3 )); then
             echo 'more=false' >> "$GITHUB_OUTPUT"
-            echo 'Either a live larger candidate was found or all 169 historical LiNEAR debt candidates were exhausted.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Either a local Sandbox settlement was actually proven or all 169 historical LiNEAR debt candidates were rechecked; neither means realized profit.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'more=true' >> "$GITHUB_OUTPUT"
             echo "next=$((STAGE157_BATCH+1))" >> "$GITHUB_OUTPUT"
