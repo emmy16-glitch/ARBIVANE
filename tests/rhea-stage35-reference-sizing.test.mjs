@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sizeStage35SourceLiquidation} from '../src/rhea/stage35-atomic-reference-sizing.ts';
+import {sizeStage35SourceLiquidation,stage169ConservativeSeizeCeiling} from '../src/rhea/stage35-atomic-reference-sizing.ts';
+import {sourceMul,SOURCE_SCALE} from '../src/rhea/source-math.ts';
 const H='2'.repeat(43),P='3'.repeat(43),E27=10n**27n;
 const source=(role,token,balance,vol)=>{
  const value=BigInt(balance)*10n**21n;
@@ -269,4 +270,52 @@ test('Stage162 can still size an authentic LiNEAR same-token source pair without
  assert.equal(result.referenceRulesPass,true);
  assert.equal(result.executionEnabled,false);
  assert.equal(result.mayBroadcast,false);
+});
+
+
+test('Stage169 never sizes seizure to the literal source repayment equality limit',()=>{
+ const scenario=sizeStage35SourceLiquidation(report(),assets(),options);
+ assert.equal(scenario.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ const repay=BigInt(scenario.repay.referenceUsdE27);
+ const seize=BigInt(scenario.seize.referenceUsdE27);
+ const discount=BigInt(scenario.referenceInitialDiscountE27);
+ const reserve=BigInt(scenario.referenceRepayRoundingReserveUsdE27);
+ assert.ok(reserve>0n);
+ assert.ok(reserve<=repay/10000n);
+ assert.ok(seize>repay);
+ assert.ok(sourceMul(seize,SOURCE_SCALE-discount)<=repay-reserve);
+ assert.ok(BigInt(scenario.paperGrossUsdE27)===seize-repay);
+ assert.equal(scenario.mayBroadcast,false);
+ assert.equal(scenario.gasAndSwapNetProfitVerified,false);
+});
+test('Stage169 reproduces the actual Stage157 source margin deficit and prevents its callback inequality',()=>{
+ // Source prices and discount from original #40402755800 / artifact #12691066664.
+ const repaySourceE27=37959646839625650474108193n;
+ const discountSourceE27=19920754157454356000913367n;
+ // Original Rhea deployed-code callback exact USD E27 figures, not guesses.
+ const originalDiscountedSeizeE27=37959128341869451899819931n;
+ const actualRepaidE27=37959050421204388719231544n;
+ assert.ok(originalDiscountedSeizeE27>actualRepaidE27);
+ const guarded=stage169ConservativeSeizeCeiling(repaySourceE27,discountSourceE27);
+ assert.ok(guarded.reservedRepayUsdE27>0n);
+ const conservativeDiscounted=sourceMul(guarded.maximumSeizedUsdE27,
+  SOURCE_SCALE-discountSourceE27);
+ assert.ok(conservativeDiscounted<actualRepaidE27,
+  'source-dependent reserve must cover the original observed rounding gap');
+ assert.ok(conservativeDiscounted<=repaySourceE27-guarded.reservedRepayUsdE27);
+ assert.ok(guarded.maximumSeizedUsdE27>repaySourceE27,
+  'guard may not manufacture a non-profitable liquidation');
+});
+test('Stage169 source guard scales without 10x size floors and blocks zero discount',()=>{
+ const discount=SOURCE_SCALE/50n;
+ const small=stage169ConservativeSeizeCeiling(10n**25n,discount);
+ const large=stage169ConservativeSeizeCeiling(10n**29n,discount);
+ assert.ok(large.maximumSeizedUsdE27>small.maximumSeizedUsdE27*9000n);
+ assert.ok(large.reservedRepayUsdE27>small.reservedRepayUsdE27*9000n);
+ assert.ok(sourceMul(small.maximumSeizedUsdE27,SOURCE_SCALE-discount)<10n**25n);
+ assert.ok(sourceMul(large.maximumSeizedUsdE27,SOURCE_SCALE-discount)<10n**29n);
+ assert.throws(()=>stage169ConservativeSeizeCeiling(1n,0n),/STAGE169_/);
+ assert.throws(()=>stage169ConservativeSeizeCeiling(-1n,discount),/STAGE169_/);
+ const tiny=stage169ConservativeSeizeCeiling(10n**10n,1n);
+ assert.equal(tiny.maximumSeizedUsdE27,0n);
 });
