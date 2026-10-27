@@ -76,6 +76,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage168](docs/STAGE168_WNEAR_PINNED_WASM_RPC_FAILOVER.md) addresses a verified original [Stage93 run #40400219939](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40400219939): source-backed candidate checks passed, but the NEAR Workspaces SDK failed to import pinned `wrap.near` code after provider **JSON-RPC -429 rate limiting**. The resulting clone failure was **before** local funding or liquidation. The new bounded SDK import fallback reads unchanged deployed code at the same pinned block from an independent archival endpoint, verifies the original code hash and all cloned FT state, and blocks on provider exhaustion. Its regression tests reject false success, changing contract code or deterministic source errors. No mainnet spending or realized profit is enabled.
 
+## Stage169 — deployed Rhea-compatible same-token seizure sizing and larger read-only discovery
+
+[Stage169](docs/STAGE169_SAFE_LIQUIDATION_SIZING.md) diagnoses the genuine [Stage157 Sandbox receipt #40402755800](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40402755800): a source-theoretical maximum seizure reverted because the **discounted collateral was $0.00000007792 larger than actual shares repaid**. The real same-token Sandbox action now reserves a 10-bps source-USD rounding cushion by **reducing the collateral requested**, never increasing the loan or weakening Rhea risk rules. It rejects plans unable to retain positive gross after the cushion, preserves the full-share repayment and independent FINAL/zero-debt verification, and does not authorize mainnet signing. Stage157 source discovery can examine up to 10% of independently rechecked real debt, compared with the unchanged 1% default Stage38 source scan; this is not unlimited financing or verified net profit.
+
 ## What works today
 
 | Area | Verified capability | Boundary |
