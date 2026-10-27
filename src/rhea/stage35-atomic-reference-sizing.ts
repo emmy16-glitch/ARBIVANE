@@ -1,5 +1,5 @@
 import {sourceFromBalancePrice,sourceComputeDiscount,sourceMulRatio,sourceDivRatio,
- sourceCheckLiquidationRules,SOURCE_SCALE} from './source-math.ts';
+ sourceCheckLiquidationRules,sourceMul,SOURCE_SCALE} from './source-math.ts';
 import type {ExecutionPythValuationReport} from './execution-pyth-valuation.ts';
 
 /** Stage35: produce bounded *reference internal-lending-unit* liquidation
@@ -34,6 +34,9 @@ export interface SourceLiquidationSizing {
  repay:ReferenceLeg|null;seize:ReferenceLeg|null;
  paperGrossUsdE27:string|null;referenceRulesPass:boolean;
  referenceAfterHealthBps:string|null;consideredPairs:number;
+ /** Stage169: intentionally unspent discounted repayment reference value;
+  * reference-only, never a claim about actual repayment or net profit. */
+ referenceRepayRoundingReserveUsdE27?:string;
  contractRouteParityVerified:false;rawTokenDenominationsVerified:false;
  sandboxStateReplaySucceeded:false;gasAndSwapNetProfitVerified:false;
  walletCapitalVerified:false;mainnetWalletApproved:false;
@@ -117,6 +120,37 @@ function maxInternalAmount(leg:Leg,target:bigint):bigint{
  }
  return low;
 }
+/** Stage169: source-pinned upper bound with proportional discounted-repayment
+ * headroom for a real Rhea callback's borrow/share conversions.
+ *
+ * Previously Stage35 chose the literal maximum of the theoretical source
+ * collateral bound. In original Stage157 #40402755800 the source-size limit
+ * was consumed and a real Sandbox callback repaid slightly less after shares
+ * converted, reverting at actions.rs:652. Reserve <=1 bp of reference repay,
+ * capped at one quarter of its *theoretical* discounted gross. No arbitrary
+ * minimum transaction size; never add extra collateral or fake a price.
+ *
+ * All values are E27 integers. The normal Stage35 four-rule contract model
+ * is still re-run on the resulting *actual chosen* seizure.
+ */
+export function stage169ConservativeSeizeCeiling(
+ repaidUsdE27:bigint,initialDiscountE27:bigint,
+):{maximumSeizedUsdE27:bigint;reservedRepayUsdE27:bigint}{
+ if(typeof repaidUsdE27!=='bigint'||typeof initialDiscountE27!=='bigint'||
+  repaidUsdE27<=0n||repaidUsdE27>U128||
+  initialDiscountE27<=0n||initialDiscountE27>=SOURCE_SCALE)
+  throw Error('STAGE169_INVALID_SOURCE_REPAY_OR_DISCOUNT');
+ const theoretical=repaidUsdE27*SOURCE_SCALE/(SOURCE_SCALE-initialDiscountE27);
+ const spread=theoretical-repaidUsdE27;
+ // A margin can only be funded by a genuine positive source discount.
+ if(spread<=4n)return {maximumSeizedUsdE27:0n,reservedRepayUsdE27:0n};
+ const oneBasisPoint=repaidUsdE27/10000n||1n;
+ const reserve=oneBasisPoint<spread/4n?oneBasisPoint:spread/4n;
+ const maximum=(repaidUsdE27-reserve)*SOURCE_SCALE/(SOURCE_SCALE-initialDiscountE27);
+ if(reserve<=0n||maximum<=repaidUsdE27)
+  return {maximumSeizedUsdE27:0n,reservedRepayUsdE27:reserve};
+ return {maximumSeizedUsdE27:maximum,reservedRepayUsdE27:reserve};
+}
 const failure=(r:ExecutionPythValuationReport,pid:string|null,pairs:number,blockers:string[]):SourceLiquidationSizing=>({
  mode:'RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING',chain:'NEAR_MAINNET',
  borrowerAccountId:r.borrowerAccountId,blockHeight:r.blockHeight,
@@ -152,7 +186,8 @@ export function sizeStage35SourceLiquidation(
  const vol=actionablePools(assets);
  let best:{p:typeof evidence.positions[number];repay:Leg;seize:Leg;
   qtyIn:bigint;qtyOut:bigint;repaidUsd:bigint;seizedUsd:bigint;
-  newC:bigint;newD:bigint;discount:bigint;gross:bigint}|null=null;
+  newC:bigint;newD:bigint;discount:bigint;gross:bigint;
+  roundingReserve:bigint}|null=null;
  let considered=0,matchingRoutePairs=0;
  let permittedPairs=0,liquidPairs=0,validRuleScenarios=0,positiveGrossScenarios=0;
  for(const p of evidence.positions){
@@ -208,8 +243,11 @@ export function sizeStage35SourceLiquidation(
      const repayAdjusted=sourceDivRatio(repaidUsd,debt.vol);
      if(repayAdjusted>=d)continue;
      const newD=d-repayAdjusted;
-     const theoreticalUsd=repaidUsd*SOURCE_SCALE/(SOURCE_SCALE-discount);
-     let low=0n,high=maxInternalAmount(collateral,theoreticalUsd);
+     const guarded=stage169ConservativeSeizeCeiling(repaidUsd,discount);
+     // Never spend the full theoretical discounted-collateral upper bound:
+     // live borrowed-pool/share accounting may truncate the realized repay.
+     if(guarded.maximumSeizedUsdE27===0n)continue;
+     let low=0n,high=maxInternalAmount(collateral,guarded.maximumSeizedUsdE27);
      // At fixed repayment, the discounted-collateral bound and strictly
      // improving borrower health impose monotonic UPPER seizure bounds.
      // FINAL_POSITION_NOT_AT_RISK is a LOWER bound, checked only at the end.
@@ -230,6 +268,11 @@ export function sizeStage35SourceLiquidation(
      }
      if(low===0n)continue;
      const seizedUsd=asValue(low,collateral);
+     // Explicit source-model invariant: the discounted collateral must stay
+     // strictly BELOW reference repayment by at least the reserved E27 value.
+     // The reserve remains an estimate, not a verified live callback margin.
+     if(sourceMul(seizedUsd,SOURCE_SCALE-discount)>
+       repaidUsd-guarded.reservedRepayUsdE27)continue;
      const seizeAdjusted=sourceMulRatio(seizedUsd,collateral.vol);
      if(seizeAdjusted>=c)continue;
      const newC=c-seizeAdjusted;
@@ -241,7 +284,8 @@ export function sizeStage35SourceLiquidation(
      if(source.validBySourceRules&&gross>0n)positiveGrossScenarios++;
      if(source.validBySourceRules&&gross>=minGross&&gross>0n&&
       (!best||gross>best.gross))best={p,repay:debt,seize:collateral,
-       qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross};
+       qtyIn:amount,qtyOut:low,repaidUsd,seizedUsd,newC,newD,discount,gross,
+       roundingReserve:guarded.reservedRepayUsdE27};
     }
    }
   }
@@ -267,6 +311,7 @@ export function sizeStage35SourceLiquidation(
  seize:{tokenId:best.seize.token,amountLendingInternalAtomic:best.qtyOut.toString(),
   referenceUsdE27:best.seizedUsd.toString(),shareToActualTokenAtomicConversionVerified:false,fundsAvailabilityVerified:false},
  paperGrossUsdE27:best.gross.toString(),referenceRulesPass:true,
+ referenceRepayRoundingReserveUsdE27:best.roundingReserve.toString(),
  referenceAfterHealthBps:(best.newC*MAX_BPS/best.newD).toString(),consideredPairs:considered,
  contractRouteParityVerified:false,rawTokenDenominationsVerified:false,
  sandboxStateReplaySucceeded:false,gasAndSwapNetProfitVerified:false,
