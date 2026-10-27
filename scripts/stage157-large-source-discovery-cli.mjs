@@ -39,6 +39,10 @@ async function main(){
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
   minimumPaperGrossUsdE27:'1',
   requiredSameTokenId:'linear-protocol.near',
+  // Stage169: scan up to 10% authentic debt, not a made-up loan size.
+  // The source's four rules, same-block asset capacity and Sandbox funding
+  // still determine which amount can actually execute.
+  sourceMaxRepayBps:1000,
  };
  const rows=[];let largest=null;
  for(const item of selected.candidates){
@@ -93,6 +97,9 @@ async function main(){
   arbitraryTransactionSizeFloorEnabled:false,
   qualifiedLargerSourceAccounts:rows.filter(x=>x.largeSourceLiquidationQualified).length,
   bestSourceRepayLendingInternalAtomic:largest?.repay?.amountLendingInternalAtomic??null,
+  maximumSourceRepayBps:options.sourceMaxRepayBps,
+  bestSourceRepayUsdE27:largest?.repay?.referenceUsdE27??null,
+  sourceRepayScaleIsNotFundingAuthorization:true,
   currentPriceAndBlockRechecked:true,
   historicalDebtLegCountNotTreatedAsLiquidationSize:true,
   readyForConditionalSandbox:!!largest,
