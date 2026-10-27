@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {NavLink, Route, Routes, useLocation, useNavigate, useSearchParams} from 'react-router-dom';
 import {
   Pulse as Activity, ArrowDown, ArrowUpRight, Bell, ChartLineUp, CheckCircle, CirclesThree,
@@ -7,6 +7,8 @@ import {
   WarningCircle, X,
 } from '@phosphor-icons/react';
 import {authenticate, command, loadEnvironment, subscribe} from './api';
+import type {StreamConnection} from './api';
+import {mergeOperationEvents} from './events';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -39,12 +41,12 @@ function Shell({children}:{children:React.ReactNode}) {
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><CirclesThree weight="fill" size={26}/></span><span><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span></div>
       <nav>{nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' } className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
-      <div className="engine"><div className="engine-head"><span>Engine status</span><StatusPill>Standby</StatusPill></div>{['Scanner','Risk analysis','Execution','Reconciliation'].map(x=><div className="engine-line" key={x}><i/>{x}</div>)}</div>
+      <div className="engine"><div className="engine-head"><span>Engine status</span><StatusPill>Per session</StatusPill></div><small>Open Live Ops to inspect actual execution stages.</small></div>
       <div className="version"><span className="brand-mark mini"><CirclesThree weight="fill" size={18}/></span><span><b>ARBIVANE v0.1</b><small>Source-verified Rhea engine</small></span></div>
     </aside>
     <header className="topbar">
       <form className="search" onSubmit={event=>{event.preventDefault();if(search.trim())navigate(`/transactions?query=${encodeURIComponent(search.trim())}`)}}><MagnifyingGlass/><input aria-label="Search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></form>
-      <div className="top-status"><StatusPill>API connected</StatusPill><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications" onClick={()=>alert('No unread persisted alerts.')}><Bell/></button><div className="avatar">A</div><div className="account"><b>Operator</b><span>Authenticated session</span></div></div>
+      <div className="top-status"><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications not configured" title="Notifications unavailable" disabled><Bell/></button><div className="avatar">A</div><div className="account"><b>Operator</b><span>Authenticated session</span></div></div>
     </header>
     <main className="main" data-route={location.pathname}>{children}</main>
     <nav className="mobile-nav">{nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' }><Icon/><span>{label}</span></NavLink>)}</nav>
@@ -68,10 +70,10 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
   </section>;
 }
 
-function Operations({events,onOpen,active}:{events:OperationEvent[];onOpen:(e:OperationEvent)=>void;active:boolean}) {
+function Operations({events,onOpen,active,connection}:{events:OperationEvent[];onOpen:(e:OperationEvent)=>void;active:boolean;connection:StreamConnection|'connecting'}) {
   const [filter,setFilter]=useState('all'); const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
   const stages=['all',...new Set(events.map(e=>e.stage))];
-  return <section className="panel operations"><div className="panel-title"><span><Activity/>Live Operations Stream</span><StatusPill tone={events.length?'success':'neutral'}>{active?'Session active':'History'}</StatusPill></div>
+  return <section className="panel operations"><div className="panel-title"><span><Activity/>Live Operations Stream</span><StatusPill tone={connection==='connected'&&active?'success':'neutral'}>{active?(connection==='connected'?'Streaming':connection==='reconnecting'?'Reconnecting':'Connecting'):(events.length?'History':'Idle')}</StatusPill></div>
     {events.length>0&&<div className="filters">{stages.map(stage=><button className={filter===stage?'active':''} onClick={()=>setFilter(stage)} key={stage}>{stage}<small>{stage==='all'?events.length:events.filter(e=>e.stage===stage).length}</small></button>)}</div>}
     {filtered.length===0?<Empty title="No active session" text="Start automation to monitor genuine backend operations."/>:<div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={`event-dot ${event.status}`}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
   </section>;
@@ -90,10 +92,42 @@ function Dashboard() {
   const [environment,setEnvironment]=useState<Environment>('sandbox'); const [state,setState]=useState<DashboardState|null>(null);
   const [readiness,setReadiness]=useState<Partial<Record<Environment,EnvironmentReadiness>>>({});
   const [events,setEvents]=useState<OperationEvent[]>([]); const [error,setError]=useState(''); const [busy,setBusy]=useState<string|null>(null); const [detail,setDetail]=useState<OperationEvent|null>(null);
-  const refresh=useCallback(async()=>{try{const data=await loadEnvironment(environment);setState(data.state);setEvents(data.events);setReadiness(old=>({...old,[environment]:data.readiness}));setError('')}catch(e){setError(e instanceof Error?e.message:'LOAD_FAILED')}},[environment]);
-  useEffect(()=>{let source:EventSource|undefined;let active=true;void refresh().then(()=>{if(active)source=subscribe(environment,event=>{setEvents(old=>old.some(x=>x.id===event.id)?old:[...old,event]);void refresh()})});return()=>{active=false;source?.close()}},[environment,refresh]);
+  const [connection,setConnection]=useState<StreamConnection|'connecting'>('connecting');
+  const selectedEnvironment=useRef(environment);
+  selectedEnvironment.current=environment;
+  const refresh=useCallback(async()=>{
+    try{
+      const data=await loadEnvironment(environment);
+      if(selectedEnvironment.current!==environment)return;
+      setState(data.state);
+      setEvents(old=>mergeOperationEvents(environment,old,data.events));
+      setReadiness(old=>({...old,[environment]:data.readiness}));
+      setError('');
+    }catch(e){
+      if(selectedEnvironment.current===environment)
+        setError(e instanceof Error?e.message:'LOAD_FAILED');
+    }
+  },[environment]);
+  useEffect(()=>{
+    let source:EventSource|undefined;let active=true;
+    let refreshTimer:ReturnType<typeof setTimeout>|undefined;
+    setState(null);setEvents([]);setDetail(null);setConnection('connecting');
+    void refresh().then(()=>{
+      if(!active)return;
+      source=subscribe(environment,event=>{
+        if(!active)return;
+        setEvents(old=>mergeOperationEvents(environment,old,[event]));
+        // Streaming updates remain immediate; only expensive financial/state
+        // reconciliation is batched. Pending timers do not cross environments.
+        if(!refreshTimer)refreshTimer=setTimeout(()=>{
+          refreshTimer=undefined; if(active)void refresh();
+        },900);
+      },status=>{if(active)setConnection(status)});
+    });
+    return()=>{active=false;if(refreshTimer)clearTimeout(refreshTimer);source?.close()};
+  },[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
 }
 
 function Page({title,description,icon:Icon}:{title:string;description:string;icon:typeof Gauge}) {
