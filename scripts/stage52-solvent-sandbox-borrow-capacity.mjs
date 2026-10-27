@@ -157,7 +157,7 @@ export async function attestStage52BorrowCollateralCapacity({
   if(diagnosticPath!==null){
    if(typeof diagnosticPath!=='string'||diagnosticPath!=='stage172-wnear-pyth-parity-diagnostics.json')
     throw Error('STAGE172_INVALID_DIAGNOSTIC_PATH');
-   await writeFile(diagnosticPath,JSON.stringify(quoteDiagnosis,null,2)+'\\n');
+   await writeFile(diagnosticPath,JSON.stringify(quoteDiagnosis,null,2)+'\n');
   }
   if(quoteDiagnosis.status!=='PINNED_QUOTE_MATCH')
    throw Error('STAGE52_WRAPPED_PYTH_FEED_CLONE_MISMATCH');
