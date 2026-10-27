@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {attestStage52BorrowCollateralCapacity}
+import {attestStage52BorrowCollateralCapacity,stage172WnearQuoteDifference}
  from '../scripts/stage52-solvent-sandbox-borrow-capacity.mjs';
 
 const H=221440179,E27=10n**27n,NEAR=10n**24n;
@@ -114,4 +114,32 @@ test('Stage52 gate executes after verified local funding but before Rhea call an
   script.indexOf('sandboxTransactionSubmitted=true'));
  assert.ok(script.includes("NEAR_WORKSPACES_NETWORK!=='sandbox'"));
  assert.ok(!script.includes('broadcast_tx'));
+});
+
+test('Stage172 preserves all-field oracle quote integrity but ignores insignificant JSON key order',async()=>{
+ const source={price:'500000000',expo:-8,conf:'200',publish_time:'1792900000'};
+ const reordered={publish_time:'1792900000',conf:'200',expo:-8,price:'500000000'};
+ assert.equal(stage172WnearQuoteDifference(source,reordered).status,'PINNED_QUOTE_MATCH');
+ assert.equal(stage172WnearQuoteDifference(source,null).reason,'SANDBOX_QUOTE_EXPIRED_OR_MISSING');
+ const drift=stage172WnearQuoteDifference(source,{...source,publish_time:'1792900001'});
+ assert.equal(drift.status,'BLOCKED_PINNED_QUOTE_DIFFERENT');
+ assert.deepEqual(drift.changedFields,['publish_time']);
+ assert.equal(drift.oraclePriceSubstituted,false);
+ assert.equal(drift.oracleFreshnessChanged,false);
+ assert.equal(drift.mainnetExecutionEnabled,false);
+ assert.equal(drift.mayBroadcastMainnet,false);
+ const x=input();
+ x.contracts.get(O).view=async()=>reordered;
+ const capacity=await attestStage52BorrowCollateralCapacity(x);
+ assert.equal(capacity.actorCoveredByConservativeReference,true);
+});
+test('Stage172 actual changed oracle price still fails before liquidation',async()=>{
+ const source={price:'500000000',expo:-8,conf:'200',publish_time:'1792900000'};
+ const changed={...source,price:'900000000'};
+ const difference=stage172WnearQuoteDifference(source,changed);
+ assert.equal(difference.reason,'VALUE_OR_PUBLICATION_DRIFT');
+ assert.deepEqual(difference.changedFields,['price']);
+ const x=input();
+ x.contracts.get(O).view=async()=>changed;
+ await assert.rejects(()=>attestStage52BorrowCollateralCapacity(x),/STAGE52_WRAPPED_PYTH_FEED_CLONE_MISMATCH/);
 });
