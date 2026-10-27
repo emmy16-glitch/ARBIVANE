@@ -21,8 +21,15 @@ export async function command(environment: Environment, action:string, settings?
     headers:{'content-type':'application/json', ...headers()}, credentials:'include', body:JSON.stringify({settings})});
   const value = await response.json(); if (!response.ok) throw new Error(value.error ?? 'COMMAND_FAILED'); return value;
 }
-export function subscribe(environment:Environment, onEvent:(event:OperationEvent)=>void) {
-  const source = new EventSource(`/api/environments/${environment}/events`, {withCredentials:true});
-  source.addEventListener('operation', (raw) => onEvent(JSON.parse((raw as MessageEvent).data)));
-  return source;
+export type StreamConnection='connected'|'reconnecting';
+export function subscribe(environment:Environment, onEvent:(event:OperationEvent)=>void,
+ onConnection?:(status:StreamConnection)=>void) {
+ const source = new EventSource(`/api/environments/${environment}/events`, {withCredentials:true});
+ source.addEventListener('operation', (raw) => {
+  try { onEvent(JSON.parse((raw as MessageEvent).data) as OperationEvent); }
+  catch { onConnection?.('reconnecting'); }
+ });
+ source.addEventListener('open', () => onConnection?.('connected'));
+ source.addEventListener('error', () => onConnection?.('reconnecting'));
+ return source;
 }
