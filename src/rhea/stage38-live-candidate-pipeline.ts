@@ -17,6 +17,9 @@ export interface Stage38Options extends Omit<SweepOptions,'batchSize'> {
  // Bounded across the shard; default eight for callers not opting into
  // Stage163. Larger source sweeps may allot enough for all blocked borrowers.
  maxRecoveryAttempts?:number;
+ // Stage169: the genuine LiNEAR Sandbox discovery may inspect larger source
+ // repayments; the established production read-only pipeline stays at 1%.
+ sourceMaxRepayBps?:number;
  // Stage159: optional execution-lane route, not a broad market-screening rule.
  // Only source-qualified, same-token LiNEAR proposals can reach the existing
  // Stage37 LiNEAR execution lane. Other candidates stay visible in rows.
@@ -55,6 +58,9 @@ export async function evaluateActualCandidate(
  input:Pick<NearReadOnlyRpc,'view'|'viewAccount'>,
  borrower:string,o:Stage38Options,
 ):Promise<SourceLiquidationSizing>{
+ if(o.sourceMaxRepayBps!==undefined&&(!number(o.sourceMaxRepayBps,5,1000)||
+  o.requiredSameTokenId!=='linear-protocol.near'))
+  throw Error('STAGE169_SOURCE_SCALING_REQUIRES_BOUNDED_LIN_EAR_ROUTE');
  const rpc=new ResilientNearReadOnlyRpc(input,{maxRetries:2,initialDelayMs:350,maxDelayMs:5000,maxCachedPinnedViews:256});
  const tip=await rpc.viewAccount(o.lendingContract);
  if(!/^[1-9][0-9]{0,15}$/.test(tip.blockHeight)||tip.codeHash!==o.expectedLendingCodeHash)
@@ -75,7 +81,7 @@ export async function evaluateActualCandidate(
  if(valuation.status==='NO_DEBT'||valuation.status==='INCOMPLETE_ACTIVE_PYTH_VALUATION')
   throw Error('STAGE38_BORROWER_NO_LONGER_PRICEABLE');
  return sizeStage35SourceLiquidation(valuation,assets.value,{
-  borrowerAccountId:borrower,maxRepayBps:100,
+  borrowerAccountId:borrower,maxRepayBps:o.sourceMaxRepayBps??100,
   minimumPaperGrossUsdE27:o.minimumPaperGrossUsdE27,
   requiredSameTokenId:o.requiredSameTokenId,
  });
@@ -92,6 +98,7 @@ export async function qualifyStage38Candidates(
   !number(o.maxFindings,1,80)||!number(o.maxRiskCandidates,1,80)||
   !number(o.concurrency,1,3)||
   (o.maxRecoveryAttempts!==undefined&&!number(o.maxRecoveryAttempts,0,160))||
+  (o.sourceMaxRepayBps!==undefined&&!number(o.sourceMaxRepayBps,5,1000))||
   !/^[1-9][0-9]{0,38}$/.test(o.minimumPaperGrossUsdE27)||
   (o.requiredSameTokenId!==undefined&&o.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('INVALID_STAGE38_CANDIDATE_OPTIONS');
