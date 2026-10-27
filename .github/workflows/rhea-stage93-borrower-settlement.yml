@@ -27,6 +27,7 @@ on:
       - 'scripts/stage82-targeted-lending-clone.mjs'
       - 'scripts/stage89-targeted-wnear-clone.mjs'
       - 'scripts/stage91-targeted-linear-token.mjs'
+      - 'src/rhea/stage35-atomic-reference-sizing.ts'
       - 'src/rhea/stage41-sandbox-settlement.ts'
 permissions:
   contents: read

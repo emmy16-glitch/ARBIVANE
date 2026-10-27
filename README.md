@@ -80,6 +80,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage169](docs/STAGE169_SOURCE_REPAY_ROUNDING_HEADROOM.md) addresses the first genuine [larger-candidate Sandbox rejection #40402755800](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40402755800). The deployed Rhea callback rejected the original source-sized LiNEAR seizure because its **discounted collateral value exceeded the debt it actually repaid after share rounding** (about US$0.000000078 difference). The source scorer now holds back a **candidate-proportional, at-most-1-basis-point repayment margin** inside the source discount, selects only source-valid seized collateral and rechecks the four original rules. Exact original-callback and multi-size regression tests preserve original Pyth pricing and guard against artificial amounts. Stage93's completed small Sandbox liquidation remains the prior independent proof; new larger-financing and **positive realized net profit remain unverified**. Mainnet execution stays disabled.
 
+## Stage170 — source-based larger LiNEAR opportunities, not oversized loans
+
+[Stage170](docs/STAGE170_BOUNDED_SOURCE_SCALING.md) builds on the merged [Stage169 rounding headroom](https://github.com/emmy16-glitch/ARBIVANE/pull/259). Only the Stage157 same-token LiNEAR Sandbox research lane may now screen up to **10% of independently source-verified borrower debt** rather than 1%, still under original Rhea four-rule health/collateral constraints and Stage169's conservative repayment rounding reserve. It reports real reference USD E27 separately from internal LiNEAR units, keeps all actor-financing and FINAL receipt checks, and leaves other Stage38 callers at 1%. This **does not** grant 10% executable borrowing, access to any mainnet flash loan, or proven net profit.
+
 ## What works today
 
 | Area | Verified capability | Boundary |

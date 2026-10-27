@@ -88,7 +88,7 @@ test('bad volatility or unsafe repay budget is rejected',()=>{
   const a=assets();a[1][1].config.volatility_ratio=n;
   assert.throws(()=>sizeStage35SourceLiquidation(report(),a,options));
  }
- for(const n of [0,3,201,1000])
+ for(const n of [0,3,1001,10000])
   assert.throws(()=>sizeStage35SourceLiquidation(report(),assets(),{...options,maxRepayBps:n}));
 });
 test('Stage35 workflow never provides signing capability',async()=>{
@@ -247,6 +247,10 @@ test('Stage162 only sizes executable LiNEAR/LiNEAR pairs when required by the ca
  assert.throws(()=>sizeStage35SourceLiquidation(report(),assets(),{
   ...options,requiredSameTokenId:'wrap.near'}),/UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE/);
 });
+test('Stage170 rejects expanded repayment sizing outside the supported LiNEAR same-token route',()=>{
+ assert.throws(()=>sizeStage35SourceLiquidation(report(),assets(),{
+  ...options,maxRepayBps:1000}),/UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE/);
+});
 test('Stage162 can still size an authentic LiNEAR same-token source pair without changing source rules',()=>{
  const p=report();
  p.positions[0].legs=[
@@ -270,6 +274,17 @@ test('Stage162 can still size an authentic LiNEAR same-token source pair without
  assert.equal(result.referenceRulesPass,true);
  assert.equal(result.executionEnabled,false);
  assert.equal(result.mayBroadcast,false);
+ const scaled=sizeStage35SourceLiquidation(p,a,{
+  ...options,requiredSameTokenId:'linear-protocol.near',
+  maxRepayBps:1000,minimumPaperGrossUsdE27:'1'});
+ assert.equal(scaled.status,'PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE');
+ assert.equal(scaled.referenceRulesPass,true);
+ assert.ok(BigInt(scaled.repay.amountLendingInternalAtomic)>
+  BigInt(result.repay.amountLendingInternalAtomic));
+ assert.ok(BigInt(scaled.referenceRepayRoundingReserveUsdE27)>0n);
+ assert.equal(scaled.mainnetWalletApproved,false);
+ assert.equal(scaled.executionEnabled,false);
+ assert.equal(scaled.mayBroadcast,false);
 });
 
 
