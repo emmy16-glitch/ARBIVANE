@@ -32,6 +32,45 @@ function amount(v:unknown):string{
  if(typeof v!=='string'||!UINT.test(v)||BigInt(v)>U128)throw Error('INVALID_SANDBOX_INTERNAL_AMOUNT');
  return v;
 }
+/** Stage169: source-denominated rounding cushion for SAME-TOKEN Rhea Liquidate.
+ * Original Stage157 #40402755800 failed on the deployed contract because its
+ * max_amount repayment rounded slightly DOWN through lending shares, while
+ * Stage35 supplied a seizure at the source-model theoretical maximum:
+ * discounted collateral $0.0379591283 > actual repaid $0.0379590504.
+ *
+ * Leave at least 10 basis points of source repayment USD as reserve by
+ * reducing OUT collateral, never by borrowing/repaying more. The real Rhea
+ * check remains authoritative. Insufficient surplus rejects rather than
+ * inventing repayment or permitting a debt residue.
+ */
+export function stage169CappedSameTokenSeizure(
+ repayInternal:string,seizeInternal:string,repayUsdE27:string,seizeUsdE27:string,
+):{seizeInternal:string;seizureReserveUsdE27:string;sourceNetGrossFloorUsdE27:string}{
+ const repay=amount(repayInternal),seize=amount(seizeInternal);
+ if(typeof repayUsdE27!=='string'||typeof seizeUsdE27!=='string'||
+  !UINT.test(repayUsdE27)||!UINT.test(seizeUsdE27))
+  throw Error('STAGE169_INVALID_SOURCE_PYTH_VALUES');
+ const debtUsd=BigInt(repayUsdE27),collateralUsd=BigInt(seizeUsdE27);
+ if(debtUsd===0n||collateralUsd<=debtUsd||BigInt(seize)<=BigInt(repay))
+  throw Error('STAGE169_NO_SOURCE_POSITIVE_SAME_TOKEN_SPREAD');
+ // 10 bps = 0.1% (fixed, integer only). Reserve must be at least one E27
+ // subunit. Ceil-unit haircut prevents the conversion from erasing the reserve.
+ const reserveUsd=(debtUsd+999n)/1000n;
+ const seizeUnits=BigInt(seize);
+ const haircut=(seizeUnits*reserveUsd+collateralUsd-1n)/collateralUsd+1n;
+ if(haircut>=seizeUnits)throw Error('STAGE169_NO_SURPLUS_AFTER_ROUNDING_RESERVE');
+ const capped=seizeUnits-haircut;
+ if(capped<=BigInt(repay))
+  throw Error('STAGE169_NO_SURPLUS_AFTER_ROUNDING_RESERVE');
+ // A conservative rounded-down lower bound on the retained paper gross.
+ // This is NOT a gas/fee-adjusted or realized profitability witness.
+ const retainedUsd=collateralUsd*capped/seizeUnits;
+ if(retainedUsd<=debtUsd)
+  throw Error('STAGE169_NO_SURPLUS_AFTER_ROUNDING_RESERVE');
+ return {seizeInternal:capped.toString(),
+  seizureReserveUsdE27:reserveUsd.toString(),
+  sourceNetGrossFloorUsdE27:(retainedUsd-debtUsd).toString()};
+}
 export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplayPlan {
  if(!e||e.mode!=='RHEA_STAGE35_PINNED_SOURCE_ONLY_LIQUIDATION_SIZING'||
  e.chain!=='NEAR_MAINNET'||e.status!=='PAPER_SCENARIOS_FOUND_NOT_EXECUTABLE'||
@@ -61,6 +100,9 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   // Never withdraw more than the independent source-sized seize/repay spread.
  if(sameToken&&BigInt(seize)<=BigInt(repay))
   throw Error('STAGE71_SAME_TOKEN_REQUIRES_POSITIVE_REMAINDER');
+ const safeSeize=sameToken?stage169CappedSameTokenSeizure(
+  repay,seize,e.repay.referenceUsdE27,e.seize.referenceUsdE27,
+ ).seizeInternal:seize;
  const borrowAction={Borrow:{token_id:e.repay.tokenId,amount:repay}};
  // Rhea's supplied-share conversion can truncate a Borrow of precisely N
   // units slightly below N. In the liquidation repayment leg, `amount:N`
@@ -69,14 +111,14 @@ export function buildStage37SandboxPlan(e:SourceLiquidationSizing):SandboxReplay
   // repays more than source-approved N; Rhea still enforces all risk rules.
   const liquidationAction={Liquidate:{account_id:e.borrowerAccountId,
   in_assets:[{token_id:e.repay.tokenId,max_amount:repay}],
-  out_assets:[{token_id:e.seize.tokenId,amount:seize}]}};
+  out_assets:[{token_id:e.seize.tokenId,amount:safeSeize}]}};
  const actions:SandboxReplayPlan['actions']=sameToken?[
   // A bare Repay consumes the actor's entire CURRENT borrowed share balance.
   // Exact amount can leave a one-share (two-atomic) debt after pool rounding.
   // The actor is freshly registered and must have zero prior debt; only its
   // bounded Borrow from this SAME atomic transaction is eligible to repay.
   borrowAction,liquidationAction,{Repay:{token_id:e.repay.tokenId}},
-  {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(seize)-BigInt(repay)).toString()}}
+  {Withdraw:{token_id:e.seize.tokenId,max_amount:(BigInt(safeSeize)-BigInt(repay)).toString()}}
  ]:[
   borrowAction,liquidationAction,{Withdraw:{token_id:e.seize.tokenId,amount:seize}}
  ];
