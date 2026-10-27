@@ -1,4 +1,4 @@
-import type {DashboardState, Environment, OperationEvent} from './types';
+import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 let authToken = sessionStorage.getItem('arbivane.token') ?? '';
 let authenticated = false;
@@ -10,7 +10,7 @@ export async function authenticate(token = '') {
   if (!response.ok) throw new Error((await response.json()).error ?? 'AUTH_FAILED');
   authenticated = true;
 }
-export async function loadEnvironment(environment: Environment): Promise<{state:DashboardState;events:OperationEvent[]}> {
+export async function loadEnvironment(environment: Environment): Promise<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}> {
   if (!authenticated) await authenticate(authToken);
   const response = await fetch(`/api/environments/${environment}`, {headers:headers(), credentials:'include'});
   if (!response.ok) throw new Error((await response.json()).error ?? 'LOAD_FAILED');

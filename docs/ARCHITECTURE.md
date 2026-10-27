@@ -34,6 +34,8 @@ The public source chain is NEAR mainnet, but the execution is **only inside isol
 
 The dashboard service is runnable but not deployed by this repository. A source file or GitHub Actions workflow alone does not imply a deployed application. See [Dashboard operations](DASHBOARD.md) for configuration and the exact supported environment boundaries.
 
+Testnet and Mainnet readiness use bounded, credential-free HTTPS `status` calls and require the expected NEAR chain ID. They expose no transaction RPC or signer. Sandbox readiness checks the configured source evidence, RPC, and local Workspaces dependency before enabling Start.
+
 ## Finalized source data and amounts
 
 The scanner pages Rhea accounts and keeps each valuation and contract view pinned to the same source block. The source formulas handle borrower shares, token atomic amounts, market indices, isolated positions, active Pyth quotes, configured token decimals and extra decimal factors. Incomplete or stale quotes must fail closed.

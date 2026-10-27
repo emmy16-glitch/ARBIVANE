@@ -13,3 +13,7 @@ export interface DashboardState {
   wallet: {status:string; accountId:string|null; balances:unknown[]; verifiedAt:string|null};
   transactions: Array<Record<string, unknown>>; opportunities: Array<Record<string, unknown>>;
 }
+export interface EnvironmentReadiness {
+  environment:Environment; status:string; chainId:string; blockHeight:number|null; checkedAt:string;
+  capabilities:Record<string,boolean>; requirements:Record<string,unknown>; error?:string;
+}
