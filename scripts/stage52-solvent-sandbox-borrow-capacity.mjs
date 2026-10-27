@@ -6,6 +6,7 @@ import {sourceFromBalancePrice,sourceDivRatio,sourceMulRatio}
  from '../src/rhea/source-math.ts';
 import {reconstructExecutionPythPrice}
  from '../src/rhea/execution-pyth-valuation.ts';
+import {writeFile} from 'node:fs/promises';
 const ID=/^[a-z0-9._-]{2,64}$/;
 const FEED=/^[a-f0-9]{64}$/;
 const UINT=/^(0|[1-9][0-9]{0,77})$/;
@@ -25,7 +26,32 @@ const small=(v,code,min,max)=>{
   Number(v)<min||Number(v)>max)throw Error('STAGE52_'+code);
  return Number(v);
 };
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// JSON object key insertion order is not a protocol invariant. Compare ALL
+// nested keys and primitive types canonically; never waive a price difference.
+function canonical(value){
+ if(Array.isArray(value))return value.map(canonical);
+ if(value!==null&&typeof value==='object')
+  return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));
+ return value;
+}
+const same=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+export function stage172WnearQuoteDifference(sourceQuote,clonedQuote){
+ const keys=['price','conf','expo','publish_time'];
+ const sourcePresent=sourceQuote!==null&&sourceQuote!==undefined;
+ const sandboxPresent=clonedQuote!==null&&clonedQuote!==undefined;
+ const changedFields=sourcePresent&&sandboxPresent?
+  keys.filter(k=>!same(sourceQuote[k],clonedQuote[k])):[];
+ const reason=!sourcePresent?'SOURCE_QUOTE_MISSING':
+  !sandboxPresent?'SANDBOX_QUOTE_EXPIRED_OR_MISSING':
+   changedFields.length?'VALUE_OR_PUBLICATION_DRIFT':
+   'ADDITIONAL_QUOTE_FIELDS_DIFFER';
+ return {mode:'STAGE172_SOURCE_WNEAR_ORACLE_DIAGNOSTIC',
+  status:same(sourceQuote,clonedQuote)?'PINNED_QUOTE_MATCH':'BLOCKED_PINNED_QUOTE_DIFFERENT',
+  reason,sourcePresent,sandboxPresent,changedFields,
+  originalSourceQuoteValuesPersisted:false,
+  oraclePriceSubstituted:false,oracleFreshnessChanged:false,
+  mainnetExecutionEnabled:false,mayBroadcastMainnet:false};
+}
 function asset(rows,id){
  if(!Array.isArray(rows)||rows.length<1||rows.length>512)throw Error('STAGE52_INVALID_ASSETS');
  const x=rows.filter(v=>Array.isArray(v)&&v.length===2&&v[0]===id);
@@ -64,7 +90,8 @@ async function mirror(contract,method,args){
  catch{throw Error('STAGE52_CLONED_PRICE_VIEW_UNAVAILABLE');}
 }
 export async function attestStage52BorrowCollateralCapacity({
- rpc,contracts,plan,proposal,actorPositions,pinnedAssets,blockHeight
+ rpc,contracts,plan,proposal,actorPositions,pinnedAssets,blockHeight,
+ diagnosticPath=null
 }){
  if(!rpc||typeof rpc.view!=='function'||!contracts||
   typeof contracts.get!=='function'||!plan||
@@ -126,7 +153,14 @@ export async function attestStage52BorrowCollateralCapacity({
   const quote=record(await source(rpc,'aggregate-oracle.near',
    'get_price_no_older_than',args,blockHeight),'PYTH_QUOTE');
   const localQuote=await mirror(oracle,'get_price_no_older_than',args);
-  if(!same(quote,localQuote))throw Error('STAGE52_WRAPPED_PYTH_FEED_CLONE_MISMATCH');
+  const quoteDiagnosis=stage172WnearQuoteDifference(quote,localQuote);
+  if(diagnosticPath!==null){
+   if(typeof diagnosticPath!=='string'||diagnosticPath!=='stage172-wnear-pyth-parity-diagnostics.json')
+    throw Error('STAGE172_INVALID_DIAGNOSTIC_PATH');
+   await writeFile(diagnosticPath,JSON.stringify(quoteDiagnosis,null,2)+'\\n');
+  }
+  if(quoteDiagnosis.status!=='PINNED_QUOTE_MATCH')
+   throw Error('STAGE52_WRAPPED_PYTH_FEED_CLONE_MISMATCH');
   const conf=BigInt(String(quote.conf));
   const px=positive(quote.price,'PYTH_PRICE');
   if(!UINT.test(String(quote.conf))||conf*10000n>px*150n)
