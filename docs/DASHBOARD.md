@@ -8,6 +8,7 @@ The dashboard is an authenticated operations surface around the existing Rhea en
 | --- | --- | --- | --- |
 | Durable, isolated state/event history | Yes | Yes | Yes |
 | SSE replay after refresh/reconnect | Yes | Yes | Yes |
+| Live RPC readiness | Local runner prerequisites | Chain-ID and finalized-height status | Read-only chain-ID and finalized-height status |
 | Start automation | Genuine Workspaces runner, when evidence and RPC are configured | Unavailable pending a supported adapter and test wallet | Disabled server-side |
 | Wallet transfers | Not exposed | Not configured | Not exposed |
 | Signing/spending | Disposable local Sandbox actor only | Not configured | Disabled |
@@ -38,6 +39,7 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 
 - `POST /api/auth/session` creates an HttpOnly, SameSite session after token validation (or loopback-only local admission).
 - `GET /api/environments/:environment` reads only that environment's state and recent events.
+- The same response includes current readiness. Public-network RPC status is accepted only over credential-free HTTPS when the returned chain ID and block-height schema match the selected environment. Provider errors are reduced to bounded codes.
 - `GET /api/environments/:environment/events` uses SSE with `Last-Event-ID`, monotonic ordering, keep-alive, and client deduplication.
 - Command routes are same-origin checked and session-state guarded.
 - No route accepts a private key, mnemonic, arbitrary executable, mainnet transaction, or claimed P&L.
@@ -49,6 +51,7 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 - [x] Durable environment state and append-only events.
 - [x] Authenticated commands and replayable SSE.
 - [x] Existing genuine Sandbox runner adapter with mainnet-signing denial.
+- [x] Live Sandbox prerequisite, Testnet RPC, and Mainnet read-only readiness checks.
 - [x] Fail-closed evidence importer for original receipt identity, source block, callback, balance deltas, actor debt, and unsold token inventory.
 - [ ] Sale/settlement importer for realized proceeds, financing fees, gas, swap costs, and net P&L.
 - [ ] Supported Testnet wallet/transfer adapter.

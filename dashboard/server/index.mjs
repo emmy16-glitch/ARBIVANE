@@ -5,6 +5,7 @@ import {extname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {AutomationManager} from './automation.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
+import {environmentReadiness} from './readiness.mjs';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const dataRoot = resolve(process.env.ARBIVANE_DASHBOARD_DATA_DIR ?? join(root, '.arbivane-dashboard'));
@@ -83,7 +84,8 @@ const server = createServer(async (request, response) => {
     if (match) {
       const environment = match[1]; const action = match[2] ?? '';
       if (request.method === 'GET' && !action)
-        return json(response, 200, {state: await store.state(environment), events: await store.events(environment, 0, 100)});
+        return json(response, 200, {state: await store.state(environment), events: await store.events(environment, 0, 100),
+          readiness: await environmentReadiness(environment)});
       if (request.method === 'GET' && action === 'events') {
         const after = Number(request.headers['last-event-id'] ?? url.searchParams.get('after') ?? 0);
         response.writeHead(200, {'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform',

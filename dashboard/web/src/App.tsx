@@ -7,7 +7,7 @@ import {
   WarningCircle, X,
 } from '@phosphor-icons/react';
 import {command, loadEnvironment, subscribe} from './api';
-import type {DashboardState, Environment, OperationEvent} from './types';
+import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
   sandbox: {title:'Sandbox', description:'Isolated NEAR Workspaces', detail:'Local test assets only', icon:Flask},
@@ -45,11 +45,11 @@ function Shell({children}:{children:React.ReactNode}) {
   </div>;
 }
 
-function EnvironmentPicker({value,onChange}:{value:Environment;onChange:(e:Environment)=>void}) {
-  return <div className="environment-picker">{(Object.keys(envInfo) as Environment[]).map((key)=>{const info=envInfo[key];const Icon=info.icon;return <button key={key} className={`environment ${value===key?'selected':''} ${key}`} onClick={()=>onChange(key)}><span className="env-icon"><Icon size={25}/></span><span><b>{info.title}</b><small>{info.description}</small><em>{info.detail}</em></span>{value===key&&<CheckCircle className="selected-check" weight="fill"/>}</button>})}</div>;
+function EnvironmentPicker({value,onChange,readiness}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
+  return <div className="environment-picker">{(Object.keys(envInfo) as Environment[]).map((key)=>{const info=envInfo[key];const Icon=info.icon;const live=readiness[key];return <button key={key} className={`environment ${value===key?'selected':''} ${key}`} onClick={()=>onChange(key)}><span className="env-icon"><Icon size={25}/></span><span><b>{info.title}</b><small>{info.description}</small><em className={live?.status==='unavailable'?'unavailable':''}>{live?(live.status==='connected'?`RPC connected · block ${live.blockHeight}`:live.status.replaceAll('_',' ')):info.detail}</em></span>{value===key&&<CheckCircle className="selected-check" weight="fill"/>}</button>})}</div>;
 }
 
-function Automation({environment,state,onCommand,busy}:{environment:Environment;state:DashboardState|null;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
+function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
   const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'1000.00');
   const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'1.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.revision]);
@@ -58,7 +58,7 @@ function Automation({environment,state,onCommand,busy}:{environment:Environment;
     <div className="automation-body"><label className="money-label"><span>Maximum financing per liquidation <small>Cap, not required loan size</small></span><div className="money-input"><span>$ USD</span><input value={amount} inputMode="decimal" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation"/></div></label>
       <div className="options"><b>Execution options</b><label><input type="checkbox" checked readOnly/> Reject below minimum net profit</label><div className="minimum"><span>Minimum verified net profit</span><input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)}/><em>USD</em></div><label className="locked"><input type="checkbox" checked readOnly/> Reconcile receipts before crediting</label></div></div>
     <div className="controls"><button className="primary" disabled={running||busy!==null||environment==='mainnet'} onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}><Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}</button><button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button><button className="stop" disabled={!running||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button></div>
-    <div className="readiness"><i className={environment==='mainnet'?'warning':''}/>{busy?`${busy}…`:environment==='sandbox'?'Ready when Sandbox evidence path is configured':environment==='testnet'?'Testnet execution unavailable until wallet and adapter are configured':'Mainnet signing and spending are disabled server-side'}</div>
+    <div className="readiness"><i className={environment==='mainnet'||readiness?.status==='unavailable'?'warning':''}/>{busy?`${busy}…`:readiness?.status==='connected'?`${readiness.chainId} RPC verified at block ${readiness.blockHeight}; execution adapter unavailable`:environment==='sandbox'&&readiness?.status==='ready'?'Sandbox evidence, RPC, and Workspaces runtime configured':environment==='sandbox'?'Sandbox runner not configured':environment==='testnet'?'Testnet wallet and execution adapter not configured':'Mainnet signing and spending are disabled server-side'}</div>
   </section>;
 }
 
@@ -82,11 +82,12 @@ function Recent({state}:{state:DashboardState|null}) {const tx=state?.transactio
 
 function Dashboard() {
   const [environment,setEnvironment]=useState<Environment>('sandbox'); const [state,setState]=useState<DashboardState|null>(null);
+  const [readiness,setReadiness]=useState<Partial<Record<Environment,EnvironmentReadiness>>>({});
   const [events,setEvents]=useState<OperationEvent[]>([]); const [error,setError]=useState(''); const [busy,setBusy]=useState<string|null>(null); const [detail,setDetail]=useState<OperationEvent|null>(null);
-  const refresh=useCallback(async()=>{try{const data=await loadEnvironment(environment);setState(data.state);setEvents(data.events);setError('')}catch(e){setError(e instanceof Error?e.message:'LOAD_FAILED')}},[environment]);
+  const refresh=useCallback(async()=>{try{const data=await loadEnvironment(environment);setState(data.state);setEvents(data.events);setReadiness(old=>({...old,[environment]:data.readiness}));setError('')}catch(e){setError(e instanceof Error?e.message:'LOAD_FAILED')}},[environment]);
   useEffect(()=>{let source:EventSource|undefined;let active=true;void refresh().then(()=>{if(active)source=subscribe(environment,event=>{setEvents(old=>old.some(x=>x.id===event.id)?old:[...old,event]);void refresh()})});return()=>{active=false;source?.close()}},[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment}/><div className="left-column"><Automation environment={environment} state={state} onCommand={run} busy={busy}/>{error&&<div className="error-banner"><WarningCircle/>{error.replaceAll('_',' ')}<button onClick={()=>setError('')}><X/></button></div>}<Operations events={events} onOpen={setDetail}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<div className="error-banner"><WarningCircle/>{error.replaceAll('_',' ')}<button onClick={()=>setError('')}><X/></button></div>}<Operations events={events} onOpen={setDetail}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
 }
 
 function Page({title,description,icon:Icon}:{title:string;description:string;icon:typeof Gauge}) {
