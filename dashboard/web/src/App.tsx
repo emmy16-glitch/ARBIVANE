@@ -59,7 +59,7 @@ function EnvironmentPicker({value,onChange,readiness}:{value:Environment;onChang
 
 function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
   const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'1000.00');
-  const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'1.00');
+  const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'0.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.environment]);
   const status=state?.session?.status??'idle'; const running=['starting','running','pause_requested','stopping'].includes(status);
   return <section className="panel automation"><div className="panel-title"><span><Gear/>Automation Control</span><StatusPill tone={environment==='mainnet'?'danger':'neutral'}>{environment==='mainnet'?'Execution locked':status}</StatusPill></div>
