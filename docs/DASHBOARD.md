@@ -59,4 +59,8 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 - [ ] Supported Testnet wallet/transfer adapter.
 - [ ] Deposit/withdrawal custody adapters with authorization and audit trails.
 - [ ] Mainnet readiness adapter; execution remains disabled.
-- [ ] Browser visual QA at target widths; no cloud browser is exposed in this environment.
+- [x] Chromium interaction and responsive QA at 1280×720, 820×900, and 390×844 with no console errors or horizontal overflow.
+
+## Validation
+
+The production server integration suite checks loopback/token authentication, HttpOnly SameSite cookies, same-origin mutation rejection, isolated initial state, missing Sandbox configuration rejection, unconditional Mainnet execution denial, CSP, and MIME hardening. The production dependency graph reports zero known `npm audit` vulnerabilities. The client bundle is approximately 94 KiB gzip; no sample financial data or external font/runtime requests are shipped.
