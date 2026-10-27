@@ -7,11 +7,16 @@
     "node": ">=22.16.0"
   },
   "scripts": {
+    "dev": "vite --config dashboard/web/vite.config.ts",
+    "dev:api": "node dashboard/server/index.mjs",
+    "build:dashboard": "vite build --config dashboard/web/vite.config.ts",
+    "preview:dashboard": "vite preview --config dashboard/web/vite.config.ts",
+    "test:dashboard": "node --test tests/dashboard-*.test.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "demo": "node --experimental-strip-types src/demo/run.ts",
     "scan:readonly": "node --experimental-strip-types src/rhea/cli.ts",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run typecheck && npm run build:dashboard && npm test",
     "scan:indicative": "node --experimental-strip-types src/rhea/assess-cli.ts",
     "probe:rhea": "node --experimental-strip-types src/rhea/probe-cli.ts",
     "probe:rhea:aggregate": "node --experimental-strip-types src/rhea/aggregate-probe-cli.ts",
@@ -51,6 +56,21 @@
     "probe:rhea:stage44-recovered-risk": "node --experimental-strip-types src/rhea/stage44-recovered-risk-sandbox-preflight-cli.ts"
   },
   "devDependencies": {
-    "typescript": "5.8.3"
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "typescript": "5.8.3",
+    "typescript-eslint": "^8.44.1",
+    "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1"
   }
 }

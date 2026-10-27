@@ -1,4 +1,6 @@
 node_modules/
+dashboard/web/dist/
+.arbivane-dashboard/
 .env
 .env.*
 !.env.example
