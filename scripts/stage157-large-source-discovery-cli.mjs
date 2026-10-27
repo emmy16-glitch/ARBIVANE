@@ -39,6 +39,9 @@ async function main(){
   maxConfidenceBps:150,sanityMaxUsd:'10000000',
   minimumPaperGrossUsdE27:'1',
   requiredSameTokenId:'linear-protocol.near',
+  // Stage170: examine up to 10% of independently confirmed original debt;
+  // retain Stage169's four source rules and rounding-price reserve.
+  sourceMaxRepayBps:1000,
  };
  const rows=[];let largest=null;
  for(const item of selected.candidates){
@@ -93,6 +96,9 @@ async function main(){
   arbitraryTransactionSizeFloorEnabled:false,
   qualifiedLargerSourceAccounts:rows.filter(x=>x.largeSourceLiquidationQualified).length,
   bestSourceRepayLendingInternalAtomic:largest?.repay?.amountLendingInternalAtomic??null,
+  maximumSourceRepayBps:options.sourceMaxRepayBps,
+  bestSourceRepayUsdE27:largest?.repay?.referenceUsdE27??null,
+  sourceRepayScaleIsNotFundingAuthorization:true,
   currentPriceAndBlockRechecked:true,
   historicalDebtLegCountNotTreatedAsLiquidationSize:true,
   readyForConditionalSandbox:!!largest,
