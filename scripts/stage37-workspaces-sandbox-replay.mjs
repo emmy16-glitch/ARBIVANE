@@ -410,6 +410,7 @@ async function main(){
  const boundedCapacity=await attestStage52BorrowCollateralCapacity({
   rpc,contracts,plan,proposal,actorPositions:actorPositionsForFunding,
   pinnedAssets:assets.value,blockHeight:block,
+  diagnosticPath:'stage172-wnear-pyth-parity-diagnostics.json',
  });
  await writeFile('stage52-actor-borrow-capacity.json',
   JSON.stringify(boundedCapacity,null,2)+'\n');
