@@ -1,5 +1,5 @@
 export type Environment = 'sandbox' | 'testnet' | 'mainnet';
-export type SessionStatus = 'starting' | 'running' | 'pause_requested' | 'paused' | 'stopping' | 'completed' | 'failed';
+export type SessionStatus = 'starting' | 'running' | 'pause_requested' | 'paused' | 'stopping' | 'stopped' | 'completed' | 'failed';
 export interface OperationEvent {
   id: string; sequence: number; environment: Environment; timestamp: string;
   sessionId: string | null; stage: string; status: string; message: string;

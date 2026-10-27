@@ -1,12 +1,12 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {NavLink, Route, Routes, useLocation} from 'react-router-dom';
+import {NavLink, Route, Routes, useLocation, useNavigate, useSearchParams} from 'react-router-dom';
 import {
   Pulse as Activity, ArrowDown, ArrowUpRight, Bell, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
-  MagnifyingGlass, Pause, Play, SlidersHorizontal, Stop, TrendUp, Wallet,
+  MagnifyingGlass, Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
   WarningCircle, X,
 } from '@phosphor-icons/react';
-import {command, loadEnvironment, subscribe} from './api';
+import {authenticate, command, loadEnvironment, subscribe} from './api';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -27,8 +27,14 @@ function Empty({icon:Icon = Activity, title, text}:{icon?:typeof Activity;title:
 function StatusPill({children, tone='neutral'}:{children:React.ReactNode;tone?:string}) {
   return <span className={`status-pill ${tone}`}><i/>{children}</span>;
 }
+function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
+  const [token,setToken]=useState(''); const [busy,setBusy]=useState(false); const [authError,setAuthError]=useState('');
+  const auth=['INVALID_TOKEN','AUTH_REQUIRED','AUTH_NOT_CONFIGURED','AUTH_FAILED'].includes(error);
+  if(!auth)return <div className="error-banner"><WarningCircle/>{error.replaceAll('_',' ')}<button onClick={onRetry}>Retry</button></div>;
+  return <form className="auth-inline" onSubmit={async event=>{event.preventDefault();setBusy(true);setAuthError('');try{await authenticate(token);onRetry()}catch(reason){setAuthError(reason instanceof Error?reason.message:'AUTH_FAILED')}finally{setBusy(false)}}}><ShieldCheck/><label><span>{authError?authError.replaceAll('_',' '):'Operator authentication required'}</span><input type="password" autoComplete="current-password" value={token} onChange={event=>setToken(event.target.value)} placeholder="Dashboard access token"/></label><button disabled={!token||busy}>{busy?'Authenticating…':'Authenticate'}</button></form>;
+}
 function Shell({children}:{children:React.ReactNode}) {
-  const location = useLocation();
+  const location = useLocation(); const navigate=useNavigate(); const [search,setSearch]=useState('');
   return <div className="shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><CirclesThree weight="fill" size={26}/></span><span><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span></div>
@@ -37,8 +43,8 @@ function Shell({children}:{children:React.ReactNode}) {
       <div className="version"><span className="brand-mark mini"><CirclesThree weight="fill" size={18}/></span><span><b>ARBIVANE v0.1</b><small>Source-verified Rhea engine</small></span></div>
     </aside>
     <header className="topbar">
-      <div className="search"><MagnifyingGlass/><input aria-label="Search" placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></div>
-      <div className="top-status"><StatusPill>API connected</StatusPill><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications"><Bell/></button><div className="avatar">A</div><div className="account"><b>Operator</b><span>Authenticated session</span></div></div>
+      <form className="search" onSubmit={event=>{event.preventDefault();if(search.trim())navigate(`/transactions?query=${encodeURIComponent(search.trim())}`)}}><MagnifyingGlass/><input aria-label="Search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></form>
+      <div className="top-status"><StatusPill>API connected</StatusPill><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications" onClick={()=>alert('No unread persisted alerts.')}><Bell/></button><div className="avatar">A</div><div className="account"><b>Operator</b><span>Authenticated session</span></div></div>
     </header>
     <main className="main" data-route={location.pathname}>{children}</main>
     <nav className="mobile-nav">{nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' }><Icon/><span>{label}</span></NavLink>)}</nav>
@@ -87,11 +93,44 @@ function Dashboard() {
   const refresh=useCallback(async()=>{try{const data=await loadEnvironment(environment);setState(data.state);setEvents(data.events);setReadiness(old=>({...old,[environment]:data.readiness}));setError('')}catch(e){setError(e instanceof Error?e.message:'LOAD_FAILED')}},[environment]);
   useEffect(()=>{let source:EventSource|undefined;let active=true;void refresh().then(()=>{if(active)source=subscribe(environment,event=>{setEvents(old=>old.some(x=>x.id===event.id)?old:[...old,event]);void refresh()})});return()=>{active=false;source?.close()}},[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<div className="error-banner"><WarningCircle/>{error.replaceAll('_',' ')}<button onClick={()=>setError('')}><X/></button></div>}<Operations events={events} onOpen={setDetail}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
 }
 
 function Page({title,description,icon:Icon}:{title:string;description:string;icon:typeof Gauge}) {
   return <div className="subpage"><div className="page-heading"><span><Icon/></span><div><small>ARBIVANE OPERATIONS</small><h1>{title}</h1><p>{description}</p></div></div><section className="panel"><Empty icon={Icon} title={`${title} has no verified records`} text="This view populates from environment-scoped backend evidence. No sample data is shown."/></section></div>;
 }
 
-export function App(){return <Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<Page title="Live operations" description="Persistent scanning, execution, and settlement events." icon={Activity}/>}/><Route path="/opportunities" element={<Page title="Opportunities" description="Source-verified candidates and rejection evidence." icon={Cube}/>}/><Route path="/performance" element={<Page title="Performance" description="Reconciled proceeds, costs, and realized results." icon={ChartLineUp}/>}/><Route path="/wallet" element={<Page title="Wallet" description="Environment-specific balances and custody controls." icon={Wallet}/>}/><Route path="/transactions" element={<Page title="Transactions" description="Original receipt identifiers and settlement evidence." icon={ClockCounterClockwise}/>}/><Route path="/analytics" element={<Page title="Analytics" description="Verified operational and financial trends." icon={ListMagnifyingGlass}/>}/><Route path="/settings" element={<Page title="Settings" description="Security, RPC, wallets, and automation configuration." icon={SlidersHorizontal}/>}/></Routes></Shell>}
+type ViewKind='live'|'opportunities'|'performance'|'wallet'|'transactions'|'analytics'|'settings';
+const viewCopy:Record<ViewKind,{title:string;description:string;icon:typeof Gauge}>={
+  live:{title:'Live operations',description:'Persistent scanning, execution, and settlement events.',icon:Activity},
+  opportunities:{title:'Opportunities',description:'Source-verified candidates and rejection evidence.',icon:Cube},
+  performance:{title:'Performance',description:'Reconciled proceeds, costs, and realized results.',icon:ChartLineUp},
+  wallet:{title:'Wallet',description:'Environment-specific balances and custody controls.',icon:Wallet},
+  transactions:{title:'Transactions',description:'Original receipt identifiers and settlement evidence.',icon:ClockCounterClockwise},
+  analytics:{title:'Analytics',description:'Verified operational and financial trends.',icon:ListMagnifyingGlass},
+  settings:{title:'Settings',description:'Security, RPC, wallets, and automation configuration.',icon:SlidersHorizontal},
+};
+
+function OperationalPage({kind}:{kind:ViewKind}) {
+  const copy=viewCopy[kind],Icon=copy.icon; const [params]=useSearchParams();
+  const [environment,setEnvironment]=useState<Environment>('sandbox');
+  const [data,setData]=useState<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}|null>(null);
+  const [error,setError]=useState('');
+  useEffect(()=>{let active=true;setData(null);void loadEnvironment(environment).then(value=>{if(active){setData(value);setError('')}}).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED')});return()=>{active=false}},[environment]);
+  const query=(params.get('query')??'').toLowerCase();
+  const transactions=(data?.state.transactions??[]).filter(row=>!query||JSON.stringify(row).toLowerCase().includes(query));
+  const opportunities=data?.state.opportunities??[];
+  const readiness=data?.readiness;
+  let content:React.ReactNode;
+  if(error) content=<ApiError error={error} onRetry={()=>{setError('');void loadEnvironment(environment).then(setData).catch(reason=>setError(reason instanceof Error?reason.message:'LOAD_FAILED'))}}/>;
+  else if(!data) content=<Empty icon={Icon} title="Loading verified records" text="Reading the selected environment's persisted backend state."/>;
+  else if(kind==='transactions') content=transactions.length?<div className="data-table" role="table"><div className="data-head" role="row"><span>Transaction</span><span>Borrower</span><span>Source block</span><span>Result</span></div>{transactions.map(row=><div className="data-row" role="row" key={String(row.id)}><code>{String(row.id)}</code><span>{String(row.borrowerAccountId)}</span><span>{String(row.sourceBlock)}</span><span><StatusPill tone="success">Verified · unsold</StatusPill></span></div>)}</div>:<Empty icon={Icon} title={query?'No matching verified transaction':'No verified transactions'} text="Original receipt-backed Sandbox transactions appear here after reconciliation."/>;
+  else if(kind==='wallet') content=<div className="record-grid"><div><small>Connection</small><strong>{data.state.wallet.status.replaceAll('_',' ')}</strong></div><div><small>Account</small><strong>{data.state.wallet.accountId??'Not configured'}</strong></div><div className="wide"><small>Verified balances</small>{data.state.wallet.balances.length?data.state.wallet.balances.map((balance,index)=><code key={index}>{JSON.stringify(balance)}</code>):<strong>None</strong>}</div><div className="wide record-actions"><button onClick={()=>alert('Deposit is unavailable until an authorized environment-specific custody adapter is configured.')}><ArrowDown/>Deposit</button><button onClick={()=>alert('Withdrawal is unavailable until ownership, destination, and settled transferable balance are verified.')}><ArrowUpRight/>Withdraw</button></div></div>;
+  else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?<div className="record-grid">{Object.entries(data.state.accounting).map(([key,value])=><div key={key}><small>{key.replaceAll(/([A-Z])/g,' $1')}</small><strong>{value==null?'Not verified':typeof value==='object'?'Evidence attached':String(value)}</strong></div>)}</div>:<Empty icon={Icon} title="No realized performance" text="Unsold collateral and missing same-denomination costs cannot populate financial charts."/>;
+  else if(kind==='opportunities') content=opportunities.length?<pre className="record-json">{JSON.stringify(opportunities,null,2)}</pre>:<Empty icon={Icon} title="No current eligible opportunities" text="Rejected or incomplete candidates remain in the Live Operations evidence stream."/>;
+  else if(kind==='live') content=data.events.length?<div className="page-events">{data.events.slice().reverse().map(event=><div key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><b>{event.stage}</b><span>{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill></div>)}</div>:<Empty icon={Icon} title="No active session" text="Start automation from Dashboard to persist and stream genuine operations."/>;
+  else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Readiness</small><strong>{readiness?.status.replaceAll('_',' ')??'Unavailable'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Observed block</small><strong>{readiness?.blockHeight??'Unavailable'}</strong></div><div className="wide"><small>Capabilities</small><code>{JSON.stringify(readiness?.capabilities??{})}</code></div><div className="wide"><small>Missing requirements</small><code>{JSON.stringify(readiness?.requirements??{})}</code></div></div>;
+  return <div className="subpage operational-page"><div className="page-heading"><span><Icon/></span><div><small>ARBIVANE OPERATIONS</small><h1>{copy.title}</h1><p>{copy.description}</p></div></div><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness?{[environment]:readiness}:{}}/><section className="panel page-panel"><div className="panel-title"><span>{copy.title}</span><span className="network-label">{environment}</span></div>{content}</section></div>;
+}
+
+export function App(){return <Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<OperationalPage kind="analytics"/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell>}
