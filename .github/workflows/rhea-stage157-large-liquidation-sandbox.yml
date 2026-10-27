@@ -15,6 +15,8 @@ on:
       - 'tests/rhea-stage89-targeted-wnear-clone.test.mjs'
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
+      - 'src/rhea/stage37-sandbox-liquidation.ts'
+      - 'tests/rhea-stage37-sandbox-execution.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
@@ -34,6 +36,8 @@ on:
       - 'tests/rhea-stage89-targeted-wnear-clone.test.mjs'
       - 'scripts/stage119-clone-failure.mjs'
       - 'tests/rhea-stage119-clone-failure.test.mjs'
+      - 'src/rhea/stage37-sandbox-liquidation.ts'
+      - 'tests/rhea-stage37-sandbox-execution.test.mjs'
       - 'scripts/stage37-workspaces-sandbox-replay.mjs'
       - 'tests/rhea-stage164-pricing-closure.test.mjs'
       - '.github/workflows/rhea-stage157-large-liquidation-sandbox.yml'
@@ -58,7 +62,7 @@ jobs:
           node --check scripts/stage157-large-source-liquidation-gate.mjs
           node --check scripts/stage164-source-pricing-closure.mjs
           node --check scripts/stage89-targeted-wnear-clone.mjs
-          node --experimental-strip-types --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs tests/rhea-stage164-pricing-closure.test.mjs tests/rhea-stage89-targeted-wnear-clone.test.mjs tests/rhea-stage119-clone-failure.test.mjs
+          node --experimental-strip-types --test tests/rhea-stage157-large-source-liquidation-gate.test.mjs tests/rhea-stage38-live-candidate-pipeline.test.mjs tests/rhea-stage164-pricing-closure.test.mjs tests/rhea-stage37-sandbox-execution.test.mjs tests/rhea-stage89-targeted-wnear-clone.test.mjs tests/rhea-stage119-clone-failure.test.mjs
   source_attested_large_candidates:
     if: github.event_name != 'pull_request'
     needs: source_gate_regression
