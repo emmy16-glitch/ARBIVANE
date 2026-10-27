@@ -179,7 +179,8 @@ export function sizeStage35SourceLiquidation(
  evidence.maySign!==false||evidence.mayBroadcast!==false||
  !Array.isArray(evidence.positions)||evidence.positions.length===0||
  evidence.positions.length!==evidence.candidatePositions||
- !Number.isSafeInteger(options.maxRepayBps)||options.maxRepayBps<5||options.maxRepayBps>200||
+ !Number.isSafeInteger(options.maxRepayBps)||options.maxRepayBps<5||options.maxRepayBps>1000||
+ (options.maxRepayBps>200&&options.requiredSameTokenId!=='linear-protocol.near')||
  (options.requiredSameTokenId!==undefined&&options.requiredSameTokenId!=='linear-protocol.near'))
   throw Error('UNTRUSTED_STAGE35_LIVE_SOURCE_EVIDENCE');
  const minGross=usd(options.minimumPaperGrossUsdE27,'MINIMUM_PAPER_GROSS');
