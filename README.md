@@ -76,6 +76,10 @@ The [Stage162 source-route diagnostics](docs/STAGE162_SOURCE_ROUTE_REJECTIONS.md
 
 [Stage168](docs/STAGE168_WNEAR_PINNED_WASM_RPC_FAILOVER.md) addresses a verified original [Stage93 run #40400219939](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40400219939): source-backed candidate checks passed, but the NEAR Workspaces SDK failed to import pinned `wrap.near` code after provider **JSON-RPC -429 rate limiting**. The resulting clone failure was **before** local funding or liquidation. The new bounded SDK import fallback reads unchanged deployed code at the same pinned block from an independent archival endpoint, verifies the original code hash and all cloned FT state, and blocks on provider exhaustion. Its regression tests reject false success, changing contract code or deterministic source errors. No mainnet spending or realized profit is enabled.
 
+## Stage169 — proportional source liquidation sizing and rounding protection
+
+[Stage169](docs/STAGE169_SOURCE_REPAY_ROUNDING_HEADROOM.md) addresses the first genuine [larger-candidate Sandbox rejection #40402755800](https://github.com/emmy16-glitch/ARBIVANE/actions/runs/40402755800). The deployed Rhea callback rejected the original source-sized LiNEAR seizure because its **discounted collateral value exceeded the debt it actually repaid after share rounding** (about US$0.000000078 difference). The source scorer now holds back a **candidate-proportional, at-most-1-basis-point repayment margin** inside the source discount, selects only source-valid seized collateral and rechecks the four original rules. Exact original-callback and multi-size regression tests preserve original Pyth pricing and guard against artificial amounts. Stage93's completed small Sandbox liquidation remains the prior independent proof; new larger-financing and **positive realized net profit remain unverified**. Mainnet execution stays disabled.
+
 ## What works today
 
 | Area | Verified capability | Boundary |
