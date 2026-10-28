@@ -53,7 +53,9 @@
     "probe:rhea:paged-position-index": "node --experimental-strip-types src/rhea/paged-position-index-cli.ts",
     "probe:rhea:stage31-debt-queue": "node --experimental-strip-types src/rhea/active-pyth-debt-queue-cli.ts",
     "probe:rhea:stage43-blocked-retry": "node --experimental-strip-types src/rhea/stage43-blocked-observation-retry-cli.ts",
-    "probe:rhea:stage44-recovered-risk": "node --experimental-strip-types src/rhea/stage44-recovered-risk-sandbox-preflight-cli.ts"
+    "probe:rhea:stage44-recovered-risk": "node --experimental-strip-types src/rhea/stage44-recovered-risk-sandbox-preflight-cli.ts",
+    "lab:plan": "node scripts/testnet-lab/plan.mjs",
+    "lab:verify": "node scripts/testnet-lab/verify.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
