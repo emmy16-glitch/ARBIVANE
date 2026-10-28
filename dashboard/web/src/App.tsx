@@ -529,7 +529,7 @@ function OperationalPage({kind}:{kind:ViewKind}){
     <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
   else if(kind==='opportunities')content=opportunities.length?
     <OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
-  else if(kind==='live')content=<LiveEventTable events={data.events}/>;
+  else if(kind==='live')content=data.events.length?<LiveEventTable events={data.events}/>:<Empty icon={Icon} title="No activity yet"/>;
   else content=<SettingsWorkspace readiness={data.readiness} environment={environment}/>;
   return <div className="subpage operational-page">
     {data&&error&&<div className="route-warning" role="status">
