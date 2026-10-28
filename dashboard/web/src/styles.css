@@ -731,3 +731,13 @@ body { background:var(--bg); color:#eaf1f9; }
  .demo-overview-activity.is-active .demo-overview-led{animation:none}
  .demo-progress-track>div{transition:none}
 }
+
+/* Stage190 desktop grid: reserve a distinct row for the Demo mode strip. */
+.shell:has(> .demo-mode-strip){grid-template-rows:58px 42px minmax(calc(100vh - 100px),auto)}
+.shell:has(> .demo-mode-strip)>.sidebar{grid-row:1/4}
+.shell:has(> .demo-mode-strip)>.topbar{grid-column:2;grid-row:1}
+.shell:has(> .demo-mode-strip)>.demo-mode-strip{grid-column:2;grid-row:2}
+.shell:has(> .demo-mode-strip)>.main{grid-column:2;grid-row:3;min-width:0}
+@media(max-width:760px){.shell:has(> .demo-mode-strip){display:block}
+ .shell:has(> .demo-mode-strip)>.main{display:block}}
+
