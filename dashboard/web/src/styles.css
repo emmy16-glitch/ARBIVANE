@@ -264,3 +264,9 @@ body { background:var(--bg); color:#eaf1f9; }
   .advanced-field { align-items:flex-start; flex-direction:column; gap:6px; }
   .advanced-field input { max-width:none; }
 }
+
+/* Brand fits as a complete two-line subtitle within its navigation rail. */
+.sidebar .brand { padding:7px 13px; }
+.sidebar .brand-copy { gap:3px; }
+.sidebar .brand-copy small { font-size:10px; line-height:1.25; }
+.page-heading small:empty { display:none; }
