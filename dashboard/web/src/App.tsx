@@ -150,7 +150,20 @@ function OperationalPage({kind}:{kind:ViewKind}) {
   const [environment,setEnvironment]=useState<Environment>('sandbox');
   const [data,setData]=useState<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}|null>(null);
   const [error,setError]=useState('');
-  useEffect(()=>{let active=true;setData(null);void loadEnvironment(environment).then(value=>{if(active){setData(value);setError('')}}).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED')});return()=>{active=false}},[environment]);
+  useEffect(()=>{
+    let active=true;let source:EventSource|undefined;
+    setData(null);
+    void loadEnvironment(environment).then(value=>{
+      if(!active)return;
+      setData(value);setError('');
+      if(kind==='live') source=subscribe(environment,event=>{
+        if(active)setData(current=>current?{
+          ...current,events:mergeOperationEvents(environment,current.events,[event])
+        }:current);
+      });
+    }).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED')});
+    return()=>{active=false;source?.close()};
+  },[environment,kind]);
   const query=(params.get('query')??'').toLowerCase();
   const transactions=(data?.state.transactions??[]).filter(row=>!query||JSON.stringify(row).toLowerCase().includes(query));
   const opportunities=data?.state.opportunities??[];
@@ -159,11 +172,19 @@ function OperationalPage({kind}:{kind:ViewKind}) {
   if(error) content=<ApiError error={error} onRetry={()=>{setError('');void loadEnvironment(environment).then(setData).catch(reason=>setError(reason instanceof Error?reason.message:'LOAD_FAILED'))}}/>;
   else if(!data) content=<Empty icon={Icon} title="Loading verified records" text="Reading the selected environment's persisted backend state."/>;
   else if(kind==='transactions') content=transactions.length?<div className="data-table" role="table"><div className="data-head" role="row"><span>Transaction</span><span>Borrower</span><span>Source block</span><span>Result</span></div>{transactions.map(row=><div className="data-row" role="row" key={String(row.id)}><code>{String(row.id)}</code><span>{String(row.borrowerAccountId)}</span><span>{String(row.sourceBlock)}</span><span><StatusPill tone="success">Verified · unsold</StatusPill></span></div>)}</div>:<Empty icon={Icon} title={query?'No matching verified transaction':'No verified transactions'} text="Original receipt-backed Sandbox transactions appear here after reconciliation."/>;
-  else if(kind==='wallet') content=<div className="record-grid"><div><small>Connection</small><strong>{data.state.wallet.status.replaceAll('_',' ')}</strong></div><div><small>Account</small><strong>{data.state.wallet.accountId??'Not configured'}</strong></div><div className="wide"><small>Verified balances</small>{data.state.wallet.balances.length?data.state.wallet.balances.map((balance,index)=><code key={index}>{JSON.stringify(balance)}</code>):<strong>None</strong>}</div><div className="wide record-actions"><button disabled title="Deposit adapter not configured"><ArrowDown/>Deposit</button><button disabled title="No authorized custody or verified transferable balance"><ArrowUpRight/>Withdraw</button></div></div>;
+  else if(kind==='wallet') content=<div className="record-grid"><div><small>Wallet status</small><strong>{data.state.wallet.status.replaceAll('_',' ')}</strong></div><div><small>Account</small><strong>{data.state.wallet.accountId??'Not configured'}</strong></div><div className="wide"><small>Verified assets</small>{data.state.wallet.balances.length?<div className="compact-records">{data.state.wallet.balances.map((balance,index)=>{
+    const asset=balance as {tokenId?:string;atomic?:string;transferableOutsideEnvironment?:boolean};
+    return <article className="compact-record" key={index}><b>{asset.tokenId??'Unknown token'}</b><span>{asset.atomic??'—'} atomic units</span><small>{asset.transferableOutsideEnvironment===false?'Sandbox-only inventory':'Transferability not verified'}</small></article>;
+  })}</div>:<strong>No verified assets</strong>}</div><div className="wide record-actions"><button disabled title="Deposit adapter not configured"><ArrowDown/>Deposit</button><button disabled title="No authorized custody or verified transferable balance"><ArrowUpRight/>Withdraw</button></div></div>;
   else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?<div className="record-grid">{Object.entries(data.state.accounting).map(([key,value])=><div key={key}><small>{key.replaceAll(/([A-Z])/g,' $1')}</small><strong>{value==null?'Not verified':typeof value==='object'?'Evidence attached':String(value)}</strong></div>)}</div>:<Empty icon={Icon} title="No realized performance" text="Unsold collateral and missing same-denomination costs cannot populate financial charts."/>;
-  else if(kind==='opportunities') content=opportunities.length?<pre className="record-json">{JSON.stringify(opportunities,null,2)}</pre>:<Empty icon={Icon} title="No current eligible opportunities" text="Rejected or incomplete candidates remain in the Live Operations evidence stream."/>;
+  else if(kind==='opportunities') content=opportunities.length?<div className="compact-records">{opportunities.map((row,index)=><article className="compact-record" key={String(row.id??index)}>
+    <div className="compact-record-heading"><b>{String(row.borrowerAccountId??row.accountId??'Source observation')}</b><StatusPill>{String(row.status??'Under review')}</StatusPill></div>
+    <span>Source block: {row.blockHeight==null?'Not verified':String(row.blockHeight)}</span>
+    <small>Reference candidate only — no funded or settled liquidation implied</small>
+    <details><summary>Source evidence</summary><pre>{JSON.stringify(row,null,2)}</pre></details>
+  </article>)}</div>:<Empty icon={Icon} title="No current eligible opportunities" text="Rejected or incomplete candidates remain in the Live Operations evidence stream."/>;
   else if(kind==='live') content=data.events.length?<div className="page-events">{data.events.slice().reverse().map(event=><div key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><b>{event.stage}</b><span>{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill></div>)}</div>:<Empty icon={Icon} title="No active session" text="Start automation from Dashboard to persist and stream genuine operations."/>;
-  else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Readiness</small><strong>{readiness?.status.replaceAll('_',' ')??'Unavailable'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Observed block</small><strong>{readiness?.blockHeight??'Unavailable'}</strong></div><div className="wide"><small>Capabilities</small><code>{JSON.stringify(readiness?.capabilities??{})}</code></div><div className="wide"><small>Missing requirements</small><code>{JSON.stringify(readiness?.requirements??{})}</code></div></div>;
+  else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status.replaceAll('_',' ')??'Unavailable'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
   return <div className="subpage operational-page"><div className="page-heading"><span><Icon/></span><div><small>ARBIVANE OPERATIONS</small><h1>{copy.title}</h1><p>{copy.description}</p></div></div><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness?{[environment]:readiness}:{}}/><section className="panel page-panel"><div className="panel-title"><span>{copy.title}</span><span className="network-label">{environment}</span></div>{content}</section></div>;
 }
 
