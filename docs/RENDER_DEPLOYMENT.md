@@ -32,3 +32,10 @@ A genuine Sandbox result requires a fresh viable borrower, a real NEAR Workspace
 ## Deployment identity
 
 The public GET /api/health endpoint returns a non-sensitive deploymentRevision (12 hex characters from Render's RENDER_GIT_COMMIT, or null outside Render). Compare it with the current GitHub main commit to verify which backend is actually live. HTTP server health does not imply Sandbox execution readiness. Exact readiness and the blockers are available only on the authenticated Sandbox environment API.
+
+
+## Stage190 — Demo, Testnet and Mainnet operator modes
+
+The operator UI intentionally exposes three modes: Demo, Testnet, and Mainnet. Demo is a local event-driven scenario engine: no chain RPC, wallet signing, flash loans or blockchain settlement. Only the top mode strip says Interactive simulation. Its generated borrower positions, execution stages, receipts, portfolio and P&L are fictional and isolated in the demo data namespace, never copied to Testnet or Mainnet. Enter a financing limit and press Start; the server sends ordered events over SSE and updates the UI through the session's existing snapshot reconciliation. Pause/Resume/Stop work for the simulated worker. A complete run processes four scenarios and ends cleanly. Advanced real-source screening controls are hidden from Demo; Testnet and Mainnet are future authentic integrations and explicitly remain non-executable.
+
+The historical source-pinned Sandbox scripts remain in the repository for research, but are not part of the three-tab operator UI. On Render Free, local demo history remains subject to ephemeral storage, and an interrupted simulation never resumes unverified operations on boot. A success event in Demo must not be treated as real on-chain evidence or profit.

@@ -14,7 +14,7 @@ import {hasFinancialEvidence} from './workspace';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
-  sandbox: {title:'Sandbox', icon:Flask},
+  demo: {title:'Demo', icon:Flask},
   testnet: {title:'Testnet', icon:CirclesThree},
   mainnet: {title:'Mainnet', icon:Globe},
 } as const;
@@ -43,6 +43,7 @@ function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
   return <form className="auth-inline" onSubmit={async event=>{event.preventDefault();setBusy(true);setAuthError('');try{await authenticate(token);onRetry()}catch(reason){setAuthError(reason instanceof Error?reason.message:'AUTH_FAILED')}finally{setBusy(false)}}}><ShieldCheck/><label><span>{authError?authError.replaceAll('_',' '):'Operator authentication required'}</span><input type="password" autoComplete="current-password" value={token} onChange={event=>setToken(event.target.value)} placeholder="Dashboard access token"/></label><button disabled={!token||busy}>{busy?'Authenticating…':'Authenticate'}</button></form>;
 }
 function Shell({children}:{children:React.ReactNode}) {
+  const {environment}=useEnvironment();
   const location=useLocation();
   const current=nav.find(([route])=>route===location.pathname)?.[1] ??
     (location.pathname==='/transactions'?'Transactions':location.pathname==='/analytics'?'Analytics':'Dashboard');
@@ -64,6 +65,11 @@ function Shell({children}:{children:React.ReactNode}) {
         <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
       </div>
     </header>
+    {environment==='demo'&&<div className="demo-mode-strip" role="note">
+      <span className="demo-mode-dot"/><strong>DEMO</strong><span className="demo-mode-divider"/>
+      <span>Interactive simulation</span><span className="demo-mode-spacer"/>
+      <span className="demo-mode-caption">No real funds or blockchain transactions</span>
+    </div>}
     <main className="main" data-route={location.pathname}>{children}</main>
     <nav className="mobile-nav" aria-label="Mobile navigation">
       {nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}>
@@ -99,19 +105,19 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
     <div className="automation-layout">
       <div className="automation-body">
       <label className="money-label">
-        <span>{environment==='sandbox'?'Maximum Sandbox financing per liquidation':'Maximum financing per liquidation'}</span>
+        <span>{environment==='demo'?'Financing limit per liquidation':'Maximum financing per liquidation'}</span>
         <div className="money-input">
           <span>USD</span>
           <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
         </div>
       </label>
-      <details className="advanced-controls">
+      {environment!=='demo'&&<details className="advanced-controls">
         <summary><SlidersHorizontal size={16}/> Advanced settings</summary>
         <label className="advanced-field"><span>Minimum reference gross (USD)</span>
           <input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)}
             aria-label="Minimum reference gross screening amount" title="Source screening threshold, not realized profit"/>
         </label>
-      </details>
+      </details>}
     </div>
       <div className="automation-actions">
         <div className="controls">
@@ -124,7 +130,7 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
         <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
       </>}
     </div>
-        {!canAutomate&&<div className="automation-availability"><span>{environment==='sandbox'?'Sandbox worker not configured':environment==='testnet'?'Testnet automation not configured':'Mainnet execution disabled'}</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
+        {!canAutomate&&<div className="automation-availability"><span>{environment==='demo'?'Demo is initializing':environment==='testnet'?'Testnet automation not configured':'Mainnet execution disabled'}</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
       </div>
     </div>
   </section>;
@@ -147,6 +153,40 @@ function Operations({events,onOpen,active,connection}:{events:OperationEvent[];o
   </section>;
 }
 
+function DemoOverview({state,events}:{state:DashboardState|null;events:OperationEvent[]}){
+  const count=state?.transactions.length??0;
+  const active=!!state?.session&&ongoing.has(state.session.status);
+  const progress=state?.session?.status==='completed'?100:
+    Math.min(95,Math.round((events.length/56)*100));
+  const metrics=[
+    {label:'Portfolio value',value:state?.accounting.available==null?'—':'$'+String(state.accounting.available),icon:Wallet},
+    {label:'Net result',value:state?.accounting.cumulativeNetPnl==null?'—':'$'+String(state.accounting.cumulativeNetPnl),icon:ChartLineUp},
+    {label:'Completed liquidations',value:String(count).padStart(2,'0'),icon:CheckCircle},
+    {label:'Events streamed',value:String(events.length),icon:Activity},
+  ];
+  return <section className="demo-overview" aria-label="Demo session overview">
+    <div className="demo-overview-top">
+      <div><span className="demo-eyebrow">MARKET MONITOR</span><h2>Liquidation engine</h2>
+        <p>{active?'Scanning positions, screening risk and processing opportunities in real time.':
+          state?.session?'Review the session or start another run.':
+          'Set a financing limit and start to see the full liquidation workflow unfold.'}</p></div>
+      <span className={'demo-overview-activity '+(active?'is-active':'')}>
+        <span className="demo-overview-led"/>{active?'Engine running':state?.session?.status==='completed'?'Run completed':
+          state?.session?.status==='paused'?'Paused':state?.session?.status==='stopped'?'Stopped':'Ready'}
+      </span>
+    </div>
+    <div className="demo-metric-grid">
+      {metrics.map(({label,value,icon:Icon})=><div className="demo-metric" key={label}>
+        <div className="demo-metric-top"><span>{label}</span><Icon size={17}/></div>
+        <strong>{value}</strong>
+      </div>)}
+    </div>
+    <div className="demo-progress"><div className="demo-progress-caption"><span>
+      {active?'Session activity':'Workflow progress'}</span><span>{progress}%</span></div>
+      <div className="demo-progress-track"><div style={{width:progress+'%'}}/></div></div>
+  </section>;
+}
+
 function Accounting({state}:{state:DashboardState|null}) {
   if(!hasFinancialEvidence(state))return null;
   const accounting=state!.accounting;
@@ -159,14 +199,14 @@ function Accounting({state}:{state:DashboardState|null}) {
     ['Net P&L',accounting.cumulativeNetPnl]
   ].filter((entry)=>entry[1]!==null&&entry[1]!==undefined);
   return <section className="panel balance" aria-label="Financial summary">
-    <div className="panel-title"><span>Balance</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
+    <div className="panel-title"><span>{state?.environment==='demo'?'Portfolio':'Balance'}</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
     <div className="account-balance-grid">
       {assets.map((asset,i)=><div className="asset-balance" key={asset.tokenId??i}>
-        <small>{asset.tokenId??'Token'} · atomic units</small>
+        <small>{asset.tokenId??'Token'}{state?.environment==='demo'?'':' · atomic units'}</small>
         <strong>{asset.atomic??'—'}</strong>
       </div>)}
       {accounting.available!==null&&accounting.available!==undefined&&
-        <div className="asset-balance"><small>Reconciled available · USD</small><strong>{String(accounting.available)}</strong></div>}
+        <div className="asset-balance"><small>{state?.environment==='demo'?'Available · USD':'Reconciled available · USD'}</small><strong>{String(accounting.available)}</strong></div>}
     </div>
     {values.length>0&&<div className="financial-metrics">{values.map(([label,value])=>
       <div key={String(label)}><small>{label}</small><b>{String(value)}</b></div>
@@ -226,9 +266,9 @@ function Recent({state}:{state:DashboardState|null}) {
     <div className="panel-title"><span>Recent Operations</span><NavLink to="/transactions">View all <ArrowUpRight/></NavLink></div>
     <div className="transaction-list">{tx.slice(0,5).map(row=><div className="transaction-row" key={String(row.id)}>
       <span className="tx-icon"><CheckCircle weight="fill"/></span>
-      <span><b>{String(row.type)}</b><small>{String(row.borrowerAccountId)}</small></span>
-      <span><b>{String(row.assetIncreaseAtomic)} atomic</b><small>{String(row.seizeTokenId)}</small></span>
-      <span><StatusPill tone="success">Verified</StatusPill><small>Unsold inventory</small></span>
+      <span><b>{String(row.network==='demo'?'Liquidation':row.type??'Transaction')}</b><small>{String(row.borrowerAccountId)}</small></span>
+      <span><b>{row.network==='demo'?'$'+String(row.netProfitUsd):String(row.assetIncreaseAtomic)+' atomic'}</b><small>{row.network==='demo'?'Net result':String(row.seizeTokenId)}</small></span>
+      <span><StatusPill tone="success">{row.network==='demo'?'Completed':'Verified'}</StatusPill><small>{row.network==='demo'?'Settled':'Unsold inventory'}</small></span>
     </div>)}</div>
   </section>;
 }
@@ -299,12 +339,12 @@ function Dashboard(){
   const session=state?.session;
   const isWorking=!!session&&ongoing.has(session.status);
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
-  return <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
+  return <>{environment==='demo'&&<DemoOverview state={state} events={events}/>}
+  <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
       <Operations key={environment} events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
-      {environment==='sandbox'&&<ResearchActivity/>}
     </div>
     {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
       <SessionSummary state={state} events={events}/>
@@ -322,7 +362,7 @@ function Dashboard(){
         <pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre>
       </aside>
     </div>}
-  </div>;
+  </div></>;
 }
 
 type ViewKind='live'|'opportunities'|'performance'|'wallet'|'transactions'|'analytics'|'settings';
@@ -415,7 +455,7 @@ function PerformanceWorkspace({accounting}:{accounting:DashboardState['accountin
   const items=metrics.filter(([,key])=>accounting[key]!=null);
   return <div className="performance-workspace">
     <div className="performance-heading">
-      <span>Reconciled financial results</span>
+      <span>{accounting.evidence && typeof accounting.evidence==='object' && (accounting.evidence as Record<string,unknown>).scenario==='demo'?'Performance overview':'Reconciled financial results'}</span>
       <time>Updated {String(accounting.reconciledAt)}</time>
     </div>
     <div className="performance-metrics">{items.map(([label,key])=><div key={key}>
@@ -443,7 +483,7 @@ function TransactionWorkspace({rows}:{rows:Array<Record<string,unknown>>}){
         <summary><code>{String(row.id??'Receipt')}</code>
           <span>{String(row.borrowerAccountId??'—')}</span>
           <span>{row.sourceBlock==null?'—':String(row.sourceBlock)}</span>
-          <StatusPill tone="success">Verified inventory</StatusPill>
+          <StatusPill tone="success">{row.network==='demo'?'Completed':'Verified inventory'}</StatusPill>
         </summary>
         <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
       </details>)}
@@ -466,11 +506,11 @@ function WalletWorkspace({state}:{state:DashboardState}){
       <div className="section-label">Assets</div>
       <div className="wallet-assets">{assets.map((asset,index)=><article className="asset-row" key={asset.tokenId??index}>
         <div><strong>{asset.tokenId??'Token'}</strong>
-          <small>{asset.transferableOutsideEnvironment===false?'Sandbox asset':'Transfer status unverified'}</small>
-        </div><div className="asset-value"><strong>{asset.atomic??'—'}</strong><small>Atomic units</small></div>
+          <small>{state.environment==='demo'?'Portfolio balance':asset.transferableOutsideEnvironment===false?'Sandbox asset':'Transfer status unverified'}</small>
+        </div><div className="asset-value"><strong>{asset.atomic??'—'}</strong><small>{state.environment==='demo'?'USD':'Atomic units'}</small></div>
       </article>)}</div>
     </>:<div className="compact-blank"><Wallet size={23}/><span>No assets available</span></div>}
-    <div className="wallet-footer"><span>Deposit and withdrawal are unavailable until authorized custody is configured.</span></div>
+    <div className="wallet-footer"><span>{state.environment==='demo'?'Portfolio is limited to this demo session.':'Deposit and withdrawal are unavailable until authorized custody is configured.'}</span></div>
   </div>;
 }
 function SettingsWorkspace({readiness,environment}:{readiness:EnvironmentReadiness;environment:Environment}){
@@ -579,4 +619,4 @@ function OperationalPage({kind}:{kind:ViewKind}){
   </div>;
 }
 
-export function App(){const [environment,setEnvironment]=useState<Environment>('sandbox');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell></EnvironmentContext.Provider>}
+export function App(){const [environment,setEnvironment]=useState<Environment>('demo');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell></EnvironmentContext.Provider>}

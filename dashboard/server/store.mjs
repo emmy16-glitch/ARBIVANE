@@ -2,7 +2,7 @@ import {appendFile, mkdir, readFile, rename, writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 
-export const ENVIRONMENTS = Object.freeze(['sandbox', 'testnet', 'mainnet']);
+export const ENVIRONMENTS = Object.freeze(['demo','sandbox', 'testnet', 'mainnet']);
 
 const initialState = (environment) => ({
   environment,

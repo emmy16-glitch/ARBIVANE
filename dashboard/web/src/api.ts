@@ -20,7 +20,7 @@ function previewResponse(environment:Environment):{
   },
   events:[],
   readiness:{
-   environment,status:'unavailable',chainId:environment==='sandbox'?'NEAR_SANDBOX':
+   environment,status:'unavailable',chainId:environment==='demo'?'SIMULATION':
     environment==='testnet'?'NEAR_TESTNET':'NEAR_MAINNET',
    blockHeight:null,checkedAt:'',capabilities:{automate:false,deposit:false,withdraw:false},
    requirements:{backend:'Not connected in view-only preview'}
