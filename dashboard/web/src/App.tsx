@@ -99,7 +99,7 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
     <div className="automation-layout">
       <div className="automation-body">
       <label className="money-label">
-        <span>Maximum Sandbox financing per liquidation</span>
+        <span>{environment==='sandbox'?'Maximum Sandbox financing per liquidation':'Maximum financing per liquidation'}</span>
         <div className="money-input">
           <span>USD</span>
           <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
