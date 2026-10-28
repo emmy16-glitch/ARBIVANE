@@ -1,5 +1,5 @@
 import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
-import {NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
+import {Navigate, NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
 import {
   Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
@@ -307,7 +307,7 @@ const viewCopy:Record<ViewKind,{title:string;icon:typeof Gauge}>={
 
 function OperationalPage({kind}:{kind:ViewKind}) {
   const copy=viewCopy[kind],Icon=copy.icon; const [params]=useSearchParams();
-  const [environment,setEnvironment]=useState<Environment>('sandbox');
+  const {environment}=useEnvironment();
   const [data,setData]=useState<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}|null>(null);
   const [error,setError]=useState('');
   useEffect(()=>{
@@ -345,7 +345,7 @@ function OperationalPage({kind}:{kind:ViewKind}) {
   </article>)}</div>:<Empty icon={Icon} title="No opportunities yet"/>;
   else if(kind==='live') content=data.events.length?<div className="page-events">{data.events.slice().reverse().map(event=><div key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><b>{event.stage}</b><span>{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill></div>)}</div>:<Empty icon={Icon} title="No activity yet"/>;
   else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status==='unavailable'?'Offline':readiness?.status.replaceAll('_',' ')??'Offline'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
-  return <div className="subpage operational-page"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness?{[environment]:readiness}:{}}/><section className="panel page-panel">{content}</section></div>;
+  return <div className="subpage operational-page"><section className="panel page-panel">{content}</section></div>;
 }
 
-export function App(){return <Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<OperationalPage kind="analytics"/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell>}
+export function App(){const [environment,setEnvironment]=useState<Environment>('sandbox');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell></EnvironmentContext.Provider>}
