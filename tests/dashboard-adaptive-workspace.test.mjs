@@ -55,3 +55,12 @@ test('Stage183 automation controls use available card width without oversized id
  assert.ok(css.includes('@media(max-width:970px)'));
  assert.ok(css.includes('grid-template-columns:minmax(0,1fr);'));
 });
+
+test('Stage186 compact amount input and single stable Automation component',async()=>{
+ const app=await readFile(new URL('../dashboard/web/src/App.tsx',import.meta.url),'utf8');
+ const css=await readFile(new URL('../dashboard/web/src/styles.css',import.meta.url),'utf8');
+ assert.equal((app.match(/<Automation environment=/g)||[]).length,1);
+ assert.ok(!app.includes('<Automation key={environment}'));
+ assert.ok(css.includes('.workspace .automation-layout .money-input { width:100%; max-width:460px;'));
+ assert.ok(css.includes('.environment-picker .environment svg'));
+});
