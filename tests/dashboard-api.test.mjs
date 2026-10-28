@@ -79,3 +79,34 @@ test('Stage174 token is never stored in browser code and signed cookies reject a
  assert.ok(!api.includes('sessionStorage'));
  assert.ok(!api.includes('localStorage'));
 });
+
+test('Stage176 production rejects missing or weak operator secret even over loopback',async(t)=>{
+ for(const secret of ['', 'too-short']){
+  const port=await freePort();
+  const data=await mkdtemp(join(tmpdir(),'arbivane-production-auth-'));
+  const child=spawn(process.execPath,['dashboard/server/index.mjs'],{
+   cwd:new URL('..',import.meta.url),
+   env:{...process.env,PORT:String(port),HOST:'127.0.0.1',
+    NODE_ENV:'production',ARBIVANE_DASHBOARD_DATA_DIR:data,
+    ARBIVANE_DASHBOARD_TOKEN:secret},
+   stdio:['ignore','pipe','pipe']
+  });
+  await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('SERVER_START_TIMEOUT')),5000);
+   child.stdout.on('data',chunk=>{
+    if(String(chunk).includes('dashboard listening')){clearTimeout(timer);resolve()}
+   });
+   child.once('exit',code=>reject(Error('SERVER_EXIT_'+code)));
+  });
+  const origin=`http://127.0.0.1:${port}`;
+  const health=await fetch(origin+'/api/health');
+  assert.equal(health.status,503);
+  assert.equal((await health.json()).status,'auth_not_configured');
+  const auth=await fetch(origin+'/api/auth/session',{method:'POST',
+   headers:{origin,authorization:'Bearer '+secret}});
+  assert.equal(auth.status,503);
+  assert.equal(auth.headers.get('set-cookie'),null);
+  child.kill('SIGTERM');
+  t.after(()=>rm(data,{recursive:true,force:true}));
+ }
+});
