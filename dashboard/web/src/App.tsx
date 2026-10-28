@@ -279,9 +279,9 @@ function Dashboard(){
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
-      <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
+      <Automation key={environment} environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
-      <Operations events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
+      <Operations key={environment} events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
       {environment==='sandbox'&&<ResearchActivity/>}
     </div>
     {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
@@ -493,7 +493,7 @@ function OperationalPage({kind}:{kind:ViewKind}){
         setData(current=>current?{
           ...value,events:mergeOperationEvents(environment,current.events,value.events)
         }:value);
-        setError('');
+        setError(previous=>previous==='STREAM_RECONNECTING'?previous:'');
         return true;
       }catch(reason){
         if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED');
