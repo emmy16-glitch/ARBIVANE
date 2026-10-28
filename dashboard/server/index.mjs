@@ -5,6 +5,7 @@ import {extname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {AutomationManager,validateSettings} from './automation.mjs';
 import {DemoAutomation} from './demo.mjs';
+import {inspectTestnet,getTestnetPositions} from './testnet-readonly.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -40,6 +41,24 @@ function verifyCookie(value) {
   const expected = cookieSignature(`${match[1]}.${match[2]}`);
   const actual = Buffer.from(match[3]), known = Buffer.from(expected);
   return known.length === actual.length && timingSafeEqual(known, actual);
+}
+// Rate-limit all public Testnet read-only bridge requests by client IP.
+const publicTestnetLimits = new Map();
+let publicTestnetHealthCache=null;
+function publicTestnetAllowed(request){
+  const ip=request.socket.remoteAddress??'unknown';
+  const now=Date.now();
+  if(publicTestnetLimits.size>2048){
+    for(const [key,entry] of publicTestnetLimits)
+      if(now-entry.since>60000)publicTestnetLimits.delete(key);
+  }
+  const prev=publicTestnetLimits.get(ip);
+  if(!prev||now-prev.since>60000){
+    publicTestnetLimits.set(ip,{since:now,count:1});
+    return true;
+  }
+  prev.count++;
+  return prev.count<=40;
 }
 const listeners = new Map(ENVIRONMENTS.map((value) => [value, new Set()]));
 const store = new DashboardStore(dataRoot);
@@ -99,6 +118,27 @@ const server = createServer(async (request, response) => {
       return json(response, prodAuthUnavailable ? 503 : 200,
         {status: prodAuthUnavailable ? 'auth_not_configured' : 'ok',
           mainnetExecutionEnabled: false, deploymentRevision});
+    if (url.pathname.startsWith('/api/public/testnet/')) {
+      if(request.method!=='GET')return json(response,405,{error:'METHOD_NOT_ALLOWED'});
+      if(!publicTestnetAllowed(request))return json(response,429,{error:'TESTNET_BRIDGE_RATE_LIMITED'});
+      try{
+        if(url.pathname==='/api/public/testnet/health'){
+          if(publicTestnetHealthCache&&Date.now()-publicTestnetHealthCache.time<15000)
+            return json(response,200,publicTestnetHealthCache.data);
+          const data=await inspectTestnet();
+          publicTestnetHealthCache={time:Date.now(),data};
+          return json(response,200,data);
+        }
+        if(url.pathname==='/api/public/testnet/positions'){
+          const from=Number(url.searchParams.get('from')),limit=Number(url.searchParams.get('limit'));
+          if(!/^\d+$/.test(url.searchParams.get('from')??'')||
+             !/^\d+$/.test(url.searchParams.get('limit')??''))
+            return json(response,400,{error:'INVALID_TESTNET_PAGE'});
+          return json(response,200,await getTestnetPositions(from,limit));
+        }
+      }catch(error){return json(response,502,{error:message(error)})}
+      return json(response,404,{error:'NOT_FOUND'});
+    }
     if (url.pathname === '/api/auth/session' && request.method === 'POST') {
       if (prodAuthUnavailable) return json(response, 503, {error:'AUTH_NOT_CONFIGURED'});
       if (!sameOrigin(request)) return json(response, 403, {error: 'ORIGIN_REJECTED'});

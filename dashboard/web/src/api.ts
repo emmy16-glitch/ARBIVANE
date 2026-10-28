@@ -1,5 +1,6 @@
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 import {browserDemo} from './demo-client';
+import {liveTestnet} from './testnet-client';
 
 // Deliberately isolated Vercel UI-review build. No fake on-chain data,
 // backend commands, signing, or financial results are available.
@@ -38,6 +39,7 @@ export async function authenticate(token: string) {
 }
 export async function loadEnvironment(environment: Environment): Promise<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}> {
   if (environment==='demo') return browserDemo().load();
+  if (environment==='testnet' && !UI_PREVIEW) return liveTestnet().load();
   if (UI_PREVIEW) return previewResponse(environment);
   const response = await fetch(`/api/environments/${environment}`, {credentials:'include'});
   if (!response.ok) throw new Error((await response.json()).error ?? 'LOAD_FAILED');
@@ -45,6 +47,7 @@ export async function loadEnvironment(environment: Environment): Promise<{state:
 }
 export async function command(environment: Environment, action:string, settings?:DashboardState['settings']) {
   if (environment==='demo') return browserDemo().command(action,settings);
+  if (environment==='testnet' && !UI_PREVIEW) return liveTestnet().command(action);
   if (UI_PREVIEW) throw new Error('VIEW_ONLY_PREVIEW_NO_EXECUTION');
   const response = await fetch(`/api/environments/${environment}/${action}`, {method:'POST',
     headers:{'content-type':'application/json'}, credentials:'include', body:JSON.stringify({settings})});
@@ -55,6 +58,8 @@ export function subscribe(environment:Environment, onEvent:(event:OperationEvent
  onConnection?:(status:StreamConnection)=>void) {
  if (environment==='demo')
    return browserDemo().subscribe(onEvent,onConnection) as EventSource;
+ if (environment==='testnet' && !UI_PREVIEW)
+   return liveTestnet().subscribe(onEvent,onConnection) as EventSource;
  if (UI_PREVIEW) return {close:()=>{}} as EventSource;
  const source = new EventSource(`/api/environments/${environment}/events`, {withCredentials:true});
  source.addEventListener('operation', (raw) => {

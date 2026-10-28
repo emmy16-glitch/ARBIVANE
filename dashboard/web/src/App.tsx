@@ -55,7 +55,7 @@ function Shell({children}:{children:React.ReactNode}) {
       </NavLink>
       <nav aria-label="Primary navigation">
         {nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}
-          className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}
+          className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{environment==='testnet'&&to==='/opportunities'?'Debt positions':label}</span></NavLink>)}
       </nav>
     </aside>
     <header className="topbar">
@@ -65,10 +65,12 @@ function Shell({children}:{children:React.ReactNode}) {
         <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
       </div>
     </header>
-    {environment==='demo'&&<div className="demo-mode-strip" role="note">
-      <span className="demo-mode-dot"/><strong>DEMO</strong><span className="demo-mode-divider"/>
-      <span>Interactive simulation</span><span className="demo-mode-spacer"/>
-      <span className="demo-mode-caption">No real funds or blockchain transactions</span>
+    {(environment==='demo'||environment==='testnet')&&<div className="demo-mode-strip" role="note">
+      <span className="demo-mode-dot"/><strong>{environment==='demo'?'DEMO':'TESTNET'}</strong>
+      <span className="demo-mode-divider"/>
+      <span>{environment==='demo'?'Interactive simulation':'Live NEAR chain · read-only discovery'}</span>
+      <span className="demo-mode-spacer"/>
+      <span className="demo-mode-caption">{environment==='demo'?'No real funds or blockchain transactions':'No liquidation transactions enabled'}</span>
     </div>}
     <main className="main" data-route={location.pathname}>{children}</main>
     <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -104,14 +106,17 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
     <div className="panel-title"><span><Gear/>Automation</span>{hasSession&&<StatusPill tone={running?'success':'neutral'}>{status.replaceAll('_',' ')}</StatusPill>}</div>
     <div className="automation-layout">
       <div className="automation-body">
-      <label className="money-label">
+      {environment!=='testnet'?<label className="money-label">
         <span>{environment==='demo'?'Financing limit per liquidation':'Maximum financing per liquidation'}</span>
         <div className="money-input">
           <span>USD</span>
           <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
         </div>
-      </label>
-      {environment!=='demo'&&<details className="advanced-controls">
+      </label>:<div className="testnet-scan-target">
+        <span>Verified lending market</span><strong>contract.burrow.testnet</strong>
+        <small>Read actual borrower debt positions and source blocks. No signing or transfers.</small>
+      </div>}
+      {environment==='mainnet'&&<details className="advanced-controls">
         <summary><SlidersHorizontal size={16}/> Advanced settings</summary>
         <label className="advanced-field"><span>Minimum reference gross (USD)</span>
           <input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)}
@@ -121,16 +126,17 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
     </div>
       <div className="automation-actions">
         <div className="controls">
-      <button className="primary" disabled={running||busy!==null||!canAutomate||!validAmount}
-        onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
-        <Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}
+      <button className="primary" disabled={running||busy!==null||!canAutomate||(environment!=='testnet'&&!validAmount)}
+        onClick={()=>onCommand(status==='paused'?'resume':'start',
+          environment==='testnet'?undefined:{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
+        <Play weight="fill"/>{status==='paused'?'Resume':environment==='testnet'?'Start Testnet Scan':'Start Automation'}
       </button>
       {hasSession&&<>
         <button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button>
         <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
       </>}
     </div>
-        {!canAutomate&&<div className="automation-availability"><span>{environment==='demo'?'Demo is initializing':environment==='testnet'?'Testnet automation not configured':'Mainnet execution disabled'}</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
+        {!canAutomate&&<div className="automation-availability"><span>{environment==='demo'?'Demo is initializing':environment==='testnet'?'Verifying live Testnet RPC and contract':'Mainnet execution disabled'}</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
       </div>
     </div>
   </section>;
@@ -184,6 +190,39 @@ function DemoOverview({state,events}:{state:DashboardState|null;events:Operation
     <div className="demo-progress"><div className="demo-progress-caption"><span>
       {active?'Session activity':'Workflow progress'}</span><span>{progress}%</span></div>
       <div className="demo-progress-track"><div style={{width:progress+'%'}}/></div></div>
+  </section>;
+}
+
+function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?:EnvironmentReadiness}){
+  const active=state?.session?.status==='running';
+  const session=state?.session as (DashboardState['session']&{
+    scanned?:number;debtPositions?:number;observedBlocks?:number;cursor?:number})|null;
+  const connected=readiness?.capabilities?.read===true;
+  return <section className="demo-overview testnet-overview" aria-label="Live Testnet monitor">
+    <div className="demo-overview-top"><div>
+      <span className="demo-eyebrow">ON-CHAIN OBSERVATION</span>
+      <h2>Rhea Testnet debt monitor</h2>
+      <p>Real borrower positions and block heights from NEAR Testnet.
+         Liquidation eligibility and transaction execution are not yet enabled.</p>
+    </div><span className={'demo-overview-activity '+(active?'is-active':'')}>
+      <span className="demo-overview-led"/>{active?'Scanning live chain':connected?'RPC connected':'RPC unavailable'}
+    </span></div>
+    <div className="demo-metric-grid">
+      <div className="demo-metric"><div className="demo-metric-top"><span>Accounts scanned</span><Activity size={17}/></div>
+        <strong>{session?.scanned?.toLocaleString()??'0'}</strong></div>
+      <div className="demo-metric"><div className="demo-metric-top"><span>Accounts with debt</span><ListMagnifyingGlass size={17}/></div>
+        <strong>{session?.debtPositions?.toLocaleString()??'0'}</strong></div>
+      <div className="demo-metric"><div className="demo-metric-top"><span>Source block</span><Cube size={17}/></div>
+        <strong>{(session?.observedBlocks??readiness?.blockHeight)?.toLocaleString()??'—'}</strong></div>
+      <div className="demo-metric"><div className="demo-metric-top"><span>Execution</span><ShieldCheck size={17}/></div>
+        <strong>Disabled</strong></div>
+    </div>
+    <div className="testnet-observer-footer">NEAR Testnet <span>·</span>
+      contract.burrow.testnet <span>·</span> Live RPC observations
+      <span className="testnet-observer-spacer"/>
+      <a href="https://wallet.testnet.near.org/" target="_blank" rel="noreferrer">Testnet wallet <ArrowUpRight size={13}/></a>
+      <a href="https://near-faucet.io/" target="_blank" rel="noreferrer">Get test tokens <ArrowUpRight size={13}/></a>
+    </div>
   </section>;
 }
 
@@ -340,6 +379,7 @@ function Dashboard(){
   const isWorking=!!session&&ongoing.has(session.status);
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <>{environment==='demo'&&<DemoOverview state={state} events={events}/>}
+  {environment==='testnet'&&<TestnetOverview state={state} readiness={readiness.testnet}/>}
   <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
@@ -435,7 +475,7 @@ function OpportunityTable({rows}:{rows:Array<Record<string,unknown>>}){
       {filtered.map((row,index)=><details key={String(row.id??index)} className="opportunity-row">
         <summary>
           <b>{String(row.borrowerAccountId??row.accountId??'Source observation')}</b>
-          <span>{row.blockHeight==null?'Block —':`Block ${row.blockHeight}`}</span>
+          <span>{(row.blockHeight??row.sourceBlock)==null?'Block —':`Block ${row.blockHeight??row.sourceBlock}`}</span>
           <StatusPill>{String(row.status??'Under review')}</StatusPill>
         </summary>
         <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
@@ -604,7 +644,9 @@ function OperationalPage({kind}:{kind:ViewKind}){
   else if(kind==='performance'||kind==='analytics')content=data.state.accounting.reconciledAt?
     <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
   else if(kind==='opportunities')content=opportunities.length?
-    <OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
+    <OpportunityTable rows={opportunities}/>:<Empty icon={Icon}
+      title={environment==='testnet'?'No borrower debt observed yet':'No opportunities yet'}
+      text={environment==='testnet'?'Start a live Testnet scan to read borrower positions from the lending contract.':undefined}/>;
   else if(kind==='live')content=data.events.length?<LiveEventTable events={data.events}/>:<Empty icon={Icon} title="No activity yet"/>;
   else content=<SettingsWorkspace readiness={data.readiness} environment={environment}/>;
   return <div className="subpage operational-page">
@@ -619,4 +661,11 @@ function OperationalPage({kind}:{kind:ViewKind}){
   </div>;
 }
 
-export function App(){const [environment,setEnvironment]=useState<Environment>('demo');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell></EnvironmentContext.Provider>}
+export function App(){const [environment,setEnvironmentState]=useState<Environment>(()=>{
+  try{const mode=sessionStorage.getItem('arbivane-current-mode');
+    return mode==='demo'||mode==='testnet'||mode==='mainnet'?mode:'demo'}catch{return 'demo'}
+});
+const setEnvironment=(next:Environment)=>{setEnvironmentState(next);
+  try{sessionStorage.setItem('arbivane-current-mode',next)}catch{}
+};
+return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell></EnvironmentContext.Provider>}
