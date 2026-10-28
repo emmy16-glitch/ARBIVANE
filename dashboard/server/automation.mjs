@@ -2,6 +2,7 @@ import {spawn} from 'node:child_process';
 import {resolve} from 'node:path';
 import {createInterface} from 'node:readline';
 import {reconcileImportedSandboxEvidence} from './evidence.mjs';
+import {environmentReadiness} from './readiness.mjs';
 
 const MONEY = /^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/;
 
@@ -34,6 +35,11 @@ export class AutomationManager {
       throw new Error(environment === 'mainnet' ? 'MAINNET_EXECUTION_DISABLED' : 'TESTNET_EXECUTION_NOT_CONFIGURED');
     const evidence = process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH;
     if (!evidence) throw new Error('SANDBOX_EVIDENCE_NOT_CONFIGURED');
+    // UI availability is advisory; the authenticated API is authoritative.
+    // Refuse to claim an execution session until every actual prerequisite
+    // is present, regardless of stale browser state or direct API calls.
+    const readiness = await environmentReadiness('sandbox');
+    if (!readiness.capabilities.automate) throw new Error('SANDBOX_RUNTIME_NOT_READY');
 
     const session = this.store.newSession(environment, settings);
     await this.store.update(environment, (state) => ({...state, settings, session}));
