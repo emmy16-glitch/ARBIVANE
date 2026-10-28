@@ -46,3 +46,14 @@ The historical source-pinned Sandbox scripts remain in the repository for resear
 The browser Demo now runs independently of the protected Render backend. The former Stage190 frontend called authenticated demo API routes, leaving the public Demo stuck in AUTH_REQUIRED with Start disabled.
 
 The frontend routes Demo load, start, pause, resume, stop and events through a browser-only scenario engine. It never calls a network API or shares state with other visitors. The session, progress checkpoint and events are saved in browser-tab sessionStorage, allowing active simulations to recover after refresh. Storage-restricted browsers retain in-memory functionality. The same standalone Demo works in Render Free and the static UI preview. Testnet and Mainnet retain their existing protected backend boundary, and neither has transaction execution enabled. No wallet, real funds, or blockchain transaction is involved.
+
+
+## Stage192 — Live NEAR Testnet lending discovery
+
+The Testnet tab now performs strictly read-only discovery of actual deployed Rhea/Burrow lending borrower positions, independently of Demo. It queries https://rpc.testnet.near.org through a fixed-origin public read-only bridge. A verified Testnet status response and pinned deployed code hash confirm the contract.burrow.testnet contract (hash: 5r4GsfdDATmriAdT6ZteFpPjDNSfPn4NneETiNuckUc6 as observed October 28, 2026). The lending configuration identifies mock-priceoracle.testnet as its price oracle. Any contract code change fails closed.
+
+Public safe endpoints: GET /api/public/testnet/health and GET /api/public/testnet/positions?from=N&limit=20. They are bounded, rate-limited, and never accept user supplied RPC URLs, contract methods, signing keys or transaction parameters.
+
+Start Testnet Scan / Pause / Resume / Stop streams actual source height, scanned account count, and borrower debt/collateral atomic amounts; it stores its own cursor and history in the browser tab. Borrower debt is NOT evidence of liquidation eligibility. No USD earnings, fabricated transaction receipts, approved flash loan, wallet signing or profit is available on Testnet yet. The genuine liquidation execution path remains blocked until a compatible funded Testnet account, oracle-linked liquidation route, and independent receipt verification are implemented.
+
+The Testnet UI links to https://wallet.testnet.near.org/ to create an account and https://near-faucet.io/ to obtain test funds when available. Users should never paste private keys or seed phrases into the application. Mainnet remains separately authenticated and execution disabled.

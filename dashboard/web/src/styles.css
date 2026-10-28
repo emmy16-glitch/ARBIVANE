@@ -741,3 +741,18 @@ body { background:var(--bg); color:#eaf1f9; }
 @media(max-width:760px){.shell:has(> .demo-mode-strip){display:block}
  .shell:has(> .demo-mode-strip)>.main{display:block}}
 
+
+.testnet-overview .demo-eyebrow{color:#77bafb}
+.testnet-observer-footer{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:17px;color:#7898ad;font-size:11px}
+.testnet-observer-footer span{color:#3b5b6f}
+.testnet-scan-target{display:flex;flex-direction:column;gap:8px;min-width:0}
+.testnet-scan-target>span{font-size:11px;color:#9db9cb;font-weight:650}
+.testnet-scan-target strong{font-size:17px;color:#d5eafe;overflow-wrap:anywhere}
+.testnet-scan-target small{font-size:11px;color:#86a2b8;line-height:1.5}
+@media(max-width:700px){.testnet-observer-footer{line-height:1.6}}
+
+.testnet-observer-spacer{flex:1}
+.testnet-observer-footer a{display:inline-flex;align-items:center;gap:4px;
+  color:#9ed3ff;text-decoration:none;white-space:nowrap}
+.testnet-observer-footer a:hover{text-decoration:underline}
