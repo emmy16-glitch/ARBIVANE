@@ -193,18 +193,30 @@ function SessionSummary({state,events}:{state:DashboardState|null;events:Operati
   </section>;
 }
 
-function ResearchActivity() {
+function ResearchActivity(){
   const runs=useResearchRuns(UI_PREVIEW);
   if(!runs.length)return null;
-  return <section className="panel research-runs">
-    <div className="panel-title"><span>Sandbox runs</span><a className="panel-link" href="https://github.com/emmy16-glitch/ARBIVANE/actions" target="_blank" rel="noreferrer">All runs <ArrowUpRight size={14}/></a></div>
-    <div className="research-rows">{runs.map(run=>{
-      const status=run.status==='completed'?(run.conclusion==='success'?'Checks passed':run.conclusion==='failure'?'Checks failed':'Completed'):run.status==='in_progress'?'Running':'Queued';
-      const tone=run.status!=='completed'?'neutral':run.conclusion==='success'?'success':run.conclusion==='failure'?'danger':'neutral';
-      return <a href={run.html_url} key={run.id} target="_blank" rel="noreferrer" className="research-row">
-        <span className="research-run-title">{run.name}</span><StatusPill tone={tone}>{status}</StatusPill><ArrowUpRight size={15}/>
-      </a>;
-    })}</div>
+  const latest=runs[0];
+  const status=(run:typeof latest)=>run.status==='completed'?
+    (run.conclusion==='success'?'Checks passed':run.conclusion==='failure'?'Checks failed':'Completed'):
+    run.status==='in_progress'?'Running':'Queued';
+  const tone=(run:typeof latest)=>run.status!=='completed'?'neutral':
+    run.conclusion==='success'?'success':run.conclusion==='failure'?'danger':'neutral';
+  return <section className="panel research-runs" aria-label="Sandbox research checks">
+    <details className="research-disclosure">
+      <summary>
+        <span className="research-disclosure-title">Sandbox research</span>
+        <span className="research-current" title={latest.name}>{latest.name}</span>
+        <StatusPill tone={tone(latest)}>{status(latest)}</StatusPill>
+      </summary>
+      <div className="research-rows">
+        {runs.map(run=><a href={run.html_url} key={run.id} target="_blank" rel="noreferrer" className="research-row">
+          <span className="research-run-title">{run.name}</span><StatusPill tone={tone(run)}>{status(run)}</StatusPill><ArrowUpRight size={15}/>
+        </a>)}
+        <a className="research-more" href="https://github.com/emmy16-glitch/ARBIVANE/actions"
+          target="_blank" rel="noreferrer">All workflow records <ArrowUpRight size={14}/></a>
+      </div>
+    </details>
   </section>;
 }
 
