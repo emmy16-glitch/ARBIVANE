@@ -151,7 +151,7 @@ function operationHighlights(events:OperationEvent[],important:boolean){
       if(event.stage==='discovery'&&events.some(other=>
         other.stage==='scan'&&other.sessionId===event.sessionId&&
         other.evidence?.blockHeight===event.evidence?.sourceBlock))return false;
-      return event.stage==='scan'||event.stage==='system'||event.stage==='network'||
+      return event.stage==='monitoring'||event.stage==='system'||event.stage==='network'||
         event.stage==='control';
     }
     return event.stage==='system'||event.stage==='discovery'||
@@ -335,28 +335,37 @@ function TestnetWallet({compact=false}:{compact?:boolean}){
 function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?:EnvironmentReadiness}){
   const active=state?.session?.status==='running';
   const session=state?.session as (DashboardState['session']&{
-    scanned?:number;debtPositions?:number;observedBlocks?:number;cursor?:number})|null;
+    scanned?:number;debtPositions?:number;observedBlocks?:number;cursor?:number;
+    blocked?:number;pending?:number;cycles?:number;missingPrices?:string[];
+    staleIndexedDebt?:number})|null;
   const connected=readiness?.capabilities?.read===true;
   return <section className="demo-overview testnet-overview" aria-label="Live Testnet monitor">
     <div className="demo-overview-top"><div>
       <span className="demo-eyebrow">NETWORK MONITOR</span>
       <h2>Testnet automation</h2>
-      <p>Live borrower discovery and execution readiness.</p>
+      <p>Checking fresh debt positions, oracle prices and liquidation readiness.</p>
     </div><span className={'demo-overview-activity '+(active?'is-active':'')}>
       <span className="demo-overview-led"/>{active?'Scanning live chain':connected?'RPC connected':'RPC unavailable'}
     </span></div>
     <div className="demo-metric-grid">
       <div className="demo-metric"><div className="demo-metric-top"><span>Accounts scanned</span><Activity size={17}/></div>
         <strong>{session?.scanned?.toLocaleString()??'0'}</strong></div>
-      <div className="demo-metric"><div className="demo-metric-top"><span>Accounts with debt</span><ListMagnifyingGlass size={17}/></div>
+      <div className="demo-metric"><div className="demo-metric-top"><span>Fresh debt accounts</span><ListMagnifyingGlass size={17}/></div>
         <strong>{session?.debtPositions?.toLocaleString()??'0'}</strong></div>
-      <div className="demo-metric"><div className="demo-metric-top"><span>Source block</span><Cube size={17}/></div>
-        <strong>{(session?.observedBlocks??readiness?.blockHeight)?.toLocaleString()??'—'}</strong></div>
+      <div className="demo-metric"><div className="demo-metric-top"><span>Blocked / unverified</span><ShieldCheck size={17}/></div>
+        <strong>{(session?.blocked??0)+(session?.pending??0)}</strong></div>
       <div className="demo-metric"><div className="demo-metric-top"><span>Execution</span><ShieldCheck size={17}/></div>
         <strong>Not ready</strong></div>
     </div>
-    <div className="testnet-observer-footer">Read-only market monitoring
-      <span>·</span> NEAR Testnet</div>
+    <div className="testnet-observer-footer">Block {(session?.observedBlocks??readiness?.blockHeight)?.toLocaleString()??'—'}
+      <span>·</span> {(session?.cycles??0)} monitoring cycles
+      <span>·</span> {(session?.staleIndexedDebt??0)} stale debt records excluded
+      <span>·</span> No transactions submitted</div>
+    {(session?.missingPrices?.length??0)>0&&
+      <div className="testnet-blocker-summary">
+        <WarningCircle size={16}/><span><strong>Oracle prices missing:</strong> {session?.missingPrices?.slice(0,4).join(', ')}
+        {(session?.missingPrices?.length??0)>4?' + more':''}</span>
+      </div>}
   </section>;
 }
 
@@ -602,7 +611,15 @@ function OpportunityTable({rows}:{rows:Array<Record<string,unknown>>}){
           <span>{(row.blockHeight??row.sourceBlock)==null?'Block —':`Block ${row.blockHeight??row.sourceBlock}`}</span>
           <StatusPill>{String(row.status??'Under review')}</StatusPill>
         </summary>
-        <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
+        {row.sourceNetwork==='testnet'?<div className="testnet-position-detail">
+          <div><span>Fresh status</span><strong>{String(row.assessmentReason??'Not verified').replaceAll('_',' ').toLowerCase()}</strong></div>
+          <div><span>Current debt</span><strong>{row.hasDebt===true?'Confirmed':'Not confirmed'}</strong></div>
+          {Array.isArray(row.missingOracleTokens)&&row.missingOracleTokens.length>0&&
+            <div className="testnet-missing-prices"><span>Missing oracle prices</span>
+              <strong>{row.missingOracleTokens.join(', ')}</strong></div>}
+          <details className="event-raw-disclosure"><summary>Technical evidence <CaretDown size={12}/></summary>
+            <pre>{JSON.stringify(row,null,2)}</pre></details>
+        </div>:<div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>}
       </details>)}
     </div>
     {filtered.length===0&&<div className="data-empty">No matching borrowers</div>}
@@ -649,7 +666,15 @@ function TransactionWorkspace({rows}:{rows:Array<Record<string,unknown>>}){
           <span>{row.sourceBlock==null?'—':String(row.sourceBlock)}</span>
           <StatusPill tone="success">{row.network==='demo'?'Completed':'Verified inventory'}</StatusPill>
         </summary>
-        <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
+        {row.sourceNetwork==='testnet'?<div className="testnet-position-detail">
+          <div><span>Fresh status</span><strong>{String(row.assessmentReason??'Not verified').replaceAll('_',' ').toLowerCase()}</strong></div>
+          <div><span>Current debt</span><strong>{row.hasDebt===true?'Confirmed':'Not confirmed'}</strong></div>
+          {Array.isArray(row.missingOracleTokens)&&row.missingOracleTokens.length>0&&
+            <div className="testnet-missing-prices"><span>Missing oracle prices</span>
+              <strong>{row.missingOracleTokens.join(', ')}</strong></div>}
+          <details className="event-raw-disclosure"><summary>Technical evidence <CaretDown size={12}/></summary>
+            <pre>{JSON.stringify(row,null,2)}</pre></details>
+        </div>:<div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>}
       </details>)}
     </div>
     {!filtered.length&&<div className="data-empty">No matching transactions</div>}

@@ -7,65 +7,81 @@ const health={status:'connected',chainId:'testnet',contract:'contract.burrow.tes
  codeHash:'5r4GsfdDATmriAdT6ZteFpPjDNSfPn4NneETiNuckUc6',blockHeight:250000000,
  oracleId:'mock-priceoracle.testnet',executionEnabled:false,checkedAt:'2026-10-28T01:00:00Z'};
 function reply(j){return {ok:true,json:async()=>j}}
-test('Testnet client streams real source responses and never manufactures PNL, receipt, eligibility',async()=>{
- const original=globalThis.fetch;
- let calls=0;globalThis.fetch=async url=>{
-  calls++;
+async function until(condition,limit=2000){const started=Date.now();while(Date.now()-started<limit){
+ if(await condition())return;await sleep(12)}throw Error('TESTNET_MONITOR_TIMEOUT')}
+let fromZeroCalls=0;
+function stubFetch(){
+ return async url=>{
   if(url==='/api/public/testnet/health')return reply(health);
-  if(String(url).includes('from=0')){
+  if(String(url).startsWith('/api/public/testnet/assessment?from=0&limit=20')){
+   fromZeroCalls++;
    return reply({network:'testnet',contract:health.contract,codeHash:health.codeHash,
-    from:0,limit:20,returned:1,blockHeight:250000010,hasMore:false,eligibilityVerified:false,
-    accounts:[{accountId:'real.borrower.testnet',sourceIndex:0,hasDebt:true,
-     borrowed:[{tokenId:'wrap.testnet',atomic:'123456789',position:'REGULAR'}],
-     collateral:[{tokenId:'usdt.fakes.testnet',atomic:'120000000',position:'REGULAR'}]}]});
+    from:0,limit:20,returned:2,blockHeight:250000010+fromZeroCalls,
+    hasMore:false,eligibilityVerified:false,executionEnabled:false,
+    indexedDebt:2,freshDebt:1,blocked:1,pending:0,staleIndexedDebt:1,
+    eligibleVerified:0,transactionsExecuted:0,
+    oracle:{fresh:true,requiredTokens:2,pricedTokens:0,error:null,ageMs:500},
+    accounts:[
+     {accountId:'real.borrower.testnet',sourceIndex:0,hasDebt:true,indexHasDebt:true,
+      status:'BLOCKED',reason:'MISSING_ORACLE_PRICE',freshBlock:250000010+fromZeroCalls,
+      missingPrices:['wrap.testnet'],
+      borrowed:[{tokenId:'wrap.testnet',atomic:'12345'}],
+      collateral:[{tokenId:'usdt.fakes.testnet',atomic:'12000'}]},
+     {accountId:'old.borrower.testnet',sourceIndex:1,indexHasDebt:true,hasDebt:false,
+      status:'NO_CURRENT_DEBT',reason:'NO_CURRENT_DEBT',freshBlock:250000010+fromZeroCalls,
+      missingPrices:[],borrowed:[],collateral:[]}
+    ]});
   }
-  throw Error('UNEXPECTED_RPC_REQUEST');
+  throw Error('UNEXPECTED_RPC_REQUEST: '+url);
  };
+}
+test('Testnet continuous scanning displays fresh data, never fictitious PNL or receipt',async()=>{
+ const original=globalThis.fetch;fromZeroCalls=0;globalThis.fetch=stubFetch();
+ const client=new LiveTestnet(storage(),{monitorIntervalMs:22});
  try{
-  const client=new LiveTestnet(storage());
   const initial=await client.load();
   assert.equal(initial.readiness.capabilities.automate,true);
   assert.equal(initial.readiness.capabilities.execution,false);
-  assert.equal(initial.state.accounting.cumulativeNetPnl,null);
-  const events=[];client.subscribe(e=>events.push(e));
-  const started=await client.command('start');
-  assert.equal(started.session.status,'running');
-  for(let i=0;i<40;i++){
-   if((await client.load()).state.session?.status==='completed')break;
-   await sleep(12);
-  }
-  const final=await client.load();
-  assert.equal(final.state.session?.status,'completed');
-  assert.equal(final.state.session?.scanned,1);
-  assert.equal(final.state.opportunities.length,1);
-  assert.equal(final.state.opportunities[0].eligibilityVerified,false);
-  assert.equal(final.state.transactions.length,0);
-  assert.equal(final.state.accounting.realizedProfit,null);
-  assert.equal(final.state.wallet.balances.length,0);
-  assert.ok(events.some(e=>e.stage==='scan'));
-  assert.ok(calls>=3);
- }finally{globalThis.fetch=original}
+  await client.command('start');
+  await until(async()=>(await client.load()).state.session?.cycles>=2);
+  const current=await client.load();
+  assert.equal(current.state.session.status,'running');
+  assert.equal(current.state.session.scanned,2);
+  assert.equal(current.state.session.debtPositions,1);
+  assert.equal(current.state.session.staleIndexedDebt,1);
+  assert.equal(current.state.session.blocked,1);
+  assert.equal(current.state.opportunities.length,2);
+  assert.equal(current.state.opportunities[0].assessmentReason,'MISSING_ORACLE_PRICE');
+  assert.equal(current.state.opportunities[0].eligibilityVerified,false);
+  assert.equal(current.state.transactions.length,0);
+  assert.equal(current.state.accounting.realizedProfit,null);
+  assert.equal(current.state.wallet.balances.length,0);
+  assert.ok(current.events.some(e=>e.stage==='monitoring'));
+  assert.ok(!current.events.some(e=>e.message.includes('Automation completed')));
+ }finally{await client.command('stop');globalThis.fetch=original}
 });
-test('Testnet browser separates mode data and preserves cursor after refresh',async()=>{
- const original=globalThis.fetch;
- globalThis.fetch=async url=>{
-  if(url==='/api/public/testnet/health')return reply(health);
-  return reply({network:'testnet',contract:health.contract,codeHash:health.codeHash,
-   from:0,limit:20,returned:0,blockHeight:250000011,hasMore:false,
-   eligibilityVerified:false,accounts:[]});
- };
+test('Testnet monitoring state and blockers persist across pause and restore',async()=>{
+ const original=globalThis.fetch;fromZeroCalls=0;globalThis.fetch=stubFetch();
+ const mem=storage(),first=new LiveTestnet(mem,{monitorIntervalMs:1000});
  try{
-  const mem=storage(),first=new LiveTestnet(mem);
   await first.command('start');
-  for(let i=0;i<40;i++){
-   if((await first.load()).state.session?.status==='completed')break;
-   await sleep(12);
-  }
-  const second=new LiveTestnet(mem);
-  const snapshot=await second.load();
-  assert.equal(snapshot.state.session?.status,'completed');
-  assert.ok(snapshot.events.length>=2);
-  assert.equal(snapshot.state.transactions.length,0);
- }finally{globalThis.fetch=original}
+  await until(async()=>(await first.load()).state.session?.cycles>=1);
+  await first.command('pause');
+  const second=new LiveTestnet(mem,{monitorIntervalMs:22});
+  const restored=await second.load();
+  assert.equal(restored.state.session.status,'paused');
+  assert.equal(restored.state.session.debtPositions,1);
+  assert.equal(restored.state.session.blocked,1);
+  assert.ok(restored.events.some(e=>e.stage==='monitoring'));
+  await second.command('resume');
+  await until(async()=>(await second.load()).state.session?.cycles>=2);
+  await second.command('stop');
+  assert.equal((await second.load()).state.session.status,'stopped');
+  assert.equal((await second.load()).state.transactions.length,0);
+ }finally{
+  if((await first.load()).state.session?.status==='running')
+   await first.command('stop');
+  globalThis.fetch=original;
+ }
 });
 
