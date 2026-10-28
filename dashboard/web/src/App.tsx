@@ -77,9 +77,10 @@ function EnvironmentPicker(){
   return <div className="environment-picker" role="group" aria-label="Network environment">
     {(Object.keys(envInfo) as Environment[]).map(key=>{
       const entry=envInfo[key];
+      const Icon=entry.icon;
       return <button type="button" key={key} aria-pressed={environment===key}
         className={environment===key?'environment selected':'environment'}
-        onClick={()=>setEnvironment(key)}>{entry.title}</button>;
+        onClick={()=>setEnvironment(key)}><Icon size={15} aria-hidden="true"/>{entry.title}</button>;
     })}
   </div>;
 }
@@ -133,6 +134,7 @@ function Operations({events,onOpen,active,connection}:{events:OperationEvent[];o
   const [filter,setFilter]=useState('all');
   const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
   const stages=['all',...new Set(events.map(e=>e.stage))];
+  useEffect(()=>{if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')},[events,filter]);
   return <section className="panel operations">
     <div className="panel-title">
       <span><Activity/>Live Operations</span>
@@ -255,18 +257,38 @@ function Dashboard(){
     }
   },[environment]);
   useEffect(()=>{
-    let source:EventSource|undefined;let active=true;
+    let source:EventSource|undefined;let active=true;let loading=false;
     let refreshTimer:ReturnType<typeof setTimeout>|undefined;
+    let poll:ReturnType<typeof setInterval>|undefined;
+    const reconcile=async()=>{
+      if(!active||loading)return;
+      loading=true;
+      try{await refresh()}finally{loading=false}
+    };
+    const onOnline=()=>{if(active)void reconcile()};
+    const onVisible=()=>{if(document.visibilityState==='visible')onOnline()};
     setState(null);setEvents([]);setDetail(null);setConnection('connecting');
-    void refresh().then(()=>{
-      if(!active)return;
+    // Subscribe independently of the first snapshot: a temporary API outage
+    // must not leave the dashboard frozen after network recovery.
+    if(!UI_PREVIEW){
       source=subscribe(environment,event=>{
         if(!active)return;
         setEvents(previous=>mergeOperationEvents(environment,previous,[event]));
-        if(!refreshTimer)refreshTimer=setTimeout(()=>{refreshTimer=undefined;if(active)void refresh()},900);
-      },status=>{if(active)setConnection(status)});
-    });
-    return()=>{active=false;if(refreshTimer)clearTimeout(refreshTimer);source?.close()};
+        if(!refreshTimer)refreshTimer=setTimeout(()=>{refreshTimer=undefined;if(active)void reconcile()},900);
+      },status=>{if(active){setConnection(status);if(status==='connected')void reconcile()}});
+      poll=setInterval(()=>{if(document.visibilityState==='visible')void reconcile()},30000);
+      window.addEventListener('online',onOnline);
+      document.addEventListener('visibilitychange',onVisible);
+    }
+    void reconcile();
+    return()=>{
+      active=false;
+      if(refreshTimer)clearTimeout(refreshTimer);
+      if(poll)clearInterval(poll);
+      window.removeEventListener('online',onOnline);
+      document.removeEventListener('visibilitychange',onVisible);
+      source?.close();
+    };
   },[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{
     setBusy(action);setError('');
@@ -279,7 +301,7 @@ function Dashboard(){
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
-      <Automation key={environment} environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
+      <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
       <Operations key={environment} events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
       {environment==='sandbox'&&<ResearchActivity/>}
@@ -318,6 +340,7 @@ function LiveEventTable({events}:{events:OperationEvent[]}){
   const [query,setQuery]=useState('');
   const [filter,setFilter]=useState('all');
   const stages=useMemo(()=>['all',...new Set(events.map(e=>e.stage))],[events]);
+  useEffect(()=>{if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')},[events,filter]);
   const rows=useMemo(()=>events.filter(e=>(filter==='all'||e.stage===filter)&&
     (!query.trim()||[e.message,e.stage,e.status,e.id,e.sessionId].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())))
     .slice().reverse(),[events,filter,query]);
@@ -500,22 +523,35 @@ function OperationalPage({kind}:{kind:ViewKind}){
         return false;
       }
     };
-    void load().then(ok=>{
-      if(!active||!ok)return;
+    // Keep retrying independently of a failed initial request. Reconnecting
+    // to the SSE stream also refreshes persisted events and metadata.
+    if(!UI_PREVIEW){
       if(kind==='live'){
         source=subscribe(environment,event=>{
           if(active)setData(current=>current?{
             ...current,events:mergeOperationEvents(environment,current.events,[event])
           }:current);
         },status=>{
-          if(active&&status==='reconnecting')setError('STREAM_RECONNECTING');
-          if(active&&status==='connected')setError(previous=>previous==='STREAM_RECONNECTING'?'':previous);
+          if(!active)return;
+          if(status==='reconnecting')setError('STREAM_RECONNECTING');
+          if(status==='connected'){
+            setError(previous=>previous==='STREAM_RECONNECTING'?'':previous);
+            void load();
+          }
         });
-        // Reconcile original persisted records even when the stream is quiet.
-        poll=setInterval(()=>{if(active)void load()},30000);
       }
-    });
-    return()=>{active=false;source?.close();if(poll)clearInterval(poll)};
+      poll=setInterval(()=>{if(active&&document.visibilityState==='visible')void load()},30000);
+    }
+    const onOnline=()=>{if(active)void load()};
+    const onVisible=()=>{if(document.visibilityState==='visible')onOnline()};
+    window.addEventListener('online',onOnline);
+    document.addEventListener('visibilitychange',onVisible);
+    void load();
+    return()=>{
+      active=false;source?.close();if(poll)clearInterval(poll);
+      window.removeEventListener('online',onOnline);
+      document.removeEventListener('visibilitychange',onVisible);
+    };
   },[environment,kind,retry]);
   const transactions=data?.state.transactions??[];
   const opportunities=data?.state.opportunities??[];
@@ -543,4 +579,4 @@ function OperationalPage({kind}:{kind:ViewKind}){
   </div>;
 }
 
-export function App(){const [environment,setEnvironment]=useState<Environment>('sandbox');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell></EnvironmentContext.Provider>}
+export function App(){const [environment,setEnvironment]=useState<Environment>('sandbox');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Shell></EnvironmentContext.Provider>}
