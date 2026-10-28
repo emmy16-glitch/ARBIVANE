@@ -14,3 +14,80 @@
 /* Stage171: clear, low-contrast explanatory copy; disabled custody is not actionable. */
 .screening-note { margin: 4px 0 0; color: var(--muted, #9aa9bb); font-size: 12px; line-height: 1.5; }
 button:disabled { cursor: not-allowed; opacity: .52; }
+
+
+/* Stage174 — accessible, restrained operations-terminal refinement.
+   Preserve the approved composition; improve legibility, affordances and density. */
+:root {
+  --bg:#08131f;--surface:#0e1c2a;--surface-2:#112232;--surface-3:#17283b;
+  --line:#26394c;--muted:#a1b0c2;--soft:#c4d0de;
+  --violet:#7362d8;--violet-2:#8e7cf0;--green:#35c99d;
+}
+body { background:var(--bg); color:#eaf1f9; }
+.main { background-image:none; padding:clamp(10px,1.1vw,18px); }
+.panel { background:var(--surface); box-shadow:none; border-color:var(--line); border-radius:10px; }
+.panel-title { min-height:44px; padding:0 15px; font-size:14px; border-bottom-color:var(--line); }
+.environment { background:var(--surface); height:86px; padding:11px; border-radius:9px; }
+.environment.selected { box-shadow:inset 0 0 0 1px var(--violet); background:#191b3c; }
+.environment.mainnet { background:#0a2224; }
+.environment b { font-size:13px; }
+.environment small { font-size:11px; line-height:1.35; }
+.environment em { font-size:10px; line-height:1.35; }
+.sidebar { background:#0b1826; }
+.sidebar nav a { font-size:13px; height:43px; border-radius:7px; }
+.sidebar nav a.active { background:#23234f; border-left-color:#8e7cf0; }
+.brand small,.version small { font-size:10px; }
+.engine { background:var(--surface); }
+.engine-head,.engine>small,.version b { font-size:11px; line-height:1.4; }
+.topbar { background:#0b1826; }
+.search input,.page-heading p { font-size:13px; }
+.status-pill,.account { font-size:11px; }
+.status-pill i,.readiness i,.engine-line i { box-shadow:none; }
+.money-label>span,.options>b { font-size:12px; }
+.money-label>span small,.readiness,.screening-note,.minimum { font-size:11px; line-height:1.45; }
+.money-input input { font-size:23px; }
+.options { gap:10px; }
+.minimum { grid-template-columns:minmax(0,1fr) 78px 30px; gap:5px; }
+.minimum input { padding:7px 8px; }
+.controls button,.balance-actions button { font-size:12px; min-height:43px; }
+.controls button.primary,.balance-actions .primary { background:#614bdc; border-color:#8272ed; }
+.controls button.stop { background:#33191f; border-color:#7b3c4a; }
+.filters button { font-size:11px; padding:6px 10px; }
+.empty { min-height:110px; }
+.empty strong { font-size:13px; }
+.empty p { font-size:12px; max-width:430px; }
+.event-list { max-height:410px; scrollbar-gutter:stable; }
+.event-row { min-height:46px; grid-template-columns:70px 8px 82px minmax(0,1fr) auto 14px; }
+.event-row time,.event-row b,.event-message { font-size:11px; }
+.balance-main small,.balance-main p { font-size:11px; }
+.balance-main strong { font-size:26px; color:#ae9aff; }
+.metrics small { font-size:10px; white-space:normal; line-height:1.35; }
+.metrics b { font-size:14px; }
+.metrics>div { background:#122232; border-color:var(--line); }
+.network-label,.panel-title a { font-size:11px; }
+.error-banner,.drawer dl,.drawer pre { font-size:12px; }
+:where(button,input,a):focus-visible { outline:2px solid #baaaff; outline-offset:3px; }
+:where(button):disabled { cursor:not-allowed; opacity:.5; }
+:where(button:not(:disabled),a) { -webkit-tap-highlight-color:transparent; }
+:where(button:not(:disabled)):hover { filter:brightness(1.08); }
+* { scrollbar-color:#40546d #0b1826; scrollbar-width:thin; }
+::-webkit-scrollbar { width:9px; height:9px; }
+::-webkit-scrollbar-thumb { background:#40546d; border:2px solid #0b1826; border-radius:6px; }
+::-webkit-scrollbar-track { background:#0b1826; }
+@media(min-width:761px) {
+  .shell { grid-template-columns:194px minmax(0,1fr); }
+  .dashboard,.left-column,.right-column { gap:12px; }
+}
+@media(max-width:760px) {
+  .event-row { grid-template-columns:58px 8px 65px minmax(0,1fr) 12px; }
+  .event-row .status-pill { display:none; }
+  .environment { min-width:195px; }
+  .main { padding:10px; }
+}
+@media(max-width:440px) {
+  .event-row { grid-template-columns:50px 7px minmax(0,1fr) 12px; }
+  .event-row b { display:none; }
+}
+@media(forced-colors:active) {
+  .status-pill,.panel,.environment { border:1px solid CanvasText; }
+}
