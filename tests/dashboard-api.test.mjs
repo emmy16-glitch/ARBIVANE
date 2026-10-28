@@ -27,7 +27,7 @@ async function boot(t) {
 test('dashboard HTTP boundary authenticates, isolates and denies unsupported execution', async (t) => {
   const {origin,token}=await boot(t);
   const health=await fetch(`${origin}/api/health`); assert.equal(health.status,200);
-  assert.deepEqual(await health.json(),{status:'ok',mainnetExecutionEnabled:false});
+  assert.deepEqual(await health.json(),{status:'ok',mainnetExecutionEnabled:false,deploymentRevision:null});
   const denied=await fetch(`${origin}/api/environments/sandbox`); assert.equal(denied.status,401);
 
   const auth=await fetch(`${origin}/api/auth/session`,{method:'POST',headers:{origin,authorization:`Bearer ${token}`}});

@@ -15,6 +15,8 @@ const host = process.env.HOST ?? '127.0.0.1';
 const configuredToken = process.env.ARBIVANE_DASHBOARD_TOKEN ?? '';
 const prodAuthUnavailable = process.env.NODE_ENV === 'production' &&
   configuredToken.length < 32;
+const deploymentRevision = /^[0-9a-f]{40}$/.test(process.env.RENDER_GIT_COMMIT ?? '') ?
+  process.env.RENDER_GIT_COMMIT.slice(0,12) : null;
 const configuredOrigin = process.env.ARBIVANE_DASHBOARD_ORIGIN ?? '';
 // Signed, expiring operator cookie survives ordinary Render deploy/restart.
 // Local development without an access token uses a process-lifetime secret.
@@ -94,7 +96,7 @@ const server = createServer(async (request, response) => {
     if (url.pathname === '/api/health')
       return json(response, prodAuthUnavailable ? 503 : 200,
         {status: prodAuthUnavailable ? 'auth_not_configured' : 'ok',
-          mainnetExecutionEnabled: false});
+          mainnetExecutionEnabled: false, deploymentRevision});
     if (url.pathname === '/api/auth/session' && request.method === 'POST') {
       if (prodAuthUnavailable) return json(response, 503, {error:'AUTH_NOT_CONFIGURED'});
       if (!sameOrigin(request)) return json(response, 403, {error: 'ORIGIN_REJECTED'});

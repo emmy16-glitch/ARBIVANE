@@ -27,3 +27,8 @@ The opt-in paid execution host example lives in render-autopilot.example.yaml an
 On the dedicated worker host only: provision a strong login token, verified HTTPS source RPC, independently current deployed lender and oracle code hashes, then set ARBIVANE_SANDBOX_AUTOPILOT_ENABLED=true. Keep EXECUTION_ENABLED=false, NEAR_WORKSPACES_NETWORK=sandbox, and all Mainnet keys absent.
 
 A genuine Sandbox result requires a fresh viable borrower, a real NEAR Workspaces execution and final receipts independently reconciled to debt/collateral/token deltas. An HTTP 202 Start and borrower scan are not evidence of profitable settlement. Testnet faucet funding and Testnet transaction execution are separate future integrations.
+
+
+## Deployment identity
+
+The public GET /api/health endpoint returns a non-sensitive deploymentRevision (12 hex characters from Render's RENDER_GIT_COMMIT, or null outside Render). Compare it with the current GitHub main commit to verify which backend is actually live. HTTP server health does not imply Sandbox execution readiness. Exact readiness and the blockers are available only on the authenticated Sandbox environment API.
