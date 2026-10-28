@@ -1,0 +1,20 @@
+# Never package local credentials, evidence, or development caches in the image.
+.git
+.github
+node_modules
+dashboard/web/dist
+dist
+coverage
+.arbivane-dashboard
+.env
+.env.*
+*.log
+*.pem
+*.key
+stage*.json
+source
+shards
+tmp
+*.sqlite
+*.db
+

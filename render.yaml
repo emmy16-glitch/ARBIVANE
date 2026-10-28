@@ -26,5 +26,8 @@ services:
         value: /tmp/arbivane-dashboard
       - key: EXECUTION_ENABLED
         value: "false"
+      # Free preview must not accept genuine Sandbox jobs without durable storage.
+      - key: ARBIVANE_SANDBOX_AUTOPILOT_ENABLED
+        value: "false"
       - key: ARBIVANE_DASHBOARD_TOKEN
         sync: false

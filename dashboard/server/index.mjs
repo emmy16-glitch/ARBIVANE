@@ -47,6 +47,8 @@ const publish = (event) => {
     response.write(`id: ${event.sequence}\nevent: operation\ndata: ${JSON.stringify(event)}\n\n`);
 };
 const automation = new AutomationManager({store, repoRoot: root, publish});
+// Recovery verifies original completed Sandbox receipts; no execution is restarted.
+await automation.recoverInterruptedSandbox();
 
 function json(response, status, value, headers = {}) {
   response.writeHead(status, {'content-type': 'application/json; charset=utf-8',

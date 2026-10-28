@@ -49,6 +49,8 @@ export class DashboardStore {
         }
         if (state.session && ['starting','running','pause_requested','stopping'].includes(state.session.status)) {
           state.session.status = 'failed';
+          state.session.interruptedPid = Number.isSafeInteger(state.session.pid)?
+            state.session.pid:null;
           state.session.failure = {code:'SERVER_RESTART_INTERRUPTED_SESSION'};
           state.session.endedAt = new Date().toISOString();
           state.session.pid = null;
