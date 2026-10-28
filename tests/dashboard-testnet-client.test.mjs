@@ -20,6 +20,10 @@ function stubFetch(){
     hasMore:false,eligibilityVerified:false,executionEnabled:false,
     indexedDebt:2,freshDebt:1,blocked:1,pending:0,staleIndexedDebt:1,
     eligibleVerified:0,transactionsExecuted:0,
+    marketStatus:'UPSTREAM_ORACLE_UNPRICED',
+    marketRemediation:{missingTokenCount:1,missingTokenIds:['wrap.testnet'],
+      lendingOwnerId:'ref-finance.sputnikv2.testnet',pythOracleEnabled:false,
+      requiresUpstreamOracleRepair:true},
     oracle:{fresh:true,requiredTokens:2,pricedTokens:0,error:null,ageMs:500},
     accounts:[
      {accountId:'real.borrower.testnet',sourceIndex:0,hasDebt:true,indexHasDebt:true,
@@ -37,7 +41,7 @@ function stubFetch(){
 }
 test('Testnet continuous scanning displays fresh data, never fictitious PNL or receipt',async()=>{
  const original=globalThis.fetch;fromZeroCalls=0;globalThis.fetch=stubFetch();
- const client=new LiveTestnet(storage(),{monitorIntervalMs:22});
+ const client=new LiveTestnet(storage(),{monitorIntervalMs:22,blockedMarketIntervalMs:22});
  try{
   const initial=await client.load();
   assert.equal(initial.readiness.capabilities.automate,true);
@@ -50,6 +54,10 @@ test('Testnet continuous scanning displays fresh data, never fictitious PNL or r
   assert.equal(current.state.session.debtPositions,1);
   assert.equal(current.state.session.staleIndexedDebt,1);
   assert.equal(current.state.session.blocked,1);
+  assert.equal(current.state.session.marketStatus,'UPSTREAM_ORACLE_UNPRICED');
+  assert.equal(current.state.session.pythOracleEnabled,false);
+  assert.equal(current.state.session.oracleOwner,'ref-finance.sputnikv2.testnet');
+  assert.equal(current.events.filter(e=>e.stage==='monitoring').length,1);
   assert.equal(current.state.opportunities.length,2);
   assert.equal(current.state.opportunities[0].assessmentReason,'MISSING_ORACLE_PRICE');
   assert.equal(current.state.opportunities[0].eligibilityVerified,false);
@@ -62,12 +70,12 @@ test('Testnet continuous scanning displays fresh data, never fictitious PNL or r
 });
 test('Testnet monitoring state and blockers persist across pause and restore',async()=>{
  const original=globalThis.fetch;fromZeroCalls=0;globalThis.fetch=stubFetch();
- const mem=storage(),first=new LiveTestnet(mem,{monitorIntervalMs:1000});
+ const mem=storage(),first=new LiveTestnet(mem,{monitorIntervalMs:1000,blockedMarketIntervalMs:1000});
  try{
   await first.command('start');
   await until(async()=>(await first.load()).state.session?.cycles>=1);
   await first.command('pause');
-  const second=new LiveTestnet(mem,{monitorIntervalMs:22});
+  const second=new LiveTestnet(mem,{monitorIntervalMs:22,blockedMarketIntervalMs:22});
   const restored=await second.load();
   assert.equal(restored.state.session.status,'paused');
   assert.equal(restored.state.session.debtPositions,1);
@@ -85,3 +93,28 @@ test('Testnet monitoring state and blockers persist across pause and restore',as
  }
 });
 
+test('Stop cancels a two-minute blocked-market retry so Start can run again immediately',async()=>{
+ const original=globalThis.fetch;
+ fromZeroCalls=0;globalThis.fetch=stubFetch();
+ const client=new LiveTestnet(storage(),{
+  monitorIntervalMs:25,blockedMarketIntervalMs:120000});
+ try{
+  await client.command('start');
+  await until(async()=>(await client.load()).state.session?.cycles>=1);
+  const firstId=(await client.load()).state.session.id;
+  await client.command('stop');
+  assert.equal((await client.load()).state.session.status,'stopped');
+  const restarted=await client.command('start');
+  assert.notEqual(restarted.session.id,firstId);
+  await until(async()=>(await client.load()).state.session?.cycles>=1);
+  assert.equal((await client.load()).state.session.status,'running');
+  await client.command('pause');
+  assert.equal((await client.load()).state.session.status,'paused');
+  await client.command('resume');
+  assert.equal((await client.load()).state.session.status,'running');
+ }finally{
+  if((await client.load()).state.session?.status==='running')
+   await client.command('stop');
+  globalThis.fetch=original;
+ }
+});

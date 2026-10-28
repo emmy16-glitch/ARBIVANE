@@ -337,7 +337,8 @@ function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?
   const session=state?.session as (DashboardState['session']&{
     scanned?:number;debtPositions?:number;observedBlocks?:number;cursor?:number;
     blocked?:number;pending?:number;cycles?:number;missingPrices?:string[];
-    staleIndexedDebt?:number})|null;
+    staleIndexedDebt?:number;marketStatus?:string;
+    oracleOwner?:string|null;pythOracleEnabled?:boolean})|null;
   const connected=readiness?.capabilities?.read===true;
   return <section className="demo-overview testnet-overview" aria-label="Live Testnet monitor">
     <div className="demo-overview-top"><div>
@@ -355,16 +356,29 @@ function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?
       <div className="demo-metric"><div className="demo-metric-top"><span>Blocked / unverified</span><ShieldCheck size={17}/></div>
         <strong>{(session?.blocked??0)+(session?.pending??0)}</strong></div>
       <div className="demo-metric"><div className="demo-metric-top"><span>Execution</span><ShieldCheck size={17}/></div>
-        <strong>Not ready</strong></div>
+        <strong>{session?.marketStatus==='UPSTREAM_ORACLE_UNPRICED'?'Oracle blocked':'Not ready'}</strong></div>
     </div>
     <div className="testnet-observer-footer">Block {(session?.observedBlocks??readiness?.blockHeight)?.toLocaleString()??'—'}
       <span>·</span> {(session?.cycles??0)} monitoring cycles
       <span>·</span> {(session?.staleIndexedDebt??0)} stale debt records excluded
       <span>·</span> No transactions submitted</div>
-    {(session?.missingPrices?.length??0)>0&&
+    {session?.marketStatus==='UPSTREAM_ORACLE_UNPRICED'&&
       <div className="testnet-blocker-summary">
-        <WarningCircle size={16}/><span><strong>Oracle prices missing:</strong> {session?.missingPrices?.slice(0,4).join(', ')}
-        {(session?.missingPrices?.length??0)>4?' + more':''}</span>
+        <WarningCircle size={17}/>
+        <div className="testnet-market-alert">
+          <strong>Rhea Testnet oracle is not pricing required assets</strong>
+          <p>The lending contract cannot verify liquidations in this market.
+             Your funded Testnet wallet does not fix an oracle feed.</p>
+          <details>
+            <summary>Technical evidence <CaretDown size={13}/></summary>
+            <div className="testnet-market-proof">
+              <span>Oracle</span><code>mock-priceoracle.testnet</code>
+              <span>Lending owner</span><code>{session.oracleOwner??'Not reported'}</code>
+              <span>Alternative Pyth oracle</span><code>{session.pythOracleEnabled?'Enabled':'Disabled'}</code>
+              <span>Unpriced assets</span><code>{session.missingPrices?.join(', ')||'Unavailable'}</code>
+            </div>
+          </details>
+        </div>
       </div>}
   </section>;
 }
