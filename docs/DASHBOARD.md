@@ -22,6 +22,8 @@ Unsold token inventory is never converted into USD or P&L. Gross proceeds, finan
 
 The repository includes a [Render Blueprint and deployment runbook](RENDER_DEPLOYMENT.md). A paid service, persistent disk, and private access token require workspace confirmation before applying the Blueprint. Configuration in Git is not proof of hosting; verify the actual Render deploy and secure /api/health separately.
 
+**Stage175 detailed routes:** The Live Operations page now subscribes to genuine SSE events rather than displaying a frozen initial snapshot. Opportunities show compact source-status cards with expandable original evidence; Wallet and Settings show actual asset identifiers, atomic balances and readiness capabilities without dumping raw JSON across the screen. Unsupported execution and transfers remain disabled.
+
 ## Running locally
 
 Use two terminals:
