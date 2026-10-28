@@ -35,41 +35,53 @@ export class DashboardStore {
     return JSON.parse(await readFile(join(this.root, environment, 'state.json'), 'utf8'));
   }
 
-  async update(environment, change) {
+  #queue(environment, action) {
     this.#assertEnvironment(environment);
     const previous = this.queues.get(environment) ?? Promise.resolve();
-    const next = previous.then(async () => {
+    const next = previous.then(action);
+    this.queues.set(environment, next.catch(() => {}));
+    return next;
+  }
+
+  async update(environment, change) {
+    return this.#queue(environment, async () => {
       const state = await this.state(environment);
       const updated = await change(structuredClone(state));
       updated.revision = state.revision + 1;
       await this.#writeState(environment, updated);
       return updated;
     });
-    this.queues.set(environment, next.catch(() => {}));
-    return next;
   }
 
   async event(environment, event) {
-    let committed;
-    await this.update(environment, (state) => {
+    // Serialize the state change AND append in the same environment queue.
+    // Concurrent Sandbox logs must never be stored or streamed out of order.
+    return this.#queue(environment, async () => {
+      const state = await this.state(environment);
       const sequence = state.nextEventSequence++;
-      committed = {id: `${environment}:${sequence}`, sequence, environment,
+      const committed = {id: `${environment}:${sequence}`, sequence, environment,
         timestamp: new Date().toISOString(), sessionId: state.session?.id ?? null,
         stage: event.stage, status: event.status, message: event.message,
         evidence: event.evidence ?? null, detail: event.detail ?? null};
-      return state;
+      await appendFile(join(this.root, environment, 'events.jsonl'),
+        `${JSON.stringify(committed)}\n`, {mode: 0o600});
+      state.revision++;
+      await this.#writeState(environment, state);
+      return committed;
     });
-    await appendFile(join(this.root, environment, 'events.jsonl'), `${JSON.stringify(committed)}\n`, {mode: 0o600});
-    return committed;
   }
 
-  async events(environment, after = 0, limit = 250) {
+  async events(environment, after = 0, limit = 250, {forward = false} = {}) {
     this.#assertEnvironment(environment);
+    if (!Number.isSafeInteger(after) || after < 0 ||
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+      throw new Error('INVALID_EVENT_CURSOR');
     let text = '';
     try { text = await readFile(join(this.root, environment, 'events.jsonl'), 'utf8'); }
     catch { return []; }
-    return text.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))
-      .filter((event) => event.sequence > after).slice(-Math.min(limit, 500));
+    const filtered = text.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))
+      .filter((event) => event.sequence > after);
+    return forward ? filtered.slice(0, limit) : filtered.slice(-limit);
   }
 
   newSession(environment, settings) {
