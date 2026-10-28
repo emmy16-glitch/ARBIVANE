@@ -675,3 +675,59 @@ body { background:var(--bg); color:#eaf1f9; }
   .workspace .automation-layout>.automation-body { padding:15px 14px 8px; }
   .workspace .automation-actions { padding:10px 14px 15px; }
 }
+
+/* Stage190 — understated three-mode simulation presentation. */
+.demo-mode-strip{
+  margin:0;display:flex;align-items:center;gap:12px;padding:9px 26px;
+  min-height:42px;background:linear-gradient(90deg,#132a33,#0d1e2d 75%,#0a1725);
+  border-bottom:1px solid #21434d;color:#b1d0d9;font-size:12px;letter-spacing:.015em
+}
+.demo-mode-strip strong{font-size:11px;letter-spacing:.12em;color:#b8f5e6}
+.demo-mode-dot{width:7px;height:7px;border-radius:100%;background:#56dcb4;
+  box-shadow:0 0 0 4px rgba(86,220,180,.11)}
+.demo-mode-divider{width:1px;height:14px;background:#35545a}
+.demo-mode-spacer{flex:1}
+.demo-mode-caption{color:#7da2ad}
+.demo-overview{margin:0 0 18px;padding:24px 25px 18px;
+  border:1px solid #284252;border-radius:15px;
+  background:radial-gradient(circle at 97% -20%,rgba(29,94,105,.3),transparent 42%),
+    linear-gradient(135deg,#101f30,#0b1827 72%);
+  box-shadow:0 12px 32px rgba(0,0,0,.12)}
+.demo-overview-top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:20px}
+.demo-eyebrow{font-size:10px;color:#7ce1c3;letter-spacing:.14em;font-weight:700}
+.demo-overview h2{font-size:23px;letter-spacing:-.035em;line-height:1.12;margin:7px 0 8px;color:#f4f8ff}
+.demo-overview p{font-size:12px;color:#97abbc;line-height:1.55;margin:0;max-width:580px}
+.demo-overview-activity{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+  color:#b0c4d4;font-size:11px;border-radius:30px;border:1px solid #2d4353;
+  padding:8px 12px;background:rgba(8,22,35,.75);font-weight:600}
+.demo-overview-led{width:7px;height:7px;border-radius:50%;background:#73899a}
+.demo-overview-activity.is-active{color:#a5e8ca;border-color:#366357}
+.demo-overview-activity.is-active .demo-overview-led{background:#49d99b;
+  box-shadow:0 0 0 4px rgba(73,217,155,.09);animation:demo-blink 2s infinite}
+@keyframes demo-blink{50%{opacity:.45}}
+.demo-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.demo-metric{padding:17px 17px 15px;border:1px solid #273a4a;
+  border-radius:11px;background:linear-gradient(145deg,rgba(20,39,56,.9),rgba(13,27,43,.9))}
+.demo-metric-top{display:flex;align-items:center;justify-content:space-between;
+  color:#91a8b9;gap:8px;font-size:11px;margin-bottom:13px}
+.demo-metric-top svg{color:#688fa2}
+.demo-metric strong{font-size:clamp(18px,1.7vw,26px);line-height:1.1;
+  letter-spacing:-.04em;color:#f1f8ff;font-variant-numeric:tabular-nums}
+.demo-progress{margin-top:18px}
+.demo-progress-caption{display:flex;justify-content:space-between;
+  gap:12px;color:#8bacc0;font-size:11px;margin-bottom:7px}
+.demo-progress-track{height:4px;border-radius:6px;background:#233d4c;overflow:hidden}
+.demo-progress-track>div{height:100%;border-radius:6px;
+  background:linear-gradient(90deg,#33b79c,#7ce3bb);transition:width .65s ease}
+.demo-mode-strip+.main{padding-top:16px}
+@media(max-width:970px){.demo-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.demo-mode-strip{padding:9px 15px;gap:9px}
+ .demo-mode-caption{display:none}.demo-overview{padding:19px 17px 16px}
+ .demo-overview-top{align-items:flex-start}.demo-overview h2{font-size:20px}
+ .demo-metric{padding:12px}.demo-metric strong{font-size:20px}}
+@media(max-width:370px){.demo-overview-activity{padding:7px;font-size:10px}
+ .demo-metric-grid{gap:7px}.demo-metric strong{font-size:17px}}
+@media(prefers-reduced-motion:reduce){
+ .demo-overview-activity.is-active .demo-overview-led{animation:none}
+ .demo-progress-track>div{transition:none}
+}

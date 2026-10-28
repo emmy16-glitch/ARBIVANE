@@ -3,7 +3,8 @@ import {readFile, stat} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {extname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {AutomationManager} from './automation.mjs';
+import {AutomationManager,validateSettings} from './automation.mjs';
+import {DemoAutomation} from './demo.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -49,6 +50,7 @@ const publish = (event) => {
     response.write(`id: ${event.sequence}\nevent: operation\ndata: ${JSON.stringify(event)}\n\n`);
 };
 const automation = new AutomationManager({store, repoRoot: root, publish});
+const demoAutomation = new DemoAutomation({store,publish});
 // Recovery verifies original completed Sandbox receipts; no execution is restarted.
 await automation.recoverInterruptedSandbox();
 
@@ -115,7 +117,7 @@ const server = createServer(async (request, response) => {
       return json(response, 503, {error:'AUTH_NOT_CONFIGURED'});
     if (url.pathname.startsWith('/api/') && !authorized(request))
       return json(response, 401, {error: 'AUTH_REQUIRED'});
-    const match = url.pathname.match(/^\/api\/environments\/(sandbox|testnet|mainnet)(?:\/(.*))?$/);
+    const match = url.pathname.match(/^\/api\/environments\/(demo|sandbox|testnet|mainnet)(?:\/(.*))?$/);
     if (match) {
       const environment = match[1]; const action = match[2] ?? '';
       if (request.method === 'GET' && !action)
@@ -149,8 +151,11 @@ const server = createServer(async (request, response) => {
       if (request.method === 'POST' && ['start', 'pause', 'resume', 'stop'].includes(action)) {
         if (!sameOrigin(request)) return json(response, 403, {error: 'ORIGIN_REJECTED'});
         const payload = await readBody(request);
-        const result = action === 'start' ? await automation.start(environment, payload.settings)
-          : await automation[action](environment);
+        const result = environment === 'demo' ?
+          (action === 'start' ? await demoAutomation.start(validateSettings(payload.settings))
+            : await demoAutomation[action]()) :
+          (action === 'start' ? await automation.start(environment, payload.settings)
+            : await automation[action](environment));
         return json(response, 202, {session: result});
       }
     }

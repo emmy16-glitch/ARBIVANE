@@ -1,5 +1,6 @@
 import {createRequire} from 'node:module';
 import {sandboxHostReadiness} from './sandbox-host.mjs';
+import {demoReadiness} from './demo.mjs';
 
 const require = createRequire(import.meta.url);
 const allowed = {
@@ -41,6 +42,7 @@ async function rpcStatus(environment, options) {
 export async function environmentReadiness(environment, options = {}) {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
+  if (environment === 'demo') return demoReadiness();
   if (environment === 'sandbox') {
     let workspacesInstalled=false;
     try { require.resolve('near-workspaces'); workspacesInstalled=true; } catch {}

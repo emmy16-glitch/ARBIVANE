@@ -35,7 +35,7 @@ test('Stage182 mode and view hierarchy never invent balances, PNL or a graph',as
  assert.ok(s.includes('<EnvironmentContext.Provider'));
  assert.ok(s.includes('<EnvironmentPicker/>'));
  assert.ok(s.includes('const hasAside=hasFinancialEvidence(state)'));
- assert.ok(s.includes("environment==='sandbox'&&<ResearchActivity/>"));
+ assert.ok(s.includes("environment==='demo'&&<DemoOverview"));
  assert.ok(s.includes("workspace-idle"));
  assert.ok(s.includes('PerformanceWorkspace accounting={data.state.accounting}'));
  assert.ok(s.includes('reconciledAt?'));
