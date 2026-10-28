@@ -1,9 +1,9 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
 import {NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
 import {
   Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
-  Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
+  Pause, Play, ShieldCheck, SlidersHorizontal, Stop, Wallet,
   WarningCircle, X,
 } from '@phosphor-icons/react';
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
@@ -18,11 +18,24 @@ const envInfo = {
   mainnet: {title:'Mainnet', icon:Globe},
 } as const;
 const nav = [
-  ['/', 'Dashboard', House], ['/live', 'Live Ops', Activity], ['/opportunities', 'Opportunities', Cube],
-  ['/performance', 'Performance', ChartLineUp], ['/wallet', 'Wallet', Wallet],
-  ['/transactions', 'Transactions', ClockCounterClockwise], ['/analytics', 'Analytics', TrendUp],
-  ['/settings', 'Settings', Gear],
+  ['/', 'Dashboard', House], ['/live', 'Live Operations', Activity],
+  ['/opportunities', 'Opportunities', Cube], ['/performance', 'Performance', ChartLineUp],
+  ['/wallet', 'Wallet', Wallet], ['/settings', 'Settings', Gear],
 ] as const;
+const EnvironmentContext=createContext<{environment:Environment;setEnvironment:(value:Environment)=>void}|null>(null);
+function useEnvironment(){
+  const state=useContext(EnvironmentContext);
+  if(!state)throw Error('ENVIRONMENT_CONTEXT_MISSING');
+  return state;
+}
+const ongoing = new Set(['starting','running','pause_requested','stopping']);
+const hasFinancialEvidence=(state:DashboardState|null)=>{
+  if(!state)return false;
+  const a=state.accounting;
+  return state.wallet.balances.length>0 ||
+   [a.available,a.grossProceeds,a.financingFees,a.swapCosts,a.gasFees,a.cumulativeNetPnl,a.realizedProfit,a.realizedLoss]
+    .some(v=>v!==null&&v!==undefined);
+};
 
 function Empty({icon:Icon = Activity, title, text}:{icon?:typeof Activity;title:string;text?:string}) {
   return <div className="empty"><span className="empty-icon"><Icon size={19}/></span><strong>{title}</strong>{text&&<p>{text}</p>}</div>;
@@ -37,14 +50,15 @@ function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
   return <form className="auth-inline" onSubmit={async event=>{event.preventDefault();setBusy(true);setAuthError('');try{await authenticate(token);onRetry()}catch(reason){setAuthError(reason instanceof Error?reason.message:'AUTH_FAILED')}finally{setBusy(false)}}}><ShieldCheck/><label><span>{authError?authError.replaceAll('_',' '):'Operator authentication required'}</span><input type="password" autoComplete="current-password" value={token} onChange={event=>setToken(event.target.value)} placeholder="Dashboard access token"/></label><button disabled={!token||busy}>{busy?'Authenticating…':'Authenticate'}</button></form>;
 }
 function Shell({children}:{children:React.ReactNode}) {
-  const location = useLocation();
-  const current = nav.find(([route]) => route === location.pathname)?.[1] ?? 'Dashboard';
-  return <div className={UI_PREVIEW ? 'shell ui-preview' : 'shell'}>
+  const location=useLocation();
+  const current=nav.find(([route])=>route===location.pathname)?.[1] ??
+    (location.pathname==='/transactions'?'Transactions':location.pathname==='/analytics'?'Analytics':'Dashboard');
+  return <div className={UI_PREVIEW?'shell ui-preview':'shell'}>
     <aside className="sidebar">
-      <div className="brand">
+      <NavLink className="brand" to="/" aria-label="ARBIVANE home">
         <span className="brand-mark"><CirclesThree weight="fill" size={26}/></span>
         <span className="brand-copy"><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span>
-      </div>
+      </NavLink>
       <nav aria-label="Primary navigation">
         {nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}
           className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}
@@ -52,7 +66,10 @@ function Shell({children}:{children:React.ReactNode}) {
     </aside>
     <header className="topbar">
       <span className="topbar-page">{current}</span>
-      <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
+      <div className="topbar-actions">
+        <EnvironmentPicker/>
+        <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
+      </div>
     </header>
     <main className="main" data-route={location.pathname}>{children}</main>
     <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -62,17 +79,14 @@ function Shell({children}:{children:React.ReactNode}) {
   </div>;
 }
 
-function EnvironmentPicker({value,onChange}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
-  return <div className="environment-picker" role="tablist" aria-label="Environment">
+function EnvironmentPicker(){
+  const {environment,onChange}=(()=>{const {environment,setEnvironment}=useEnvironment();return {environment,onChange:setEnvironment}})();
+  return <div className="environment-picker" role="group" aria-label="Network environment">
     {(Object.keys(envInfo) as Environment[]).map(key=>{
-      const info=envInfo[key];const Icon=info.icon;
-      return <button key={key} role="tab" aria-selected={value===key}
-        className={'environment '+(value===key?'selected ':'')+key}
-        onClick={()=>onChange(key)}>
-        <span className="env-icon"><Icon size={22}/></span>
-        <span className="env-name">{info.title}</span>
-        {value===key&&<CheckCircle className="selected-check" weight="fill"/>}
-      </button>;
+      const entry=envInfo[key];
+      return <button type="button" key={key} aria-pressed={environment===key}
+        className={environment===key?'environment selected':'environment'}
+        onClick={()=>onChange(key)}>{entry.title}</button>;
     })}
   </div>;
 }
