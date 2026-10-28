@@ -25,7 +25,7 @@ test('Stage184 detail data subscriptions cancel on mode change and retry safely'
  assert.ok(source.includes('setRetry(current=>current+1)'));
  assert.ok(source.includes('mergeOperationEvents(environment,current.events,[event])'));
  assert.ok(source.includes("previous==='STREAM_RECONNECTING'?previous:''"));
- assert.ok(source.includes('<Automation key={environment}'));
+ assert.ok(source.includes('<Automation environment={environment}'));
  assert.ok(source.includes('<Operations key={environment}'));
 });
 test('Stage184 accessible controls and compact details on desktop and mobile',async()=>{
@@ -47,4 +47,15 @@ test('Stage185 transaction history stays accessible with an empty live event fee
  assert.ok(app.includes('<NavLink to="/live" end>Events</NavLink>'));
  assert.ok(app.includes('<NavLink to="/transactions">Transactions</NavLink>'));
  assert.ok(css.includes('.history-tabs a.active'));
+});
+
+test('Stage186 all pages recover from initial load failures and mode changes',async()=>{
+ const source=await readFile(appPath,'utf8');
+ assert.ok(source.includes('source=subscribe(environment,event=>'));
+ assert.ok(source.includes("poll=setInterval(()=>{if(document.visibilityState==='visible')void reconcile()},30000)"));
+ assert.ok(source.includes("window.addEventListener('online',onOnline)"));
+ assert.ok(source.includes("document.addEventListener('visibilitychange',onVisible)"));
+ assert.ok(source.includes("poll=setInterval(()=>{if(active&&document.visibilityState==='visible')void load()},30000)"));
+ assert.ok(source.includes('<Route path="*" element={<Navigate to="/" replace/>}/>'));
+ assert.ok(source.includes("if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')"));
 });
