@@ -305,6 +305,74 @@ const viewCopy:Record<ViewKind,{title:string;icon:typeof Gauge}>={
   settings:{title:'Settings',icon:SlidersHorizontal},
 };
 
+function LiveEventTable({events}:{events:OperationEvent[]}){
+  const [query,setQuery]=useState('');
+  const [filter,setFilter]=useState('all');
+  const stages=useMemo(()=>['all',...new Set(events.map(e=>e.stage))],[events]);
+  const rows=useMemo(()=>events.filter(e=>(filter==='all'||e.stage===filter)&&
+    (!query.trim()||[e.message,e.stage,e.status,e.id,e.sessionId].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())))
+    .slice().reverse(),[events,filter,query]);
+  return <div className="operations-workspace">
+    <div className="table-toolbar">
+      <label className="table-search"><span className="visually-hidden">Search operations</span>
+        <input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search events, stages, transactions"/>
+      </label>
+      <select aria-label="Filter by operation stage" value={filter} onChange={event=>setFilter(event.target.value)}>
+        {stages.map(stage=><option value={stage} key={stage}>{stage==='all'?'All stages':stage}</option>)}
+      </select>
+      <NavLink to="/transactions" className="table-text-link">Transactions <ArrowUpRight size={15}/></NavLink>
+    </div>
+    {rows.length===0?<div className="data-empty">No matching activity</div>:
+      <div className="operations-table">
+        <div className="operations-table-head"><span>Time</span><span>Stage</span><span>Activity</span><span>Result</span></div>
+        {rows.map(event=><details key={event.id} className="operation-entry">
+          <summary>
+            <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
+            <span className="operation-stage">{event.stage}</span>
+            <span className="operation-message">{event.message}</span>
+            <StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill>
+          </summary>
+          <div className="operation-evidence">
+            <dl><dt>Event ID</dt><dd>{event.id}</dd><dt>Session</dt><dd>{event.sessionId??'—'}</dd>
+            <dt>Timestamp</dt><dd>{event.timestamp}</dd></dl>
+            {event.evidence&&<pre>{JSON.stringify(event.evidence,null,2)}</pre>}
+          </div>
+        </details>)}
+      </div>}
+  </div>;
+}
+
+function OpportunityTable({rows}:{rows:Array<Record<string,unknown>>}){
+  const [query,setQuery]=useState('');
+  const [order,setOrder]=useState<'recent'|'borrower'>('recent');
+  const filtered=useMemo(()=>{
+    const list=rows.filter(r=>!query.trim()||
+      String(r.borrowerAccountId??r.accountId??'').toLowerCase().includes(query.trim().toLowerCase()));
+    return order==='borrower'?list.slice().sort((a,b)=>String(a.borrowerAccountId??a.accountId??'').localeCompare(String(b.borrowerAccountId??b.accountId??''))):list;
+  },[rows,query,order]);
+  return <div className="opportunity-workspace">
+    <div className="table-toolbar">
+      <label className="table-search"><span className="visually-hidden">Search borrowers</span>
+        <input type="search" placeholder="Search borrowers" value={query} onChange={event=>setQuery(event.target.value)}/>
+      </label>
+      <select aria-label="Sort opportunities" value={order} onChange={event=>setOrder(event.target.value)}>
+        <option value="recent">Recorded order</option><option value="borrower">Borrower A–Z</option>
+      </select>
+    </div>
+    <div className="opportunity-list">
+      {filtered.map((row,index)=><details key={String(row.id??index)} className="opportunity-row">
+        <summary>
+          <b>{String(row.borrowerAccountId??row.accountId??'Source observation')}</b>
+          <span>{row.blockHeight==null?'Block —':`Block ${row.blockHeight}`}</span>
+          <StatusPill>{String(row.status??'Under review')}</StatusPill>
+        </summary>
+        <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
+      </details>)}
+    </div>
+    {filtered.length===0&&<div className="data-empty">No matching borrowers</div>}
+  </div>;
+}
+
 function OperationalPage({kind}:{kind:ViewKind}) {
   const copy=viewCopy[kind],Icon=copy.icon; const [params]=useSearchParams();
   const {environment}=useEnvironment();
@@ -337,13 +405,8 @@ function OperationalPage({kind}:{kind:ViewKind}) {
     return <article className="compact-record" key={index}><b>{asset.tokenId??'Unknown token'}</b><span>{asset.atomic??'—'} atomic units</span><small>{asset.transferableOutsideEnvironment===false?'Sandbox-only inventory':'Transferability not verified'}</small></article>;
   })}</div>:<strong>No balances</strong>}</div><div className="wide record-actions"><button disabled title="Deposit adapter not configured"><ArrowDown/>Deposit</button><button disabled title="No authorized custody or verified transferable balance"><ArrowUpRight/>Withdraw</button></div></div>;
   else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?<div className="record-grid">{Object.entries(data.state.accounting).map(([key,value])=><div key={key}><small>{key.replaceAll(/([A-Z])/g,' $1')}</small><strong>{value==null?'Not verified':typeof value==='object'?'Evidence attached':String(value)}</strong></div>)}</div>:<Empty icon={Icon} title="No performance data"/>;
-  else if(kind==='opportunities') content=opportunities.length?<div className="compact-records">{opportunities.map((row,index)=><article className="compact-record" key={String(row.id??index)}>
-    <div className="compact-record-heading"><b>{String(row.borrowerAccountId??row.accountId??'Source observation')}</b><StatusPill>{String(row.status??'Under review')}</StatusPill></div>
-    <span>Source block: {row.blockHeight==null?'Not verified':String(row.blockHeight)}</span>
-    
-    <details><summary>Source evidence</summary><pre>{JSON.stringify(row,null,2)}</pre></details>
-  </article>)}</div>:<Empty icon={Icon} title="No opportunities yet"/>;
-  else if(kind==='live') content=data.events.length?<div className="page-events">{data.events.slice().reverse().map(event=><div key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><b>{event.stage}</b><span>{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill></div>)}</div>:<Empty icon={Icon} title="No activity yet"/>;
+  else if(kind==='opportunities') content=opportunities.length?<OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
+  else if(kind==='live') content=<LiveEventTable events={data.events}/>;
   else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status==='unavailable'?'Offline':readiness?.status.replaceAll('_',' ')??'Offline'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
   return <div className="subpage operational-page"><section className="panel page-panel">{content}</section></div>;
 }
