@@ -65,7 +65,10 @@ async function runSandbox(proposal,index){
   env:{...env,EXECUTION_ENABLED:'false',NEAR_NETWORK:'mainnet',
    NEAR_WORKSPACES_NETWORK:'sandbox',STAGE37_ALLOW_SANDBOX_MUTATION:'true',
    STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING:'true',
-   STAGE37_STAGE35_EVIDENCE_PATH:evidence,NEAR_PRIVATE_KEY:'',
+   STAGE37_STAGE35_EVIDENCE_PATH:evidence,STAGE82_SINGLE_BORROWER:'true',
+   SANDBOX_ARTIFACT_URL:env.SANDBOX_ARTIFACT_URL||
+    'https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.13.4/near-sandbox.tar.gz',
+   NEAR_PRIVATE_KEY:'',
    MAINNET_PRIVATE_KEY:'',NEAR_ACCOUNT_ID:''}
  });
  const lastErrors=[];
