@@ -91,7 +91,7 @@ test('Stage179 does not silently discard a corrupted event journal',async(t)=>{
  const {appendFile}=await import('node:fs/promises');
  await appendFile(join(root,'sandbox','events.jsonl'),JSON.stringify({
   id:'sandbox:3',sequence:3,environment:'sandbox',message:'skipped'
- })+'\\n');
+ })+'\n');
  const second=new DashboardStore(root);
  await assert.rejects(()=>second.init(),/DASHBOARD_CORRUPT_EVENT_JOURNAL/);
 });
