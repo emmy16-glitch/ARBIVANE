@@ -26,7 +26,8 @@ function makeMock({priced=false,staleOracle=false,wrongChain=false,drift=false}=
   let value;
   if(q.method_name==='get_config'){
    value={oracle_account_id:'mock-priceoracle.testnet',ref_exchange_id:'ref-finance-101.testnet',
-    enable_price_oracle:true};
+    enable_price_oracle:true,enable_pyth_oracle:false,
+    owner_id:'ref-finance.sputnikv2.testnet'};
   }else if(q.method_name==='get_accounts_paged'){
    assert.deepEqual(args,{from_index:0,limit:20});value=indexed;
   }else if(q.method_name==='get_account'){
@@ -60,6 +61,12 @@ test('fresh borrower recheck removes stale debt; missing oracle price blocks exe
  assert.equal(result.pending,0);
  assert.equal(result.eligibleVerified,0);
  assert.equal(result.transactionsExecuted,0);
+ assert.equal(result.marketStatus,'UPSTREAM_ORACLE_UNPRICED');
+ assert.equal(result.marketRemediation.requiresUpstreamOracleRepair,true);
+ assert.equal(result.marketRemediation.pythOracleEnabled,false);
+ assert.equal(result.marketRemediation.lendingOwnerId,'ref-finance.sputnikv2.testnet');
+ assert.equal(result.marketRemediation.callerSuppliedPricesPermitted,false);
+ assert.deepEqual(result.marketRemediation.missingTokenIds,['wrap.testnet']);
  assert.equal(result.executionEnabled,false);
  assert.equal(result.accounts[0].reason,'MISSING_ORACLE_PRICE');
  assert.deepEqual(result.accounts[0].missingPrices,['wrap.testnet']);
@@ -73,6 +80,8 @@ test('full quotes are not enough to claim liquidation eligibility without health
  const r=await assessTestnetPage(0,20,{fetchImpl:mock.fetchImpl,nowMs:NOW});
  assert.equal(r.freshDebt,1);
  assert.equal(r.pending,1);
+ assert.equal(r.marketStatus,'HEALTH_FACTOR_UNVERIFIED');
+ assert.equal(r.marketRemediation.requiresUpstreamOracleRepair,false);
  assert.equal(r.blocked,0);
  assert.equal(r.accounts[0].reason,'HEALTH_FACTOR_NOT_VERIFIED');
  assert.equal(r.accounts[0].eligible,false);

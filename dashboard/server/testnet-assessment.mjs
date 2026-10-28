@@ -130,8 +130,26 @@ export async function assessTestnetPage(from,limit,{
  const freshDebt=accounts.filter(a=>a.hasDebt).length;
  const blocked=accounts.filter(a=>a.status==='BLOCKED').length;
  const pending=accounts.filter(a=>a.status==='UNVERIFIED').length;
+ const missingRequiredTokens=tokens.filter(x=>quote.prices.get(x)!==true);
+ const marketStatus=oracleError||!quote.fresh?
+  'ORACLE_UNAVAILABLE':missingRequiredTokens.length?
+  'UPSTREAM_ORACLE_UNPRICED':'HEALTH_FACTOR_UNVERIFIED';
  const out={
   network:'testnet',contract:TESTNET_LENDING,codeHash:health.codeHash,
+  marketStatus,blockchainExecutionReady:false,
+  marketRemediation:{
+   source:'DEPLOYED_LENDING_CONFIGURED_ORACLE',
+   lendingOwnerId:health.lendingOwnerId??null,
+   oracleContract:ORACLE,pythOracleEnabled:health.pythOracleEnabled===true,
+   missingTokenIds:missingRequiredTokens,
+   missingTokenCount:missingRequiredTokens.length,
+   requiresUpstreamOracleRepair:marketStatus==='UPSTREAM_ORACLE_UNPRICED',
+   callerSuppliedPricesPermitted:false,
+   signerConnected:false,
+   nextSafeAction:missingRequiredTokens.length?
+    'LENDING_ORACLE_OPERATOR_MUST_RESTORE_PRICES_OR_USE_ISOLATED_TESTNET_DEPLOYMENT':
+    'VERIFY_HEALTH_FACTOR_EXECUTION_SIGNER_AND_FINAL_RECEIPTS'
+  },
   oracleId:ORACLE,blockHeight:page.blockHeight,from,limit,
   returned:accounts.length,hasMore:page.hasMore,
   indexedDebt:indexed.length,freshDebt,blocked,pending,

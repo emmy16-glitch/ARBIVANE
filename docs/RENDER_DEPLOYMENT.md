@@ -76,3 +76,21 @@ Stage195 adds a fixed-origin, read-only GET /api/public/testnet/assessment?from=
 The Testnet Start Automation control now performs repeated borrower/price checks every 25 seconds instead of ending after one page. Each monitoring cycle replaces stale borrower state with fresh account reads, updates exact blocker token lists, and preserves pause/resume/stop and event history. This is continuous monitoring only while a user's browser tab is active; the public Render Free tier does not promise an always-on execution daemon.
 
 Actual Testnet liquidations remain disabled. The external mock oracle is missing prices required to verify real liquidation health, and the 10 TNEAR address is not a connected signing account. A genuine liquidation requires a signer controlled by the user, valid lending/oracle and swap routes, a provably eligible borrower, and independently verified final chain receipts. Do not import private keys into the public dashboard. Mainnet execution remains disabled.
+
+## Stage196 — Shared Testnet oracle is externally unpriced (not an ARBIVANE data bug)
+
+On 28 October 2026, independently queried the deployed lending configuration at `contract.burrow.testnet` and its configured legacy oracle `mock-priceoracle.testnet`.
+
+- Lending contract config: `oracle_account_id=mock-priceoracle.testnet`, `enable_price_oracle=true`, `enable_pyth_oracle=false`, and lending owner `ref-finance.sputnikv2.testnet`. The owner belongs to the shared lending protocol and is not an ARBIVANE-owned account.
+- The oracle's own `get_assets` and `get_price_data` responses explicitly return `price:null` for `wrap.testnet`, `usdt.fakes.testnet`, `usdc.fakes.testnet` and `dai.fakes.testnet`, among other assets. This is not a frontend token-symbol problem or a stale RPC cache.
+- All currently observed borrower debt positions on this Testnet lending contract require at least one missing configured price. No liquidatable position, repay size, secured collateral, signing authority, receipt or profit has been established.
+- Pulling prices from an off-chain third-party source would NOT change what the deployed lending protocol considers liquidatable. Never substitute arbitrary off-chain prices for protocol-approved liquidation valuations, or submit owner-only oracle updates to shared contracts.
+
+The preflight endpoint now returns an explicit `marketStatus` and `marketRemediation` object. `UPSTREAM_ORACLE_UNPRICED` includes the real configured oracle, lending contract owner, Pyth-enabled flag, missing token coverage and refusal of caller-supplied prices. Market blocked is distinct from missing RPC connectivity or unavailable wallet funds. The browser displays a compact source-backed market status instead of a raw repetitive comma-separated warning, while retaining the detailed token evidence behind an inline disclosure. When the market stays blocked, browser monitoring backs off to 2-minute intervals, deduplicates unchanged feed alerts, and never credits phantom liquidations.
+
+**Actual liquidation repair paths:**
+1. Obtain authorized repair of the shared Rhea Testnet oracle prices and governance-approved oracle configuration from its maintainers. ARBIVANE cannot do this through a read-only RPC or a 10-TNEAR wallet.
+2. For self-contained transaction/receipt verification, deploy a separately owned Burrow-compatible lending + price-oracle test fixture to **NEAR Testnet**, with explicitly provisioned controlled positions and token contracts. Do not manipulate prices on the shared market; no controlled Testnet fixture has yet been deployed.
+3. Independently validate the target's on-chain liquidation health, funding/repayment path and final receipts. Add secure wallet authorization only after that evidence exists.
+
+The public dashboard remains without transaction signing, private keys or arbitrary RPC methods, and Mainnet spending remains disabled.

@@ -59,6 +59,8 @@ export async function inspectTestnet({fetchImpl=fetch}={}){
  return {chainId:'testnet',status:'connected',blockHeight:status.sync_info.latest_block_height,
   contract:TESTNET_LENDING,codeHash:contract.code_hash,oracleId:config.value.oracle_account_id,
   oracleEnabled:config.value.enable_price_oracle===true,
+  pythOracleEnabled:config.value.enable_pyth_oracle===true,
+  lendingOwnerId:typeof config.value.owner_id==='string'?config.value.owner_id:null,
   observations:'real_testnet',executionEnabled:false,checkedAt:new Date().toISOString()};
 }
 export async function getTestnetPositions(from,limit,{fetchImpl=fetch}={}){

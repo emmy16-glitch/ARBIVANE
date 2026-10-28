@@ -884,3 +884,15 @@ body { background:var(--bg); color:#eaf1f9; }
 .testnet-position-detail .event-raw-disclosure{grid-column:1/-1;margin-top:0}
 .testnet-position-detail pre{white-space:pre-wrap;word-break:break-word;font-size:11px;
   padding:14px;border-radius:8px;background:#071523}
+
+.testnet-market-alert{min-width:0;flex:1}
+.testnet-market-alert>strong{color:#f1d3a7;font-size:12px}
+.testnet-market-alert p{font-size:11px;color:#cfb69a;margin:6px 0 9px;line-height:1.55}
+.testnet-market-alert details>summary{display:inline-flex;align-items:center;gap:6px;
+ cursor:pointer;color:#f2ce9a;font-size:11px;font-weight:600;list-style:none}
+.testnet-market-alert details[open]>summary svg{transform:rotate(180deg)}
+.testnet-market-proof{display:grid;grid-template-columns:minmax(110px,155px) minmax(0,1fr);
+ gap:8px 13px;border-top:1px solid #765737;margin-top:11px;padding-top:11px;font-size:11px}
+.testnet-market-proof>span{color:#c2a88d}
+.testnet-market-proof code{color:#f1d8b8;overflow-wrap:anywhere;font-size:10px}
+@media(max-width:530px){.testnet-market-proof{grid-template-columns:1fr;gap:4px}}

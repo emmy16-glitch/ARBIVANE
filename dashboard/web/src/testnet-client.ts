@@ -4,6 +4,7 @@ const STORAGE_KEY='arbivane-testnet-live-v1';
 const PAGE_SIZE=20;
 const DELAY_MS=2600;
 const MONITOR_INTERVAL_MS=25000;
+const BLOCKED_MARKET_INTERVAL_MS=120000;
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 interface AccountObservation{
  accountId:string;sourceIndex:number;hasDebt:boolean;indexHasDebt:boolean;
@@ -24,11 +25,15 @@ interface AccountPage{
  indexedDebt:number;freshDebt:number;blocked:number;pending:number;staleIndexedDebt:number;
  eligibleVerified:0;transactionsExecuted:0;
  oracle:{fresh:boolean;requiredTokens:number;pricedTokens:number;error:string|null;ageMs:number|null};
+ marketStatus:'ORACLE_UNAVAILABLE'|'UPSTREAM_ORACLE_UNPRICED'|'HEALTH_FACTOR_UNVERIFIED';
+ marketRemediation:{missingTokenCount:number;missingTokenIds:string[];
+  lendingOwnerId:string|null;pythOracleEnabled:boolean;requiresUpstreamOracleRepair:boolean};
 }
 type TestnetSession=NonNullable<DashboardState['session']>&{
  cursor?:number;scanned?:number;debtPositions?:number;observedBlocks?:number;
  blocked?:number;pending?:number;staleIndexedDebt?:number;cycles?:number;
  missingPrices?:string[];lastCheckedAt?:string;
+ marketStatus?:string;oracleOwner?:string|null;pythOracleEnabled?:boolean;
  sourceContract?:string;codeHash?:string;
 };
 type LiveState=Omit<DashboardState,'session'>&{session:TestnetSession|null;nextEventSequence:number};
@@ -76,8 +81,10 @@ function readStorage(storage:Pick<Storage,'getItem'>):Saved{
  }catch{}
  return blank();
 }
-async function readJson<T>(path:string,timeoutMs=16000):Promise<T>{
- const response=await fetch(path,{credentials:'omit',signal:AbortSignal.timeout(timeoutMs),
+async function readJson<T>(path:string,timeoutMs=16000,stopSignal?:AbortSignal):Promise<T>{
+ const signal=stopSignal?AbortSignal.any([AbortSignal.timeout(timeoutMs),stopSignal]):
+  AbortSignal.timeout(timeoutMs);
+ const response=await fetch(path,{credentials:'omit',signal,
   headers:{'accept':'application/json'}});
  const result=await response.json() as {error?:string};
  if(!response.ok)throw Error(typeof result.error==='string'?result.error:'TESTNET_READ_FAILED');
@@ -90,12 +97,34 @@ export class LiveTestnet{
  private listeners=new Set<(event:OperationEvent)=>void>();
  private connections=new Set<(connection:'connected'|'reconnecting')=>void>();
  private job:number|null=null;
+ private abortRequest:AbortController|null=null;
+ private wakeSleep:(()=>void)|null=null;
+ private async waitOrCancel(ms:number){
+  await new Promise<void>(resolve=>{
+   let complete=false;
+   const completeWait=()=>{
+    if(complete)return;
+    complete=true;clearTimeout(timer);
+    if(this.wakeSleep===completeWait)this.wakeSleep=null;
+    resolve();
+   };
+   const timer=setTimeout(completeWait,ms);
+   this.wakeSleep=completeWait;
+  });
+ }
+ private cancelPending(){
+  this.abortRequest?.abort();
+  this.wakeSleep?.();
+ }
  private readonly monitorIntervalMs:number;
+ private readonly blockedMarketIntervalMs:number;
  private readonly storage:Pick<Storage,'setItem'|'getItem'>|null;
  constructor(storage:Pick<Storage,'setItem'|'getItem'>|null=null,
-  {monitorIntervalMs=MONITOR_INTERVAL_MS}:{monitorIntervalMs?:number}={}){
+  {monitorIntervalMs=MONITOR_INTERVAL_MS,blockedMarketIntervalMs=BLOCKED_MARKET_INTERVAL_MS}:
+  {monitorIntervalMs?:number;blockedMarketIntervalMs?:number}={}){
   this.storage=storage;this.data=storage?readStorage(storage):blank();
   this.monitorIntervalMs=monitorIntervalMs;
+  this.blockedMarketIntervalMs=blockedMarketIntervalMs;
  }
  private persist(){
   try{this.storage?.setItem(STORAGE_KEY,JSON.stringify(this.data))}catch{}
@@ -152,6 +181,11 @@ export class LiveTestnet{
   if(action==='start'){
    if(this.data.state.session&&['starting','running','paused'].includes(this.data.state.session.status))
     throw Error('TESTNET_SCAN_ALREADY_ACTIVE');
+   if(this.job!==null){
+    this.cancelPending();
+    for(let i=0;i<60&&this.job!==null;i++)await sleep(10);
+    if(this.job!==null)throw Error('PREVIOUS_TESTNET_SCAN_STOPPING');
+   }
    const health=await this.healthCheck(true);
    if(!readiness(health).capabilities.read)throw Error('TESTNET_MARKET_UNAVAILABLE');
    const now=new Date().toISOString();
@@ -173,7 +207,7 @@ export class LiveTestnet{
   if(!session)throw Error('TESTNET_SCAN_NOT_STARTED');
   if(action==='pause'){
    if(session.status!=='running')throw Error('TESTNET_SCAN_NOT_RUNNING');
-   session.status='paused';
+   session.status='paused';this.cancelPending();
    this.notify('control','info','Testnet scan paused · cursor preserved.',{cursor:session.cursor??0});
   }else if(action==='resume'){
    if(session.status!=='paused')throw Error('TESTNET_SCAN_NOT_PAUSED');
@@ -184,6 +218,7 @@ export class LiveTestnet{
   }else if(action==='stop'){
    if(!['running','paused'].includes(session.status))throw Error('TESTNET_SCAN_NOT_ACTIVE');
    session.status='stopped';session.endedAt=new Date().toISOString();
+   this.cancelPending();
    this.notify('control','info','Testnet scan stopped · observed positions preserved.',{
     scanned:session.scanned??0});
   }else throw Error('INVALID_TESTNET_COMMAND');
@@ -201,8 +236,15 @@ export class LiveTestnet{
     if(from>=1500000){session.status='failed';
       session.failure={code:'TESTNET_SCAN_CURSOR_LIMIT'};break}
     try{
-     const page=await readJson<AccountPage>(
-      '/api/public/testnet/assessment?from='+from+'&limit='+PAGE_SIZE,55000);
+     const request=new AbortController();
+     this.abortRequest=request;
+     let page:AccountPage;
+     try{
+      page=await readJson<AccountPage>(
+       '/api/public/testnet/assessment?from='+from+'&limit='+PAGE_SIZE,55000,request.signal);
+     }finally{
+      if(this.abortRequest===request)this.abortRequest=null;
+     }
      if(page.network!=='testnet'||page.contract!==session.sourceContract||
       page.codeHash!==session.codeHash||page.from!==from||
       !Number.isSafeInteger(page.blockHeight)||page.blockHeight<0||
@@ -213,7 +255,10 @@ export class LiveTestnet{
       !Number.isSafeInteger(page.pending)||
       page.freshDebt<0||page.freshDebt>page.accounts.length||
       page.blocked<0||page.blocked>page.accounts.length||
-      !page.oracle||typeof page.oracle.fresh!=='boolean')
+      !page.oracle||typeof page.oracle.fresh!=='boolean'||
+      !['ORACLE_UNAVAILABLE','UPSTREAM_ORACLE_UNPRICED','HEALTH_FACTOR_UNVERIFIED']
+       .includes(page.marketStatus)||!page.marketRemediation||
+      !Array.isArray(page.marketRemediation.missingTokenIds))
       throw Error('TESTNET_ASSESSMENT_PROOF_INVALID');
      if(this.data.state.session?.id!==id||this.data.state.session.status!=='running')break;
      failures=0;
@@ -232,6 +277,10 @@ export class LiveTestnet{
      session.staleIndexedDebt=(session.staleIndexedDebt??0)+page.staleIndexedDebt;
      session.lastCheckedAt=new Date().toISOString();
      session.observedBlocks=page.blockHeight;
+     const previousMarketStatus=session.marketStatus??null;
+     session.marketStatus=page.marketStatus;
+     session.oracleOwner=page.marketRemediation.lendingOwnerId;
+     session.pythOracleEnabled=page.marketRemediation.pythOracleEnabled;
      const missing=new Set(session.missingPrices??[]);
      for(const row of page.accounts)for(const token of row.missingPrices??[])missing.add(token);
      session.missingPrices=[...missing].slice(0,60);
@@ -255,18 +304,23 @@ export class LiveTestnet{
      if(!page.hasMore||page.returned===0){
       session.cycles=(session.cycles??0)+1;
       session.cursor=0;
-      this.notify('monitoring',session.blocked?'warning':'info',
-       session.blocked?
-        session.blocked+' accounts blocked by price/eligibility checks · monitoring continues.':
-        'No executable positions verified · monitoring continues.',{
-       cycle:session.cycles,accounts:session.scanned,currentDebt:session.debtPositions,
-       blocked:session.blocked,pending:session.pending,
-       missingOracleTokens:session.missingPrices,transactionsExecuted:0,
-       executionEnabled:false});
-      await sleep(this.monitorIntervalMs);
+      const issue=session.marketStatus==='UPSTREAM_ORACLE_UNPRICED';
+      if(previousMarketStatus!==session.marketStatus||
+         session.cycles===1||session.cycles%5===0){
+       this.notify('monitoring',issue?'warning':'info',
+        issue?'Lending oracle has no prices for required tokens; trades remain blocked.':
+        'No liquidations verified on this Testnet market.',{
+        cycle:session.cycles,accounts:session.scanned,currentDebt:session.debtPositions,
+        marketStatus:session.marketStatus,
+        blocked:session.blocked,pending:session.pending,
+        missingTokenCount:session.missingPrices?.length??0,
+        transactionsExecuted:0,executionEnabled:false});
+      }
+      await this.waitOrCancel(issue?Math.max(this.monitorIntervalMs,this.blockedMarketIntervalMs):
+        this.monitorIntervalMs);
       continue;
      }
-     await sleep(DELAY_MS);
+     await this.waitOrCancel(DELAY_MS);
     }catch(error){
      if(this.data.state.session?.status!=='running')break;
      failures++;
@@ -279,7 +333,7 @@ export class LiveTestnet{
      }
      this.notify('network','warning','Testnet RPC unavailable · retrying this batch.',{
       cursor:from,attempt:failures});
-     await sleep(1800*failures);
+     await this.waitOrCancel(1800*failures);
     }
    }
   }finally{this.job=null;this.persist();
