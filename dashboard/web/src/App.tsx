@@ -9,6 +9,7 @@ import {
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
 import type {StreamConnection} from './api';
 import {mergeOperationEvents} from './events';
+import {useResearchRuns} from './research';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -152,6 +153,21 @@ function Accounting({state}:{state:DashboardState|null}) {
   </section>;
 }
 
+function ResearchActivity() {
+  const runs=useResearchRuns(UI_PREVIEW);
+  if(!runs.length)return null;
+  return <section className="panel research-runs">
+    <div className="panel-title"><span>Sandbox runs</span><a className="panel-link" href="https://github.com/emmy16-glitch/ARBIVANE/actions" target="_blank" rel="noreferrer">All runs <ArrowUpRight size={14}/></a></div>
+    <div className="research-rows">{runs.map(run=>{
+      const status=run.status==='completed'?(run.conclusion==='success'?'Checks passed':run.conclusion==='failure'?'Checks failed':'Completed'):run.status==='in_progress'?'Running':'Queued';
+      const tone=run.status!=='completed'?'neutral':run.conclusion==='success'?'success':run.conclusion==='failure'?'danger':'neutral';
+      return <a href={run.html_url} key={run.id} target="_blank" rel="noreferrer" className="research-row">
+        <span className="research-run-title">{run.name}</span><StatusPill tone={tone}>{status}</StatusPill><ArrowUpRight size={15}/>
+      </a>;
+    })}</div>
+  </section>;
+}
+
 function Recent({state}:{state:DashboardState|null}) {
   const tx=state?.transactions??[];
   if(!tx.length)return null;
@@ -205,7 +221,7 @@ function Dashboard() {
     return()=>{active=false;if(refreshTimer)clearTimeout(refreshTimer);source?.close()};
   },[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/><ResearchActivity/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
 }
 
 type ViewKind='live'|'opportunities'|'performance'|'wallet'|'transactions'|'analytics'|'settings';
