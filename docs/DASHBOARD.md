@@ -20,7 +20,7 @@ Unsold token inventory is never converted into USD or P&L. Gross proceeds, finan
 
 **Stage173 streaming UX:** [Incremental event updates](STAGE173_DASHBOARD_EVENT_STREAM.md) deliver actual events immediately, merge authenticated replay without duplicate rows, throttle full backend refresh, discard obsolete responses after network-mode switches, and distinguish reconnection from confirmed live streaming. Recent client history is intentionally capped; old events remain in the backend store.\n\n## Hosted deployment
 
-The repository includes a [Render Blueprint and deployment runbook](RENDER_DEPLOYMENT.md). A paid service, persistent disk, and private access token require workspace confirmation before applying the Blueprint. Configuration in Git is not proof of hosting; verify the actual Render deploy and secure /api/health separately.
+The repository includes a [Render Blueprint and deployment runbook](RENDER_DEPLOYMENT.md). The no-cost Render preview is live, but has ephemeral storage that cannot be a durable ledger. Rotate the private operator token in Render Environment settings before signing in. Mainnet and unsupported custody are still locked.
 
 **Stage175 detailed routes:** The Live Operations page now subscribes to genuine SSE events rather than displaying a frozen initial snapshot. Opportunities show compact source-status cards with expandable original evidence; Wallet and Settings show actual asset identifiers, atomic balances and readiness capabilities without dumping raw JSON across the screen. Unsupported execution and transfers remain disabled.
 
