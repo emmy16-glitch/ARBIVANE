@@ -1,9 +1,9 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {NavLink, Route, Routes, useLocation, useNavigate, useSearchParams} from 'react-router-dom';
+import {NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
 import {
-  Pulse as Activity, ArrowDown, ArrowUpRight, Bell, ChartLineUp, CheckCircle, CirclesThree,
+  Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
-  MagnifyingGlass, Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
+  Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
   WarningCircle, X,
 } from '@phosphor-icons/react';
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
@@ -12,9 +12,9 @@ import {mergeOperationEvents} from './events';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
-  sandbox: {title:'Sandbox', description:'Isolated NEAR Workspaces', detail:'Local test assets only', icon:Flask},
-  testnet: {title:'Testnet', description:'NEAR test network', detail:'Wallet not configured', icon:CirclesThree},
-  mainnet: {title:'Mainnet', description:'Live read-only infrastructure', detail:'Spending disabled', icon:Globe},
+  sandbox: {title:'Sandbox', icon:Flask},
+  testnet: {title:'Testnet', icon:CirclesThree},
+  mainnet: {title:'Mainnet', icon:Globe},
 } as const;
 const nav = [
   ['/', 'Dashboard', House], ['/live', 'Live Ops', Activity], ['/opportunities', 'Opportunities', Cube],
@@ -36,60 +36,135 @@ function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
   return <form className="auth-inline" onSubmit={async event=>{event.preventDefault();setBusy(true);setAuthError('');try{await authenticate(token);onRetry()}catch(reason){setAuthError(reason instanceof Error?reason.message:'AUTH_FAILED')}finally{setBusy(false)}}}><ShieldCheck/><label><span>{authError?authError.replaceAll('_',' '):'Operator authentication required'}</span><input type="password" autoComplete="current-password" value={token} onChange={event=>setToken(event.target.value)} placeholder="Dashboard access token"/></label><button disabled={!token||busy}>{busy?'Authenticating…':'Authenticate'}</button></form>;
 }
 function Shell({children}:{children:React.ReactNode}) {
-  const location = useLocation(); const navigate=useNavigate(); const [search,setSearch]=useState('');
-  return <div className={`shell ${UI_PREVIEW?'ui-preview':''}`}>
+  const location = useLocation();
+  const current = nav.find(([route]) => route === location.pathname)?.[1] ?? 'Dashboard';
+  return <div className={UI_PREVIEW ? 'shell ui-preview' : 'shell'}>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><CirclesThree weight="fill" size={26}/></span><span><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span></div>
-      <nav>{nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' } className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
-      <div className="engine"><div className="engine-head"><span>Engine status</span><StatusPill>Per session</StatusPill></div><small>Open Live Ops to inspect actual execution stages.</small></div>
-      <div className="version"><span className="brand-mark mini"><CirclesThree weight="fill" size={18}/></span><span><b>ARBIVANE v0.1</b><small>Source-verified Rhea engine</small></span></div>
+      <div className="brand">
+        <span className="brand-mark"><CirclesThree weight="fill" size={26}/></span>
+        <span className="brand-copy"><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span>
+      </div>
+      <nav aria-label="Primary navigation">
+        {nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}
+          className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}
+      </nav>
     </aside>
     <header className="topbar">
-      <form className="search" onSubmit={event=>{event.preventDefault();if(search.trim())navigate(`/transactions?query=${encodeURIComponent(search.trim())}`)}}><MagnifyingGlass/><input aria-label="Search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></form>
-      <div className="top-status"><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications not configured" title="Notifications unavailable" disabled><Bell/></button><div className="avatar">A</div><div className="account"><b>{UI_PREVIEW?'Design preview':'Operator'}</b><span>{UI_PREVIEW?'View only':'Private terminal'}</span></div></div>
+      <span className="topbar-page">{current}</span>
+      <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
     </header>
-    <main className="main" data-route={location.pathname}>
-        {UI_PREVIEW&&<div className="preview-strip" role="status"><strong>INTERFACE PREVIEW</strong><span>Navigation and layouts only. No live trading, wallet connection or simulated earnings.</span><a href="https://github.com/emmy16-glitch/ARBIVANE" target="_blank" rel="noreferrer">Repository <ArrowUpRight size={13}/></a></div>}
-        {children}
-      </main>
-    <nav className="mobile-nav">{nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' }><Icon/><span>{label}</span></NavLink>)}</nav>
+    <main className="main" data-route={location.pathname}>{children}</main>
+    <nav className="mobile-nav" aria-label="Mobile navigation">
+      {nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}>
+        <Icon/><span>{label}</span></NavLink>)}
+    </nav>
   </div>;
 }
 
-function EnvironmentPicker({value,onChange,readiness}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
-  return <div className="environment-picker">{(Object.keys(envInfo) as Environment[]).map((key)=>{const info=envInfo[key];const Icon=info.icon;const live=readiness[key];return <button key={key} className={`environment ${value===key?'selected':''} ${key}`} onClick={()=>onChange(key)}><span className="env-icon"><Icon size={25}/></span><span><b>{info.title}</b><small>{info.description}</small><em className={live?.status==='unavailable'?'unavailable':''}>{live?(live.status==='connected'?`RPC connected · block ${live.blockHeight}`:live.status.replaceAll('_',' ')):info.detail}</em></span>{value===key&&<CheckCircle className="selected-check" weight="fill"/>}</button>})}</div>;
+function EnvironmentPicker({value,onChange}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
+  return <div className="environment-picker" role="tablist" aria-label="Environment">
+    {(Object.keys(envInfo) as Environment[]).map(key=>{
+      const info=envInfo[key];const Icon=info.icon;
+      return <button key={key} role="tab" aria-selected={value===key}
+        className={'environment '+(value===key?'selected ':'')+key}
+        onClick={()=>onChange(key)}>
+        <span className="env-icon"><Icon size={22}/></span>
+        <span className="env-name">{info.title}</span>
+        {value===key&&<CheckCircle className="selected-check" weight="fill"/>}
+      </button>;
+    })}
+  </div>;
 }
 
 function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
   const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'');
   const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'0.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.environment]);
-  const status=state?.session?.status??'idle'; const running=['starting','running','pause_requested','stopping'].includes(status);
-  return <section className="panel automation"><div className="panel-title"><span><Gear/>Automation Control</span><StatusPill tone={environment==='mainnet'?'danger':'neutral'}>{environment==='mainnet'?'Execution locked':status}</StatusPill></div>
-    <div className="automation-body"><label className="money-label"><span>Maximum financing per liquidation <small>Verified source repayment cannot exceed this cap</small></span><div className="money-input"><span>$ USD</span><input value={amount} inputMode="decimal" placeholder="Enter USD limit" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation"/></div></label>
-      <div className="options"><b>Risk controls</b><div className="minimum"><span>Minimum source gross to consider</span><input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)} aria-label="Minimum source gross screening target"/><em>USD</em></div><p className="screening-note">Estimated gross is not net profit. Financing, fees and settlement must be verified separately.</p></div></div>
-    <div className="controls"><button className="primary" disabled={running||busy!==null||readiness?.capabilities?.automate!==true} onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}><Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}</button><button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button><button className="stop" disabled={!running||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button></div>
-    <div className="readiness"><i className={environment==='mainnet'||readiness?.status==='unavailable'?'warning':''}/>{busy?`${busy}…`:readiness?.status==='connected'?`${readiness.chainId} RPC verified at block ${readiness.blockHeight}; execution adapter unavailable`:environment==='sandbox'&&readiness?.status==='ready'?'Sandbox evidence, RPC, and Workspaces runtime configured':environment==='sandbox'?'Sandbox runner not configured':environment==='testnet'?'Testnet wallet and execution adapter not configured':'Mainnet signing and spending are disabled server-side'}</div>
+  const status=state?.session?.status??'idle';
+  const running=['starting','running','pause_requested','stopping'].includes(status);
+  const hasSession=running||status==='paused';
+  const canAutomate=readiness?.capabilities?.automate===true;
+  const validAmount=/^\d+(?:\.\d{1,2})?$/.test(amount.trim())&&Number(amount)>0;
+  return <section className="panel automation">
+    <div className="panel-title"><span><Gear/>Automation</span>{hasSession&&<StatusPill tone={running?'success':'neutral'}>{status.replaceAll('_',' ')}</StatusPill>}</div>
+    <div className="automation-body">
+      <label className="money-label">
+        <span>Maximum financing per liquidation</span>
+        <div className="money-input">
+          <span>USD</span>
+          <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
+        </div>
+      </label>
+      <details className="advanced-controls">
+        <summary><SlidersHorizontal size={16}/> Advanced settings</summary>
+        <label className="advanced-field"><span>Minimum reference gross (USD)</span>
+          <input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)}
+            aria-label="Minimum reference gross screening amount" title="Source screening threshold, not realized profit"/>
+        </label>
+      </details>
+    </div>
+    <div className="controls">
+      <button className="primary" disabled={running||busy!==null||!canAutomate||!validAmount}
+        onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
+        <Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}
+      </button>
+      {hasSession&&<>
+        <button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button>
+        <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
+      </>}
+    </div>
+    {!canAutomate&&<div className="automation-availability"><span>Automation unavailable</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
   </section>;
 }
 
 function Operations({events,onOpen,active,connection}:{events:OperationEvent[];onOpen:(e:OperationEvent)=>void;active:boolean;connection:StreamConnection|'connecting'}) {
-  const [filter,setFilter]=useState('all'); const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
+  const [filter,setFilter]=useState('all');
+  const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
   const stages=['all',...new Set(events.map(e=>e.stage))];
-  return <section className="panel operations"><div className="panel-title"><span><Activity/>Live Operations Stream</span><StatusPill tone={connection==='connected'&&active?'success':'neutral'}>{active?(connection==='connected'?'Streaming':connection==='reconnecting'?'Reconnecting':'Connecting'):(events.length?'History':'Idle')}</StatusPill></div>
+  return <section className="panel operations">
+    <div className="panel-title">
+      <span><Activity/>Live Operations</span>
+      {active&&<StatusPill tone={connection==='connected'?'success':'neutral'}>{connection==='connected'?'Live':connection==='reconnecting'?'Reconnecting':'Connecting'}</StatusPill>}
+      {!active&&events.length>0&&<NavLink className="panel-link" to="/live">History <ArrowUpRight size={14}/></NavLink>}
+    </div>
     {events.length>0&&<div className="filters">{stages.map(stage=><button className={filter===stage?'active':''} onClick={()=>setFilter(stage)} key={stage}>{stage}<small>{stage==='all'?events.length:events.filter(e=>e.stage===stage).length}</small></button>)}</div>}
-    {filtered.length===0?<Empty title="No active session" text="Start automation to monitor genuine backend operations."/>:<div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={`event-dot ${event.status}`}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
+    {filtered.length===0?<div className="stream-empty">{active?'Waiting for events':'No activity yet'}</div>:
+      <div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={'event-dot '+event.status}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
   </section>;
 }
 
 function Accounting({state}:{state:DashboardState|null}) {
-  const a=state?.accounting; const asset=state?.wallet.balances?.[0] as {atomic?:string;tokenId?:string}|undefined;
-  const fields=[['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],['Swap costs','swapCosts'],['Gas fees','gasFees'],['Realized P&L','cumulativeNetPnl']] as const;
-  return <><section className="panel balance"><div className="panel-title"><span>ARBIVANE Balance</span><span className="network-label">{state?.environment??'—'}</span></div><div className="balance-main"><span className="balance-icon"><Wallet/></span><div><small>{asset?'Verified unsold inventory':'Verified available'}</small><strong>{asset?.atomic??(a?.available==null?'—':`$${a.available}`)}</strong><p>{asset?`atomic ${asset.tokenId}`:state?.wallet.status==='not_configured'?'Wallet not configured':'Reconciled balance'}</p></div><div className="balance-actions"><button disabled title="Deposit is unavailable until an environment-specific custody adapter is configured"><ArrowDown/>Deposit</button><button className="primary" disabled title="Withdrawal is unavailable without authorized custody and verified transferable funds"><ArrowUpRight/>Withdraw</button></div></div><div className="metrics">{fields.map(([label,key])=><div key={key}><small>{label}</small><b>{a?.[key]==null?'—':`$${a[key]}`}</b></div>)}</div></section>
-    <section className="panel chart"><div className="panel-title"><span>Cumulative P&amp;L</span><span className="network-label">Verified settlements only</span></div><Empty icon={ChartLineUp} title="No reconciled P&L yet" text="The chart appears after settled proceeds and every cost are independently verified."/></section></>;
+  const a=state?.accounting;
+  const balances=state?.wallet.balances??[];
+  const asset=balances[0] as {atomic?:string;tokenId?:string}|undefined;
+  const available=a?.available;
+  const hasAccounting=Boolean(a&&[a.grossProceeds,a.financingFees,a.swapCosts,a.gasFees,a.cumulativeNetPnl].some(v=>v!==null&&v!==undefined));
+  const fields=[['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],['Swap costs','swapCosts'],['Gas fees','gasFees'],['Net P&L','cumulativeNetPnl']] as const;
+  return <section className="panel balance">
+    <div className="panel-title"><span>ARBIVANE Balance</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
+    {asset||available!==null&&available!==undefined?
+      <div className="balance-main"><span className="balance-icon"><Wallet size={23}/></span>
+        <div><small>Available</small><strong>{asset?.atomic??('$'+String(available))}</strong>
+        {asset?.tokenId&&<p>{asset.tokenId} · atomic units</p>}</div>
+      </div>:
+      <div className="balance-empty"><Wallet size={20}/><span>No balance available</span></div>}
+    {hasAccounting&&<div className="metrics">{fields.filter(([,key])=>a?.[key]!=null).map(([label,key])=><div key={key}><small>{label}</small><b>{'$'+String(a?.[key])}</b></div>)}</div>}
+  </section>;
 }
 
-function Recent({state}:{state:DashboardState|null}) {const tx=state?.transactions??[];return <section className="panel recent"><div className="panel-title"><span>Recent Operations</span><NavLink to="/transactions">View all <ArrowUpRight/></NavLink></div>{tx.length?<div className="transaction-list">{tx.slice(0,5).map((row)=><div className="transaction-row" key={String(row.id)}><span className="tx-icon"><CheckCircle weight="fill"/></span><span><b>{String(row.type)}</b><small>{String(row.borrowerAccountId)}</small></span><span><b>{String(row.assetIncreaseAtomic)} atomic</b><small>{String(row.seizeTokenId)}</small></span><span><StatusPill tone="success">Verified</StatusPill><small>Unsold inventory</small></span></div>)}</div>:<Empty icon={ClockCounterClockwise} title="No verified transactions" text="Only reconciled environment-specific receipts will appear here."/>}</section>}
+function Recent({state}:{state:DashboardState|null}) {
+  const tx=state?.transactions??[];
+  if(!tx.length)return null;
+  return <section className="panel recent">
+    <div className="panel-title"><span>Recent Operations</span><NavLink to="/transactions">View all <ArrowUpRight/></NavLink></div>
+    <div className="transaction-list">{tx.slice(0,5).map(row=><div className="transaction-row" key={String(row.id)}>
+      <span className="tx-icon"><CheckCircle weight="fill"/></span>
+      <span><b>{String(row.type)}</b><small>{String(row.borrowerAccountId)}</small></span>
+      <span><b>{String(row.assetIncreaseAtomic)} atomic</b><small>{String(row.seizeTokenId)}</small></span>
+      <span><StatusPill tone="success">Verified</StatusPill><small>Unsold inventory</small></span>
+    </div>)}</div>
+  </section>;
+}
 
 function Dashboard() {
   const [environment,setEnvironment]=useState<Environment>('sandbox'); const [state,setState]=useState<DashboardState|null>(null);
