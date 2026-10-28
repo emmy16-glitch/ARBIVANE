@@ -62,3 +62,36 @@ test('Stage174 serializes concurrent persisted events and replays long cursor ba
  assert.deepEqual(latest.map(x=>x.sequence),[521,522,523,524,525,526,527,528,529,530]);
  await assert.rejects(()=>store.events('sandbox',-1,10),/INVALID_EVENT_CURSOR/);
 });
+
+test('Stage179 restart recovers appended event sequence without duplication and closes orphaned sessions',async(t)=>{
+ const root=await mkdtemp(join(tmpdir(),'arbivane-recover-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const first=new DashboardStore(root);await first.init();
+ await first.event('sandbox',{stage:'scan',status:'info',message:'actual event'});
+ await first.update('sandbox',state=>{
+  state.nextEventSequence=1;
+  state.session=first.newSession('sandbox',{maxFinancingUsd:'1.00',minimumNetProfitUsd:'0.00'});
+  state.session.status='running';state.session.pid=424242;return state;
+ });
+ const second=new DashboardStore(root);await second.init();
+ const recovered=await second.state('sandbox');
+ assert.equal(recovered.nextEventSequence,2);
+ assert.equal(recovered.session.status,'failed');
+ assert.equal(recovered.session.failure.code,'SERVER_RESTART_INTERRUPTED_SESSION');
+ assert.equal(recovered.session.pid,null);
+ const next=await second.event('sandbox',{stage:'system',status:'info',message:'next real event'});
+ assert.equal(next.sequence,2);
+ assert.deepEqual((await second.events('sandbox')).map(e=>e.sequence),[1,2]);
+});
+test('Stage179 does not silently discard a corrupted event journal',async(t)=>{
+ const root=await mkdtemp(join(tmpdir(),'arbivane-corrupt-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const first=new DashboardStore(root);await first.init();
+ await first.event('sandbox',{stage:'system',status:'info',message:'first'});
+ const {appendFile}=await import('node:fs/promises');
+ await appendFile(join(root,'sandbox','events.jsonl'),JSON.stringify({
+  id:'sandbox:3',sequence:3,environment:'sandbox',message:'skipped'
+ })+'\\n');
+ const second=new DashboardStore(root);
+ await assert.rejects(()=>second.init(),/DASHBOARD_CORRUPT_EVENT_JOURNAL/);
+});
