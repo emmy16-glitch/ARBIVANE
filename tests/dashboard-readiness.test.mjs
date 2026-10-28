@@ -34,3 +34,17 @@ test('mainnet readiness can never advertise signing or spending', async () => {
   assert.equal(result.capabilities.mainnetSpending, false);
   assert.match(result.requirements.note, /disabled/i);
 });
+
+test('Stage187 Sandbox readiness requires deliberate keyless auto-worker setup',async()=>{
+ const base={EXECUTION_ENABLED:'false',NEAR_RPC_URL:'https://rpc.mainnet.near.org',
+  ARBIVANE_SANDBOX_AUTOPILOT_ENABLED:'true',
+  RHEA_EXPECTED_LENDING_CODE_HASH:'6Nek1MZ8cwJJ2xMQAUWup9V5AToYS9rkTxJfwo6BCpFa',
+  RHEA_EXPECTED_ORACLE_CODE_HASH:'9vafnXzrPYQ4ErDqt2triRkQJHdxtG7tfkyb24t5Ttrg'};
+ const ready=await environmentReadiness('sandbox',{env:base});
+ assert.equal(ready.capabilities.automate,ready.capabilities.disposableSigning);
+ assert.equal(ready.capabilities.mainnetSpending,false);
+ const disabled=await environmentReadiness('sandbox',{env:{...base,ARBIVANE_SANDBOX_AUTOPILOT_ENABLED:'false'}});
+ assert.equal(disabled.capabilities.automate,false);
+ const keyed=await environmentReadiness('sandbox',{env:{...base,NEAR_PRIVATE_KEY:'never-allowed'}});
+ assert.equal(keyed.capabilities.automate,false);
+});

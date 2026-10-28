@@ -9,7 +9,7 @@ The dashboard is an authenticated operations surface around the existing Rhea en
 | Durable, isolated state/event history | Yes | Yes | Yes |
 | SSE replay after refresh/reconnect | Yes | Yes | Yes |
 | Live RPC readiness | Local runner prerequisites | Chain-ID and finalized-height status | Read-only chain-ID and finalized-height status |
-| Start automation | Genuine Workspaces runner, when evidence and RPC are configured | Unavailable pending a supported adapter and test wallet | Disabled server-side |
+| Start automation | Automated source discovery + real Workspaces replay when runtime, code hash pins and RPC are configured | Unavailable pending a supported adapter and test wallet | Disabled server-side |
 | Wallet transfers | Not exposed | Not configured | Not exposed |
 | Signing/spending | Disposable local Sandbox actor only | Not configured | Disabled |
 | Financial credit | Unsold token inventory only after four independent evidence gates | Not configured | Not configured |
@@ -37,7 +37,9 @@ The API binds to `127.0.0.1:8787` by default. With no `ARBIVANE_DASHBOARD_TOKEN`
 
 ## Genuine Sandbox execution
 
-Start is fail-closed until `ARBIVANE_SANDBOX_EVIDENCE_PATH`, `NEAR_RPC_URL`, `near-workspaces`, and the existing Sandbox runtime are configured. The server launches only `scripts/stage37-workspaces-sandbox-replay.mjs` with `EXECUTION_ENABLED=false`, clears mainnet account/private-key variables, and forces `NEAR_WORKSPACES_NETWORK=sandbox`. Browser input cannot select an executable.
+Stage187 Sandbox Autopilot uses fresh on-chain borrower scans, without requiring the user to provide a candidate proposal. A long-lived backend must set ARBIVANE_SANDBOX_AUTOPILOT_ENABLED=true and EXECUTION_ENABLED=false, install the pinned near-workspaces@5.0.0 runtime separately on the dedicated backend host (for example npm install --no-save near-workspaces@5.0.0 after npm ci), configure a read-only HTTPS NEAR_RPC_URL, and pin independently verified deployed lending/Pyth code hashes. It enumerates actual debt positions using pinned Rhea contract views; fresh current health/price evidence, a LiNEAR/LiNEAR compatible route, and the entered source financing cap are mandatory before the Stage37 local NEAR Workspaces transaction can start. Missing candidates or failed parity do not count as success. Mainnet signing remains disabled.
+
+The entered Sandbox amount is a funding ceiling, not a real token balance, real flash loan, or verified profit. Stage37 attempts, receipts and failures remain in isolated session folders. The Vercel UI preview remains view-only; the worker requires a persistent Node execution host. Render Free ephemeral storage is unsuitable for durable operational history.
 
 Pause and Stop do not kill an in-flight financial operation. They record a durable request and prevent follow-up work; the current Sandbox process is allowed to settle. Resume is admitted only after the prior process reaches `paused`.
 

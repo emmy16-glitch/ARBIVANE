@@ -42,16 +42,27 @@ export async function environmentReadiness(environment, options = {}) {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
   if (environment === 'sandbox') {
-    let evidenceConfigured = false; let workspacesInstalled = false;
-    if (env.ARBIVANE_SANDBOX_EVIDENCE_PATH) {
-      try { await access(env.ARBIVANE_SANDBOX_EVIDENCE_PATH); evidenceConfigured = true; } catch {}
-    }
-    try { require.resolve('near-workspaces'); workspacesInstalled = true; } catch {}
-    const configured = evidenceConfigured && workspacesInstalled && Boolean(env.NEAR_RPC_URL);
-    return {environment, status:configured?'ready':'not_configured', chainId:'localnet', blockHeight:null,
-      checkedAt:new Date().toISOString(), capabilities:{read:true, automate:configured,
-        disposableSigning:workspacesInstalled, externalTransfer:false, mainnetSpending:false},
-      requirements:{evidenceConfigured, workspacesInstalled, sourceRpcConfigured:Boolean(env.NEAR_RPC_URL)}};
+    let workspacesInstalled=false;
+    try { require.resolve('near-workspaces'); workspacesInstalled=true; } catch {}
+    const hashesConfigured=/^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(env.RHEA_EXPECTED_LENDING_CODE_HASH??'')&&
+      /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(env.RHEA_EXPECTED_ORACLE_CODE_HASH??'');
+    const keyless=!env.NEAR_PRIVATE_KEY&&!env.MAINNET_PRIVATE_KEY&&!env.NEAR_ACCOUNT_ID;
+    let rpcConfigured=false;
+    try{
+      const url=new URL(env.NEAR_RPC_URL);
+      rpcConfigured=url.protocol==='https:'&&!url.username&&!url.password&&!url.hash;
+    }catch{}
+    const explicitSandbox=env.ARBIVANE_SANDBOX_AUTOPILOT_ENABLED==='true';
+    const configured=workspacesInstalled&&rpcConfigured&&hashesConfigured&&keyless&&explicitSandbox&&
+      env.EXECUTION_ENABLED==='false';
+    return {environment,status:configured?'ready':'not_configured',chainId:'localnet',
+      blockHeight:null,checkedAt:new Date().toISOString(),
+      capabilities:{read:rpcConfigured,automate:configured,disposableSigning:workspacesInstalled,
+        externalTransfer:false,mainnetSpending:false},
+      requirements:{autopilotOptIn:explicitSandbox,workspacesInstalled,
+        sourceRpcConfigured:rpcConfigured,codeHashesPinned:hashesConfigured,
+        noMainnetKeys:keyless,executionSafetyLock:env.EXECUTION_ENABLED==='false',
+        note:'Source discovery reads Rhea mainnet; execution and accounts stay in a disposable local Sandbox.'}};
   }
   if (!Object.hasOwn(allowed, environment)) throw new Error('INVALID_ENVIRONMENT');
   const rpc = await rpcStatus(environment, {env, fetchImpl, timeoutMs:options.timeoutMs});
