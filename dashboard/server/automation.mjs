@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {resolve,join,sep} from 'node:path';
-import {mkdir,readFile,writeFile,rename} from 'node:fs/promises';
+import {mkdir,readFile,writeFile,rename,readlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createInterface} from 'node:readline';
 import {reconcileImportedSandboxEvidence} from './evidence.mjs';
@@ -33,6 +33,8 @@ export class AutomationManager {
     const current = await this.store.state(environment);
     if (current.session && ['starting', 'running', 'pause_requested', 'stopping'].includes(current.session.status))
       throw new Error('SESSION_ALREADY_ACTIVE');
+    if (await this.#orphanWorkerRunning(current.session))
+      throw new Error('ORPHANED_SANDBOX_WORKER_STILL_RUNNING');
     if (environment !== 'sandbox')
       throw new Error(environment === 'mainnet' ? 'MAINNET_EXECUTION_DISABLED' : 'TESTNET_EXECUTION_NOT_CONFIGURED');
 
@@ -125,6 +127,61 @@ export class AutomationManager {
       }
       void this.#emit(environment,{stage,status,message:safe}).catch(()=>{});
     });
+  }
+
+  async #orphanWorkerRunning(session){
+    if(session?.failure?.code!=='SERVER_RESTART_INTERRUPTED_SESSION')return false;
+    const pid=session.interruptedPid;
+    if(!Number.isSafeInteger(pid)||pid<=0)return false;
+    try{
+      const [cmd,cwd]=await Promise.all([
+        readFile('/proc/'+pid+'/cmdline','utf8'),readlink('/proc/'+pid+'/cwd')]);
+      return cmd.includes('stage187-sandbox-autopilot.mjs')&&
+        cwd===session.workDir;
+    }catch{return false}
+  }
+
+  async recoverInterruptedSandbox(){
+    const state=await this.store.state('sandbox');
+    const session=state.session;
+    if(session?.failure?.code!=='SERVER_RESTART_INTERRUPTED_SESSION'||
+      session.recoveryCheckedAt)return;
+    // Never race an orphan still finishing local callbacks.
+    if(await this.#orphanWorkerRunning(session))return;
+    let imported=0,errors=0;
+    try{
+      const root=resolve(this.store.root,'sandbox','sessions')+sep;
+      if(typeof session.workDir!=='string'||!session.workDir.startsWith(root))
+        throw Error('RECOVERY_SESSION_PATH_INVALID');
+      const manifest=JSON.parse(await readFile(join(session.workDir,'stage187-results.json'),'utf8'));
+      if(manifest.mode!=='STAGE187_SANDBOX_AUTOPILOT'||
+        manifest.mainnetExecutionEnabled!==false||!Array.isArray(manifest.attempts)||
+        manifest.attempts.length>20)throw Error('RECOVERY_MANIFEST_INVALID');
+      for(let i=0;i<manifest.attempts.length;i++){
+        const attempt=manifest.attempts[i];
+        if(attempt.exitCode!==0)continue;
+        const dir=join(session.workDir,'attempt-'+String(i+1).padStart(5,'0'));
+        if(attempt.directory!==dir||attempt.source!==join(dir,'source-evidence.json')){
+          errors++;continue;
+        }
+        try{
+          await reconcileImportedSandboxEvidence(this.store,dir,attempt.source);
+          imported++;
+        }catch{errors++}
+      }
+    }catch{errors++}
+    await this.store.update('sandbox',value=>{
+      if(value.session?.id===session.id){
+        value.session.recoveryCheckedAt=new Date().toISOString();
+        value.session.recovery={verifiedReceiptBundles:imported,unverifiedOrMissing:errors,
+          sessionStillFailed:true,realizedPnlVerified:false};
+      }
+      return value;
+    });
+    await this.#emit('sandbox',{stage:'recovery',status:errors?'warning':'info',
+      message:'Interrupted Sandbox session checked for independently verified final receipts; it was not restarted.',
+      evidence:{verifiedReceiptBundles:imported,unverifiedOrMissing:errors,
+        sessionStillFailed:true,realizedPnlVerified:false}});
   }
 
   async #finish(environment,code,signal){

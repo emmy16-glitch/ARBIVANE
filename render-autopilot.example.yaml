@@ -1,0 +1,46 @@
+# OPTIONAL PAID EXECUTION HOST EXAMPLE. Never auto-upgrade the existing
+# free dashboard. Use only after explicit owner confirmation of billing.
+#
+# Approximate plan: 2 CPU / 4 GiB, plus separately billed persistent disk.
+# Native NEAR Workspaces clones can need more RAM/disk depending on the market.
+services:
+  - type: web
+    name: arbivane-autopilot
+    runtime: docker
+    dockerfilePath: ./Dockerfile.autopilot
+    dockerContext: .
+    plan: 2c-4g
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    disk:
+      name: arbivane-evidence
+      mountPath: /var/data
+      sizeGB: 20
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: EXECUTION_ENABLED
+        value: "false"
+      - key: ARBIVANE_DASHBOARD_DATA_DIR
+        value: /var/data/arbivane-dashboard
+      - key: ARBIVANE_REQUIRED_PERSISTENT_MOUNT
+        value: /var/data
+      - key: ARBIVANE_SANDBOX_AUTOPILOT_ENABLED
+        value: "false"
+      - key: NEAR_NETWORK
+        value: mainnet
+      - key: NEAR_WORKSPACES_NETWORK
+        value: sandbox
+      - key: NEAR_RPC_URL
+        sync: false
+      - key: RHEA_EXPECTED_LENDING_CODE_HASH
+        sync: false
+      - key: RHEA_EXPECTED_ORACLE_CODE_HASH
+        sync: false
+      - key: ARBIVANE_DASHBOARD_TOKEN
+        sync: false
+

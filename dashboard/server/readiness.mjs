@@ -1,5 +1,5 @@
-import {access} from 'node:fs/promises';
 import {createRequire} from 'node:module';
+import {sandboxHostReadiness} from './sandbox-host.mjs';
 
 const require = createRequire(import.meta.url);
 const allowed = {
@@ -53,7 +53,9 @@ export async function environmentReadiness(environment, options = {}) {
       rpcConfigured=url.protocol==='https:'&&!url.username&&!url.password&&!url.hash;
     }catch{}
     const explicitSandbox=env.ARBIVANE_SANDBOX_AUTOPILOT_ENABLED==='true';
+    const host=await sandboxHostReadiness({env});
     const configured=workspacesInstalled&&rpcConfigured&&hashesConfigured&&keyless&&explicitSandbox&&
+      host.memoryReady&&host.persistentStorageReady&&host.nativeToolchainReady&&
       env.EXECUTION_ENABLED==='false';
     return {environment,status:configured?'ready':'not_configured',chainId:'localnet',
       blockHeight:null,checkedAt:new Date().toISOString(),
@@ -62,7 +64,8 @@ export async function environmentReadiness(environment, options = {}) {
       requirements:{autopilotOptIn:explicitSandbox,workspacesInstalled,
         sourceRpcConfigured:rpcConfigured,codeHashesPinned:hashesConfigured,
         noMainnetKeys:keyless,executionSafetyLock:env.EXECUTION_ENABLED==='false',
-        note:'Source discovery reads Rhea mainnet; execution and accounts stay in a disposable local Sandbox.'}};
+        ...host,
+        note:'Sandbox uses only disposable local actors. A production worker needs a persistent mount, minimum RAM and the native C toolchain.'}};
   }
   if (!Object.hasOwn(allowed, environment)) throw new Error('INVALID_ENVIRONMENT');
   const rpc = await rpcStatus(environment, {env, fetchImpl, timeoutMs:options.timeoutMs});

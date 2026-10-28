@@ -16,3 +16,14 @@ Authentic Sandbox execution requires source evidence and near-workspaces prerequ
 Confirm Render deploy status live, built React assets and running Node server. Check /api/health returns 200 and mainnetExecutionEnabled=false. Confirm anonymous API requests are rejected. Enter your private token after rotating it; verify all three environment screens, their honest empty states and reconnect indications. A successful build alone is not proof of wallet integration.
 
 Render source: https://render.com/docs/free
+
+
+## Stage188 — execution host safety and deployment
+
+The existing Render Free instance remains a view-only operations dashboard. A push to GitHub main can auto-deploy the UI and server code, but it does not create a durable Sandbox worker. Keep ARBIVANE_SANDBOX_AUTOPILOT_ENABLED=false on Free. Render Free spins down on inactivity and loses locally written evidence on redeploy, restart or spin-down. A successful /api/health is only an HTTP-server health signal, not execution proof.
+
+The opt-in paid execution host example lives in render-autopilot.example.yaml and Dockerfile.autopilot at the repository root. It is deliberately not the default render.yaml and cannot auto-upgrade the existing Free service. Apply it only after the account owner approves the separately billed compute and persistent storage. It installs the native C toolchain and near-workspaces@5.0.0, and supplies a dedicated /var/data disk. Runtime readiness checks the cgroup-aware memory limit, compiler presence, and that the dashboard data directory is actually under a separate mounted volume.
+
+On the dedicated worker host only: provision a strong login token, verified HTTPS source RPC, independently current deployed lender and oracle code hashes, then set ARBIVANE_SANDBOX_AUTOPILOT_ENABLED=true. Keep EXECUTION_ENABLED=false, NEAR_WORKSPACES_NETWORK=sandbox, and all Mainnet keys absent.
+
+A genuine Sandbox result requires a fresh viable borrower, a real NEAR Workspaces execution and final receipts independently reconciled to debt/collateral/token deltas. An HTTP 202 Start and borrower scan are not evidence of profitable settlement. Testnet faucet funding and Testnet transaction execution are separate future integrations.
