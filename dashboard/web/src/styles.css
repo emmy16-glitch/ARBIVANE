@@ -270,3 +270,30 @@ body { background:var(--bg); color:#eaf1f9; }
 .sidebar .brand-copy { gap:3px; }
 .sidebar .brand-copy small { font-size:10px; line-height:1.25; }
 .page-heading small:empty { display:none; }
+
+/* Stage179: consistent quiet detail routes, no duplicated page hero. */
+.subpage.operational-page { width:100%; max-width:1460px; margin:0; display:grid; gap:14px; align-content:start; }
+.operational-page>.environment-picker { grid-column:1; max-width:860px; }
+.operational-page .page-panel { min-height:0; }
+.subpage.operational-page>.panel .empty { min-height:128px; }
+.operational-page .record-grid { padding:15px; gap:12px; }
+.operational-page .record-grid>div { border:1px solid #283e52; border-radius:9px; background:#101f2d; }
+.operational-page .record-grid small { font-size:11px; }
+.operational-page .record-grid strong { font-size:13px; }
+.operational-page .data-head,.operational-page .data-row { font-size:12px; }
+.operational-page .page-events { max-height:none; }
+.research-runs { margin-top:0; }
+.research-rows { display:grid; padding:5px 12px; }
+.research-row { display:grid; grid-template-columns:minmax(0,1fr) auto 18px; align-items:center;
+  gap:12px; min-height:46px; padding:8px 6px; border-bottom:1px solid #2a3b4d; text-decoration:none; color:#cad8e8; }
+.research-row:last-child { border-bottom:0; }
+.research-row:hover .research-run-title { color:#f1f4fb; }
+.research-run-title { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.research-row .status-pill { font-size:10px; white-space:nowrap; }
+.research-row>svg { color:#8999ae; }
+@media(max-width:760px) {
+ .subpage.operational-page { width:100%; }
+ .operational-page>.environment-picker { max-width:none; }
+ .research-row { gap:8px; }
+ .research-run-title { font-size:11px; }
+}

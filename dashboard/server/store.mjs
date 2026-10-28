@@ -25,8 +25,40 @@ export class DashboardStore {
     await mkdir(this.root, {recursive: true, mode: 0o700});
     for (const environment of ENVIRONMENTS) {
       await mkdir(join(this.root, environment), {recursive: true, mode: 0o700});
-      try { await readFile(join(this.root, environment, 'state.json')); }
-      catch { await this.#writeState(environment, initialState(environment)); }
+      try {
+        const state = await this.state(environment);
+        // A process can die after appending an event and before advancing the
+        // state cursor. Recover from the original append-only journal; never
+        // overwrite an event ID or mistake a killed worker for a live session.
+        let lastSequence = 0;
+        let journal = '';
+        try { journal = await readFile(join(this.root, environment, 'events.jsonl'), 'utf8'); }
+        catch (error) { if (error?.code !== 'ENOENT') throw error; }
+        for (const line of journal.split('\n')) {
+          if (!line) continue;
+          const event = JSON.parse(line);
+          if (event.environment !== environment || !Number.isSafeInteger(event.sequence) ||
+              event.sequence !== lastSequence + 1)
+            throw new Error('DASHBOARD_CORRUPT_EVENT_JOURNAL');
+          lastSequence = event.sequence;
+        }
+        let changed = false;
+        if (state.nextEventSequence <= lastSequence) {
+          state.nextEventSequence = lastSequence + 1;
+          changed = true;
+        }
+        if (state.session && ['starting','running','pause_requested','stopping'].includes(state.session.status)) {
+          state.session.status = 'failed';
+          state.session.failure = {code:'SERVER_RESTART_INTERRUPTED_SESSION'};
+          state.session.endedAt = new Date().toISOString();
+          state.session.pid = null;
+          changed = true;
+        }
+        if (changed) { state.revision++; await this.#writeState(environment, state); }
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        await this.#writeState(environment, initialState(environment));
+      }
     }
   }
 

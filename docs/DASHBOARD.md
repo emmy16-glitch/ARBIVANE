@@ -70,3 +70,11 @@ Pause and Stop do not kill an in-flight financial operation. They record a durab
 ## Validation
 
 The production server integration suite checks loopback/token authentication, HttpOnly SameSite cookies, same-origin mutation rejection, isolated initial state, missing Sandbox configuration rejection, unconditional Mainnet execution denial, CSP, and MIME hardening. The production dependency graph reports zero known `npm audit` vulnerabilities. The client bundle is approximately 94 KiB gzip; no sample financial data or external font/runtime requests are shipped.
+
+## Stage179 — compact interface, public Sandbox research status, and crash recovery
+
+- Detail routes use the app's existing navigation title; duplicate icons, page descriptions, and redundant headings are removed.
+- The Vercel frontend reads the **public GitHub Actions run metadata** for Stage93/Stage157 Sandbox research from GitHub's REST API and identifies each as a **check**, not a liquidation or wallet asset. It refreshes at most once per minute, uses no owner credential, shows no result when the API is unavailable, and never manufactures profit or activity.
+- The Vercel build is a static, read-only client and **cannot start Sandbox transactions**. The actual Stage37 Workspaces engine remains in the authenticated Node backend and is available only when an original Stage35 source proposal, suitable archival RPC and runtime are configured on a dedicated execution host. A free web server lacks durable event/financial storage.
+- Repeated worker sessions that were running before a Node restart are marked failed/interrupted, never deceptively left running. Event cursors recover from the append-only journal before any new event is written; a corrupt journal fails closed.
+- Testnet and Mainnet execution remain disabled. No transfer, real profit, or current qualified borrower is inferred from GitHub Actions workflow conclusions.

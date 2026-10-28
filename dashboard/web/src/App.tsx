@@ -9,6 +9,7 @@ import {
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
 import type {StreamConnection} from './api';
 import {mergeOperationEvents} from './events';
+import {useResearchRuns} from './research';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -152,6 +153,21 @@ function Accounting({state}:{state:DashboardState|null}) {
   </section>;
 }
 
+function ResearchActivity() {
+  const runs=useResearchRuns(UI_PREVIEW);
+  if(!runs.length)return null;
+  return <section className="panel research-runs">
+    <div className="panel-title"><span>Sandbox runs</span><a className="panel-link" href="https://github.com/emmy16-glitch/ARBIVANE/actions" target="_blank" rel="noreferrer">All runs <ArrowUpRight size={14}/></a></div>
+    <div className="research-rows">{runs.map(run=>{
+      const status=run.status==='completed'?(run.conclusion==='success'?'Checks passed':run.conclusion==='failure'?'Checks failed':'Completed'):run.status==='in_progress'?'Running':'Queued';
+      const tone=run.status!=='completed'?'neutral':run.conclusion==='success'?'success':run.conclusion==='failure'?'danger':'neutral';
+      return <a href={run.html_url} key={run.id} target="_blank" rel="noreferrer" className="research-row">
+        <span className="research-run-title">{run.name}</span><StatusPill tone={tone}>{status}</StatusPill><ArrowUpRight size={15}/>
+      </a>;
+    })}</div>
+  </section>;
+}
+
 function Recent({state}:{state:DashboardState|null}) {
   const tx=state?.transactions??[];
   if(!tx.length)return null;
@@ -205,18 +221,18 @@ function Dashboard() {
     return()=>{active=false;if(refreshTimer)clearTimeout(refreshTimer);source?.close()};
   },[environment,refresh]);
   const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/><ResearchActivity/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
 }
 
 type ViewKind='live'|'opportunities'|'performance'|'wallet'|'transactions'|'analytics'|'settings';
-const viewCopy:Record<ViewKind,{title:string;description:string;icon:typeof Gauge}>={
-  live:{title:'Live operations',description:'Execution events and status.',icon:Activity},
-  opportunities:{title:'Opportunities',description:'Borrower screening and outcomes.',icon:Cube},
-  performance:{title:'Performance',description:'Proceeds, costs and results.',icon:ChartLineUp},
-  wallet:{title:'Wallet',description:'Balances and transfers.',icon:Wallet},
-  transactions:{title:'Transactions',description:'Transaction history.',icon:ClockCounterClockwise},
-  analytics:{title:'Analytics',description:'Activity and trends.',icon:ListMagnifyingGlass},
-  settings:{title:'Settings',description:'Networks, security and automation.',icon:SlidersHorizontal},
+const viewCopy:Record<ViewKind,{title:string;icon:typeof Gauge}>={
+  live:{title:'Live operations',icon:Activity},
+  opportunities:{title:'Opportunities',icon:Cube},
+  performance:{title:'Performance',icon:ChartLineUp},
+  wallet:{title:'Wallet',icon:Wallet},
+  transactions:{title:'Transactions',icon:ClockCounterClockwise},
+  analytics:{title:'Analytics',icon:ListMagnifyingGlass},
+  settings:{title:'Settings',icon:SlidersHorizontal},
 };
 
 function OperationalPage({kind}:{kind:ViewKind}) {
@@ -254,12 +270,12 @@ function OperationalPage({kind}:{kind:ViewKind}) {
   else if(kind==='opportunities') content=opportunities.length?<div className="compact-records">{opportunities.map((row,index)=><article className="compact-record" key={String(row.id??index)}>
     <div className="compact-record-heading"><b>{String(row.borrowerAccountId??row.accountId??'Source observation')}</b><StatusPill>{String(row.status??'Under review')}</StatusPill></div>
     <span>Source block: {row.blockHeight==null?'Not verified':String(row.blockHeight)}</span>
-    <small>Reference candidate only — no funded or settled liquidation implied</small>
+    
     <details><summary>Source evidence</summary><pre>{JSON.stringify(row,null,2)}</pre></details>
   </article>)}</div>:<Empty icon={Icon} title="No opportunities yet"/>;
   else if(kind==='live') content=data.events.length?<div className="page-events">{data.events.slice().reverse().map(event=><div key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><b>{event.stage}</b><span>{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill></div>)}</div>:<Empty icon={Icon} title="No activity yet"/>;
   else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status==='unavailable'?'Offline':readiness?.status.replaceAll('_',' ')??'Offline'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
-  return <div className="subpage operational-page"><div className="page-heading"><span><Icon/></span><div><h1>{copy.title}</h1><p>{copy.description}</p></div></div><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness?{[environment]:readiness}:{}}/><section className="panel page-panel"><div className="panel-title"><span>{copy.title}</span><span className="network-label">{environment}</span></div>{content}</section></div>;
+  return <div className="subpage operational-page"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness?{[environment]:readiness}:{}}/><section className="panel page-panel">{content}</section></div>;
 }
 
 export function App(){return <Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<OperationalPage kind="analytics"/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell>}
