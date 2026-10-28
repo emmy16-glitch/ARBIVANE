@@ -13,6 +13,8 @@ const webRoot = resolve(root, 'dashboard/web/dist');
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? '127.0.0.1';
 const configuredToken = process.env.ARBIVANE_DASHBOARD_TOKEN ?? '';
+const prodAuthUnavailable = process.env.NODE_ENV === 'production' &&
+  configuredToken.length < 32;
 const configuredOrigin = process.env.ARBIVANE_DASHBOARD_ORIGIN ?? '';
 // Signed, expiring operator cookie survives ordinary Render deploy/restart.
 // Local development without an access token uses a process-lifetime secret.
@@ -88,10 +90,11 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
     if (url.pathname === '/api/health')
-      return json(response, process.env.NODE_ENV === 'production' && !configuredToken ? 503 : 200,
-        {status: process.env.NODE_ENV === 'production' && !configuredToken ? 'auth_not_configured' : 'ok',
+      return json(response, prodAuthUnavailable ? 503 : 200,
+        {status: prodAuthUnavailable ? 'auth_not_configured' : 'ok',
           mainnetExecutionEnabled: false});
     if (url.pathname === '/api/auth/session' && request.method === 'POST') {
+      if (prodAuthUnavailable) return json(response, 503, {error:'AUTH_NOT_CONFIGURED'});
       if (!sameOrigin(request)) return json(response, 403, {error: 'ORIGIN_REJECTED'});
       const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
       const local = ['127.0.0.1', '::1'].includes(request.socket.remoteAddress ?? '');
@@ -104,6 +107,8 @@ const server = createServer(async (request, response) => {
       return json(response, 201, {authenticated: true}, {'set-cookie':
         `arbivane_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure ? '; Secure' : ''}`});
     }
+    if (prodAuthUnavailable && url.pathname.startsWith('/api/'))
+      return json(response, 503, {error:'AUTH_NOT_CONFIGURED'});
     if (url.pathname.startsWith('/api/') && !authorized(request))
       return json(response, 401, {error: 'AUTH_REQUIRED'});
     const match = url.pathname.match(/^\/api\/environments\/(sandbox|testnet|mainnet)(?:\/(.*))?$/);
