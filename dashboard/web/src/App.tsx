@@ -532,6 +532,9 @@ function OperationalPage({kind}:{kind:ViewKind}){
   else if(kind==='live')content=data.events.length?<LiveEventTable events={data.events}/>:<Empty icon={Icon} title="No activity yet"/>;
   else content=<SettingsWorkspace readiness={data.readiness} environment={environment}/>;
   return <div className="subpage operational-page">
+    {(kind==='live'||kind==='transactions')&&<nav className="history-tabs" aria-label="Operations sections">
+      <NavLink to="/live" end>Events</NavLink><NavLink to="/transactions">Transactions</NavLink>
+    </nav>}
     {data&&error&&<div className="route-warning" role="status">
       <span>{error==='STREAM_RECONNECTING'?'Reconnecting to events':error.replaceAll('_',' ')}</span>
       <button onClick={()=>setRetry(current=>current+1)}>Retry</button>
