@@ -1,5 +1,5 @@
 import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from 'react';
-import {Navigate, NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
+import {Navigate, NavLink, Route, Routes, useLocation} from 'react-router-dom';
 import {
   Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
@@ -385,8 +385,55 @@ function OpportunityTable({rows}:{rows:Array<Record<string,unknown>>}){
   </div>;
 }
 
+function PerformanceWorkspace({accounting}:{accounting:DashboardState['accounting']}){
+  const metrics=[
+    ['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],
+    ['Swap costs','swapCosts'],['Gas fees','gasFees'],
+    ['Realized profit','realizedProfit'],['Realized loss','realizedLoss'],
+    ['Net P&L','cumulativeNetPnl']
+  ] as const;
+  const items=metrics.filter(([,key])=>accounting[key]!=null);
+  return <div className="performance-workspace">
+    <div className="performance-heading">
+      <span>Reconciled financial results</span>
+      <time>Updated {String(accounting.reconciledAt)}</time>
+    </div>
+    <div className="performance-metrics">{items.map(([label,key])=><div key={key}>
+      <small>{label}</small><strong>{String(accounting[key])}</strong>
+    </div>)}</div>
+    {accounting.evidence!=null&&<details className="performance-evidence">
+      <summary>Reconciliation evidence</summary><pre>{JSON.stringify(accounting.evidence,null,2)}</pre>
+    </details>}
+  </div>;
+}
+
+function TransactionWorkspace({rows}:{rows:Array<Record<string,unknown>>}){
+  const [query,setQuery]=useState('');
+  const filtered=rows.filter(row=>!query.trim()||
+    JSON.stringify(row).toLowerCase().includes(query.trim().toLowerCase()));
+  return <div className="transaction-workspace">
+    <div className="table-toolbar">
+      <label className="table-search"><span className="visually-hidden">Search transactions</span>
+        <input type="search" value={query} onChange={event=>setQuery(event.target.value)}
+         placeholder="Search borrower, transaction or token"/>
+      </label>
+    </div>
+    <div className="transaction-table">
+      {filtered.map((row,index)=><details key={String(row.id??index)} className="transaction-entry">
+        <summary><code>{String(row.id??'Receipt')}</code>
+          <span>{String(row.borrowerAccountId??'—')}</span>
+          <span>{row.sourceBlock==null?'—':String(row.sourceBlock)}</span>
+          <StatusPill tone="success">Verified inventory</StatusPill>
+        </summary>
+        <div className="operation-evidence"><pre>{JSON.stringify(row,null,2)}</pre></div>
+      </details>)}
+    </div>
+    {!filtered.length&&<div className="data-empty">No matching transactions</div>}
+  </div>;
+}
+
 function OperationalPage({kind}:{kind:ViewKind}) {
-  const copy=viewCopy[kind],Icon=copy.icon; const [params]=useSearchParams();
+  const copy=viewCopy[kind],Icon=copy.icon;
   const {environment}=useEnvironment();
   const [data,setData]=useState<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}|null>(null);
   const [error,setError]=useState('');
@@ -404,19 +451,19 @@ function OperationalPage({kind}:{kind:ViewKind}) {
     }).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED')});
     return()=>{active=false;source?.close()};
   },[environment,kind]);
-  const query=(params.get('query')??'').toLowerCase();
-  const transactions=(data?.state.transactions??[]).filter(row=>!query||JSON.stringify(row).toLowerCase().includes(query));
+  const transactions=data?.state.transactions??[];
   const opportunities=data?.state.opportunities??[];
   const readiness=data?.readiness;
   let content:React.ReactNode;
   if(error) content=<ApiError error={error} onRetry={()=>{setError('');void loadEnvironment(environment).then(setData).catch(reason=>setError(reason instanceof Error?reason.message:'LOAD_FAILED'))}}/>;
   else if(!data) content=<Empty icon={Icon} title="Loading"/>;
-  else if(kind==='transactions') content=transactions.length?<div className="data-table" role="table"><div className="data-head" role="row"><span>Transaction</span><span>Borrower</span><span>Source block</span><span>Result</span></div>{transactions.map(row=><div className="data-row" role="row" key={String(row.id)}><code>{String(row.id)}</code><span>{String(row.borrowerAccountId)}</span><span>{String(row.sourceBlock)}</span><span><StatusPill tone="success">Verified · unsold</StatusPill></span></div>)}</div>:<Empty icon={Icon} title={query?'No matching transactions':'No transactions yet'}/>;
+  else if(kind==='transactions') content=transactions.length?<TransactionWorkspace rows={transactions}/>:<Empty icon={Icon} title="No transactions yet"/>;
   else if(kind==='wallet') content=<div className="record-grid"><div><small>Wallet status</small><strong>{data.state.wallet.status.replaceAll('_',' ')}</strong></div><div><small>Account</small><strong>{data.state.wallet.accountId??'Not configured'}</strong></div><div className="wide"><small>Verified assets</small>{data.state.wallet.balances.length?<div className="compact-records">{data.state.wallet.balances.map((balance,index)=>{
     const asset=balance as {tokenId?:string;atomic?:string;transferableOutsideEnvironment?:boolean};
     return <article className="compact-record" key={index}><b>{asset.tokenId??'Unknown token'}</b><span>{asset.atomic??'—'} atomic units</span><small>{asset.transferableOutsideEnvironment===false?'Sandbox-only inventory':'Transferability not verified'}</small></article>;
   })}</div>:<strong>No balances</strong>}</div><div className="wide record-actions"><button disabled title="Deposit adapter not configured"><ArrowDown/>Deposit</button><button disabled title="No authorized custody or verified transferable balance"><ArrowUpRight/>Withdraw</button></div></div>;
-  else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?<div className="record-grid">{Object.entries(data.state.accounting).map(([key,value])=><div key={key}><small>{key.replaceAll(/([A-Z])/g,' $1')}</small><strong>{value==null?'Not verified':typeof value==='object'?'Evidence attached':String(value)}</strong></div>)}</div>:<Empty icon={Icon} title="No performance data"/>;
+  else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?
+    <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
   else if(kind==='opportunities') content=opportunities.length?<OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
   else if(kind==='live') content=<LiveEventTable events={data.events}/>;
   else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status==='unavailable'?'Offline':readiness?.status.replaceAll('_',' ')??'Offline'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
