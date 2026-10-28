@@ -1,9 +1,9 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {NavLink, Route, Routes, useLocation, useNavigate, useSearchParams} from 'react-router-dom';
+import {NavLink, Route, Routes, useLocation, useSearchParams} from 'react-router-dom';
 import {
-  Pulse as Activity, ArrowDown, ArrowUpRight, Bell, ChartLineUp, CheckCircle, CirclesThree,
+  Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
-  MagnifyingGlass, Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
+  Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
   WarningCircle, X,
 } from '@phosphor-icons/react';
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
@@ -36,23 +36,28 @@ function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
   return <form className="auth-inline" onSubmit={async event=>{event.preventDefault();setBusy(true);setAuthError('');try{await authenticate(token);onRetry()}catch(reason){setAuthError(reason instanceof Error?reason.message:'AUTH_FAILED')}finally{setBusy(false)}}}><ShieldCheck/><label><span>{authError?authError.replaceAll('_',' '):'Operator authentication required'}</span><input type="password" autoComplete="current-password" value={token} onChange={event=>setToken(event.target.value)} placeholder="Dashboard access token"/></label><button disabled={!token||busy}>{busy?'Authenticating…':'Authenticate'}</button></form>;
 }
 function Shell({children}:{children:React.ReactNode}) {
-  const location = useLocation(); const navigate=useNavigate(); const [search,setSearch]=useState('');
-  return <div className={`shell ${UI_PREVIEW?'ui-preview':''}`}>
+  const location = useLocation();
+  const current = nav.find(([route]) => route === location.pathname)?.[1] ?? 'Dashboard';
+  return <div className={UI_PREVIEW ? 'shell ui-preview' : 'shell'}>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><CirclesThree weight="fill" size={26}/></span><span><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span></div>
-      <nav>{nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' } className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
-      <div className="engine"><div className="engine-head"><span>Engine status</span><StatusPill>Per session</StatusPill></div><small>Open Live Ops to inspect actual execution stages.</small></div>
-      <div className="version"><span className="brand-mark mini"><CirclesThree weight="fill" size={18}/></span><span><b>ARBIVANE v0.1</b><small>Source-verified Rhea engine</small></span></div>
+      <div className="brand">
+        <span className="brand-mark"><CirclesThree weight="fill" size={26}/></span>
+        <span className="brand-copy"><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span>
+      </div>
+      <nav aria-label="Primary navigation">
+        {nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}
+          className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}
+      </nav>
     </aside>
     <header className="topbar">
-      <form className="search" onSubmit={event=>{event.preventDefault();if(search.trim())navigate(`/transactions?query=${encodeURIComponent(search.trim())}`)}}><MagnifyingGlass/><input aria-label="Search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></form>
-      <div className="top-status"><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications not configured" title="Notifications unavailable" disabled><Bell/></button><div className="avatar">A</div><div className="account"><b>{UI_PREVIEW?'Design preview':'Operator'}</b><span>{UI_PREVIEW?'View only':'Private terminal'}</span></div></div>
+      <span className="topbar-page">{current}</span>
+      <NavLink className="topbar-settings" to="/settings" title="Settings" aria-label="Settings"><Gear size={19}/></NavLink>
     </header>
-    <main className="main" data-route={location.pathname}>
-        {UI_PREVIEW&&<div className="preview-strip" role="status"><strong>INTERFACE PREVIEW</strong><span>Navigation and layouts only. No live trading, wallet connection or simulated earnings.</span><a href="https://github.com/emmy16-glitch/ARBIVANE" target="_blank" rel="noreferrer">Repository <ArrowUpRight size={13}/></a></div>}
-        {children}
-      </main>
-    <nav className="mobile-nav">{nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' }><Icon/><span>{label}</span></NavLink>)}</nav>
+    <main className="main" data-route={location.pathname}>{children}</main>
+    <nav className="mobile-nav" aria-label="Mobile navigation">
+      {nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/'}>
+        <Icon/><span>{label}</span></NavLink>)}
+    </nav>
   </div>;
 }
 
