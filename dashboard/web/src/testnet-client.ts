@@ -150,7 +150,7 @@ export class LiveTestnet{
     failure:null,cursor:0,scanned:0,debtPositions:0,observedBlocks:health.blockHeight,
     sourceContract:health.contract,codeHash:health.codeHash};
    this.data.state.session=session;this.persist();
-   this.notify('network','success','NEAR Testnet connected · verified lending contract.',{
+   this.notify('network','success','Connected to NEAR Testnet.',{
     chainId:'testnet',contract:health.contract,blockHeight:health.blockHeight,
     oracle:health.oracleId,executionEnabled:false});
    this.loop(session.id);
@@ -209,17 +209,13 @@ export class LiveTestnet{
       sourceContract:page.contract,sourceNetwork:'testnet',
      }));
      this.data.state.opportunities=[...this.data.state.opportunities,...observations].slice(-500);
-     this.notify('scan','info','Read '+page.returned+' actual lending accounts at block '+page.blockHeight+'.',{
+     this.notify('scan','info','Scanned '+page.returned+' accounts · '+debt.length+' with debt.',{
       blockHeight:page.blockHeight,from,accountsScanned:session.scanned,
-      debtPositions:session.debtPositions,candidatesInPage:debt.length});
-     for(const row of debt.slice(0,4)){
-      this.notify('discovery','info','Debt position observed · '+row.accountId,{
-       borrower:row.accountId,sourceBlock:page.blockHeight,
-       debtAssets:row.borrowed.length,eligibilityVerified:false});
-     }
+      debtPositions:session.debtPositions,candidatesInPage:debt.length,
+      transactionCount:0});
      if(!page.hasMore||page.returned===0){
       session.status='completed';session.endedAt=new Date().toISOString();
-      this.notify('system','success','Reached the end of the available borrower index.',{
+      this.notify('system','success','Scan completed · '+session.scanned+' accounts checked, no trades submitted.',{
        scanned:session.scanned,debtPositions:session.debtPositions,
        eligibilityVerified:false,transactionsExecuted:0});
       break;

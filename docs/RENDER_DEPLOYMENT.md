@@ -57,3 +57,12 @@ Public safe endpoints: GET /api/public/testnet/health and GET /api/public/testne
 Start Testnet Scan / Pause / Resume / Stop streams actual source height, scanned account count, and borrower debt/collateral atomic amounts; it stores its own cursor and history in the browser tab. Borrower debt is NOT evidence of liquidation eligibility. No USD earnings, fabricated transaction receipts, approved flash loan, wallet signing or profit is available on Testnet yet. The genuine liquidation execution path remains blocked until a compatible funded Testnet account, oracle-linked liquidation route, and independent receipt verification are implemented.
 
 The Testnet UI links to https://wallet.testnet.near.org/ to create an account and https://near-faucet.io/ to obtain test funds when available. Users should never paste private keys or seed phrases into the application. Mainnet remains separately authenticated and execution disabled.
+
+
+## Stage193 - inline activity, concise history and Testnet wallet funding
+
+All event detail views now use native inline disclosure rather than a right-hand overlay. The dashboard and full Live Operations history share the same summary-first row design. Highlights hides routine repeated chatter by default, while All events retains the complete original audit stream; raw JSON is an optional nested detail.
+
+The Testnet dashboard and wallet route accept only a public NEAR Testnet account address. The fixed-origin backend verifies chain identity and reads the account total balance using the NEAR view_account query, returning a rounded TNEAR display and raw yoctoNEAR amount. The verified public account ID can be copied for deposits; faucet links open externally. Nothing asks for or stores seed phrases, private keys or access keys. Showing a funded account is not proof that ARBIVANE can sign on its behalf, access collateral or execute liquidation.
+
+The Testnet action reads Start Automation like Demo. It automatically runs the authenticated read-only borrower scan, but will not claim a valid liquidation or credit PNL without a funded signer, eligible borrower, correct oracle/collateral route and independent final receipts. Mainnet remains separately protected.

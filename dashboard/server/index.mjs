@@ -5,7 +5,7 @@ import {extname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {AutomationManager,validateSettings} from './automation.mjs';
 import {DemoAutomation} from './demo.mjs';
-import {inspectTestnet,getTestnetPositions} from './testnet-readonly.mjs';
+import {inspectTestnet,getTestnetPositions,getTestnetAccount} from './testnet-readonly.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -128,6 +128,13 @@ const server = createServer(async (request, response) => {
           const data=await inspectTestnet();
           publicTestnetHealthCache={time:Date.now(),data};
           return json(response,200,data);
+        }
+        if(url.pathname==='/api/public/testnet/account'){
+          const accountId=url.searchParams.get('accountId')??'';
+          if(!(/^[a-z0-9][a-z0-9_.-]{0,56}\.testnet$/.test(accountId)||
+             /^[a-f0-9]{64}$/.test(accountId)))
+            return json(response,400,{error:'INVALID_TESTNET_ACCOUNT_ID'});
+          return json(response,200,await getTestnetAccount(accountId));
         }
         if(url.pathname==='/api/public/testnet/positions'){
           const from=Number(url.searchParams.get('from')),limit=Number(url.searchParams.get('limit'));

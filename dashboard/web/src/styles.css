@@ -756,3 +756,116 @@ body { background:var(--bg); color:#eaf1f9; }
 .testnet-observer-footer a{display:inline-flex;align-items:center;gap:4px;
   color:#9ed3ff;text-decoration:none;white-space:nowrap}
 .testnet-observer-footer a:hover{text-decoration:underline}
+
+/* Stage193 — compact expandable audit events and wallet funding surface. */
+.inline-event-list{max-height:420px;overflow-y:auto;scrollbar-gutter:stable}
+.event-toolbar{padding:10px 13px;display:flex;align-items:center;gap:9px;
+  border-bottom:1px solid #24394b;background:#0d1d2c}
+.event-view-switch{display:inline-flex;gap:2px;padding:3px;background:#0a1726;
+  border:1px solid #284053;border-radius:8px}
+.event-view-switch button{border:0;border-radius:5px;background:transparent;
+  padding:6px 11px;color:#92abc0;font-size:11px;cursor:pointer}
+.event-view-switch button.active{color:#e5f4ff;background:#21334c;font-weight:700}
+.event-toolbar select{margin-left:auto;background:#0b192a;color:#b5cde0;
+  border:1px solid #2a4357;border-radius:7px;padding:8px 12px;font-size:11px}
+.event-toolbar-count{color:#688aa0;font-size:10px;white-space:nowrap}
+.operation-entry.event-disclosure{border-bottom:1px solid #203449;background:transparent}
+.operation-entry.event-disclosure>summary{display:grid;grid-template-columns:83px 110px minmax(0,1fr) 82px 16px;
+  align-items:center;gap:12px;list-style:none;padding:12px 17px;min-height:53px;
+  cursor:pointer;transition:background .12s}
+.operation-entry.event-disclosure>summary:hover{background:#14283b}
+.operation-entry.event-disclosure[open]>summary{background:#1a2c40;border-bottom:1px solid #2e4557}
+.operation-entry.event-disclosure .operation-expand-icon{color:#7693ab;transition:transform .15s}
+.operation-entry.event-disclosure[open] .operation-expand-icon{transform:rotate(180deg)}
+.operation-entry.event-disclosure time{font-size:11px;color:#8bacc3;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.operation-entry.event-disclosure .operation-stage{font-size:11px;
+  font-weight:650;text-transform:capitalize;color:#8faef4}
+.operation-entry.event-disclosure .operation-message{font-size:12px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dae8f3}
+.operation-entry.event-disclosure .status-pill{justify-self:end;font-size:10px}
+.operation-entry.event-disclosure .operation-quiet{font-size:10px;
+  justify-self:end;color:#688da7}
+.operation-entry.event-disclosure .operation-evidence{padding:15px 19px 17px;
+  background:#0c1928}
+.event-detail-heading{display:flex;justify-content:space-between;gap:12px;
+  align-items:center;margin-bottom:12px}
+.event-detail-heading strong{font-size:12px;color:#e0edf7}
+.event-detail-heading span{color:#7794ac;font-size:10px;overflow-wrap:anywhere}
+.operation-entry.event-disclosure .operation-evidence dl{display:grid;
+  grid-template-columns:minmax(110px,160px) minmax(0,1fr);gap:9px 14px;margin:0;
+  padding:0}
+.operation-entry.event-disclosure .operation-evidence dt{color:#829db5;font-size:11px}
+.operation-entry.event-disclosure .operation-evidence dd{color:#d5e5f2;
+  font-size:11px;overflow-wrap:anywhere}
+.event-raw-disclosure{margin-top:14px;border-top:1px solid #294154;padding-top:11px}
+.event-raw-disclosure>summary{display:inline-flex;align-items:center;gap:6px;
+  cursor:pointer;font-size:11px;color:#8caee0;list-style:none}
+.event-raw-disclosure[open]>summary svg{transform:rotate(180deg)}
+.event-raw-disclosure pre{max-height:240px;overflow:auto;white-space:pre-wrap;
+  overflow-wrap:anywhere;margin:10px 0 0;padding:13px;border-radius:7px;
+  border:1px solid #2b4255;background:#071423;color:#aac4d9;font-size:10px}
+.operation-entry.event-disclosure.compact>summary{grid-template-columns:68px 80px minmax(0,1fr) 72px 14px;
+  min-height:47px;padding:10px 14px;gap:9px}
+.event-table-head{grid-template-columns:83px 110px minmax(0,1fr) 82px 16px;
+  gap:12px;background:#102338;padding:11px 17px;font-weight:600}
+.event-history-toolbar{flex-wrap:wrap;gap:8px;padding:14px}
+.event-history-toolbar .table-search{flex:1 1 260px;min-width:180px}
+.event-history-toolbar select{padding:10px;border:1px solid #30485a;border-radius:7px}
+.event-load-more{display:block;width:100%;border:0;border-top:1px solid #2c4558;
+  color:#b5cbe1;background:#122335;padding:13px;cursor:pointer;font-size:11px}
+.testnet-start-summary{display:flex;flex-direction:column;gap:7px;
+  padding:4px 0;color:#e0eef7;font-size:13px}
+.testnet-start-summary span{font-size:11px;color:#849fb5}
+.testnet-wallet-card{border:1px solid #294454;background:linear-gradient(135deg,#101f30,#0c1c29);
+  border-radius:13px;padding:19px 22px;margin-bottom:18px}
+.testnet-wallet-card.compact{padding:16px 20px}
+.testnet-wallet-heading,.testnet-wallet-balance,.testnet-wallet-foot{
+  display:flex;justify-content:space-between;align-items:center;gap:12px}
+.testnet-wallet-heading{margin-bottom:14px}
+.testnet-wallet-overline{font-size:9px;letter-spacing:.13em;font-weight:700;color:#79bdeb}
+.testnet-wallet-heading h3{font-size:16px;letter-spacing:-.018em;
+  color:#e3eef8;margin:4px 0 0}
+.testnet-wallet-state{display:inline-flex;gap:7px;align-items:center;font-size:10px;
+  border:1px solid #29475a;border-radius:20px;padding:6px 10px;color:#9bbdd0;white-space:nowrap}
+.testnet-wallet-state i{width:6px;height:6px;border-radius:50%;background:#72bddc}
+.testnet-wallet-input{display:flex;gap:9px}
+.testnet-wallet-input input{flex:1;min-width:0;background:#071625;color:#e1f0fb;
+  border:1px solid #365065;border-radius:8px;padding:12px 13px;font-size:13px}
+.testnet-wallet-input input:focus{outline:2px solid #4c7c9d;outline-offset:1px}
+.testnet-wallet-input button,.testnet-wallet-balance button{display:inline-flex;
+  align-items:center;justify-content:center;gap:7px;border:1px solid #3a5471;
+  background:#1b3150;color:#e1f0fa;border-radius:8px;padding:10px 14px;
+  cursor:pointer;font-size:11px;white-space:nowrap}
+.testnet-wallet-input button:disabled{opacity:.55;cursor:not-allowed}
+.testnet-wallet-balance{margin-top:12px;border:1px solid #2d495c;
+  background:#0d2232;border-radius:9px;padding:11px 14px}
+.testnet-wallet-balance small{display:block;color:#83a7c0;font-size:10px;margin-bottom:5px}
+.testnet-wallet-balance strong{color:#e6f5ff;font-size:20px;font-variant-numeric:tabular-nums}
+.testnet-wallet-balance strong span{font-size:12px;color:#8cbacb}
+.testnet-wallet-foot{justify-content:flex-start;flex-wrap:wrap;margin-top:13px}
+.testnet-wallet-foot a{color:#9dd9fb;text-decoration:none;display:inline-flex;align-items:center;
+  font-size:11px;gap:4px}
+.testnet-wallet-foot a:hover{text-decoration:underline}
+.testnet-wallet-note{font-size:10px;color:#66889f;margin-left:auto}
+.testnet-wallet-error{font-size:11px;color:#ffac9a;margin-top:9px}
+@media(max-width:850px){
+ .operation-entry.event-disclosure>summary,.operation-entry.event-disclosure.compact>summary{
+  grid-template-columns:65px 76px minmax(0,1fr) 14px}
+ .operation-entry.event-disclosure .status-pill,.operation-entry.event-disclosure .operation-quiet{
+  display:none}
+ .event-table-head{grid-template-columns:65px 76px minmax(0,1fr) 14px}
+ .event-table-head span:nth-child(4){display:none}
+}
+@media(max-width:530px){
+ .testnet-wallet-state{display:none}
+ .testnet-wallet-card{padding:15px}
+ .testnet-wallet-note{margin-left:0}
+ .event-toolbar-count{display:none}
+ .event-view-switch button{padding:7px 8px}
+ .operation-entry.event-disclosure>summary,.operation-entry.event-disclosure.compact>summary{
+  grid-template-columns:54px 65px minmax(0,1fr) 14px;gap:6px;padding:12px 10px}
+ .operation-entry.event-disclosure .operation-message{font-size:11px}
+ .event-table-head{display:none}
+ .operation-entry.event-disclosure .operation-evidence dl{grid-template-columns:100px 1fr}
+}

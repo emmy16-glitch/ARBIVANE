@@ -57,5 +57,5 @@ test('Stage186 all pages recover from initial load failures and mode changes',as
  assert.ok(source.includes("document.addEventListener('visibilitychange',onVisible)"));
  assert.ok(source.includes("poll=setInterval(()=>{if(active&&document.visibilityState==='visible')void load()},30000)"));
  assert.ok(source.includes('<Route path="*" element={<Navigate to="/" replace/>}/>'));
- assert.ok(source.includes("if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')"));
+ assert.ok(source.includes("if(stage!=='all'&&!stages.includes(stage))setStage('all')"));
 });
