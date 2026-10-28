@@ -648,3 +648,30 @@ body { background:var(--bg); color:#eaf1f9; }
 @media(max-width:620px){ .history-tabs { width:100%; }
   .history-tabs a { flex:1; text-align:center; }
 }
+
+/* Cross-route compact controls and stable responsive switching. */
+.workspace .automation-layout>.automation-body { padding:18px 22px 17px; }
+.workspace .automation-layout .money-label,
+.workspace .automation-layout .advanced-controls { max-width:460px; }
+.workspace .automation-layout .money-input { width:100%; max-width:460px; min-height:44px; }
+.workspace .automation-layout .money-input input { min-width:0; }
+.workspace .automation-actions { padding:17px 20px; }
+.workspace .automation-actions .controls .primary { min-height:44px; }
+.environment-picker .environment { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.environment-picker .environment svg { flex-shrink:0; }
+.workspace .panel, .page-panel, .history-tabs { min-width:0; }
+.main { min-width:0; }
+@media(max-width:970px){
+  .workspace .automation-layout .money-label,
+  .workspace .automation-layout .advanced-controls,
+  .workspace .automation-layout .money-input { max-width:100%; }
+  .workspace .automation-layout>.automation-body { padding:16px 17px 9px; }
+  .workspace .automation-actions { padding:12px 17px 17px; }
+}
+@media(max-width:620px){
+  .environment-picker { max-width:100%; min-width:0; }
+  .environment-picker .environment { gap:4px; }
+  .environment-picker .environment svg { width:13px; height:13px; }
+  .workspace .automation-layout>.automation-body { padding:15px 14px 8px; }
+  .workspace .automation-actions { padding:10px 14px 15px; }
+}
