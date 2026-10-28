@@ -278,7 +278,7 @@ function Dashboard(){
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
       <Operations events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
-      <ResearchActivity/>
+      {environment==='sandbox'&&<ResearchActivity/>}
     </div>
     {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
       <SessionSummary state={state} events={events}/>
