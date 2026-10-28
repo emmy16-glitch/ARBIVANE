@@ -40,3 +40,25 @@ test('financing input is a positive bounded decimal cap', () => {
     assert.throws(() => validateSettings({maxFinancingUsd:value, minimumNetProfitUsd:'1'}), /INVALID_MAX_FINANCING/);
   assert.throws(() => validateSettings({maxFinancingUsd:'1', minimumNetProfitUsd:'-1'}), /INVALID_MINIMUM_PROFIT/);
 });
+
+test('Stage174 serializes concurrent persisted events and replays long cursor backlogs without gaps',async(t)=>{
+ const root=await mkdtemp(join(tmpdir(),'arbivane-events-'));
+ t.after(()=>rm(root,{recursive:true,force:true}));
+ const store=new DashboardStore(root);await store.init();
+ await Promise.all(Array.from({length: 530},(_,i)=>
+  store.event('sandbox',{stage:'scan',status:'info',message:`replayed-${i}` })));
+ const rows=(await readFile(join(root,'sandbox','events.jsonl'),'utf8'))
+  .trim().split('\n').map(JSON.parse);
+ assert.equal(rows.length,530);
+ assert.deepEqual(rows.map(x=>x.sequence),Array.from({length:530},(_,i)=>i+1));
+ const first=await store.events('sandbox',1,500,{forward:true});
+ assert.equal(first[0].sequence,2);
+ assert.equal(first.at(-1).sequence,501);
+ const second=await store.events('sandbox',501,500,{forward:true});
+ assert.equal(second.length,29);
+ assert.equal(second[0].sequence,502);
+ assert.equal(second.at(-1).sequence,530);
+ const latest=await store.events('sandbox',0,10);
+ assert.deepEqual(latest.map(x=>x.sequence),[521,522,523,524,525,526,527,528,529,530]);
+ await assert.rejects(()=>store.events('sandbox',-1,10),/INVALID_EVENT_CURSOR/);
+});

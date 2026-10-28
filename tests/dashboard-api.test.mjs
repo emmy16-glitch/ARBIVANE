@@ -61,3 +61,21 @@ test('dashboard rejects cross-origin mutation and serves hardened production she
   assert.equal(page.headers.get('x-content-type-options'),'nosniff');
   assert.match(await page.text(),/ARBIVANE — Operations Terminal/);
 });
+
+test('Stage174 token is never stored in browser code and signed cookies reject alteration',async(t)=>{
+ const {origin,token}=await boot(t);
+ const auth=await fetch(`${origin}/api/auth/session`,{method:'POST',headers:{
+  origin,authorization:`Bearer ${token}`,'x-forwarded-proto':'https'}});
+ assert.equal(auth.status,201);
+ assert.match(auth.headers.get('set-cookie'),/; Secure/);
+ const cookie=auth.headers.get('set-cookie').split(';')[0];
+ const ok=await fetch(`${origin}/api/environments/sandbox`,{headers:{cookie}});
+ assert.equal(ok.status,200);
+ const modified=cookie.slice(0,-1)+(cookie.endsWith('A')?'B':'A');
+ const denied=await fetch(`${origin}/api/environments/sandbox`,{headers:{cookie:modified}});
+ assert.equal(denied.status,401);
+ const api=await import('node:fs/promises').then(fs=>
+  fs.readFile(new URL('../dashboard/web/src/api.ts',import.meta.url),'utf8'));
+ assert.ok(!api.includes('sessionStorage'));
+ assert.ok(!api.includes('localStorage'));
+});

@@ -1,4 +1,4 @@
-import {randomBytes, timingSafeEqual} from 'node:crypto';
+import {createHmac, randomBytes, timingSafeEqual} from 'node:crypto';
 import {readFile, stat} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {extname, join, resolve} from 'node:path';
@@ -14,7 +14,28 @@ const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? '127.0.0.1';
 const configuredToken = process.env.ARBIVANE_DASHBOARD_TOKEN ?? '';
 const configuredOrigin = process.env.ARBIVANE_DASHBOARD_ORIGIN ?? '';
-const sessions = new Map();
+// Signed, expiring operator cookie survives ordinary Render deploy/restart.
+// Local development without an access token uses a process-lifetime secret.
+const cookieKey = configuredToken || randomBytes(32).toString('hex');
+const COOKIE_AGE_MS = 12 * 60 * 60 * 1000;
+function cookieSignature(payload) {
+  return createHmac('sha256',cookieKey).update(payload).digest('base64url');
+}
+function signCookie() {
+  const payload = `${Date.now()}.${randomBytes(24).toString('base64url')}`;
+  return `${payload}.${cookieSignature(payload)}`;
+}
+function verifyCookie(value) {
+  if (typeof value !== 'string' || value.length > 200) return false;
+  const match = value.match(/^([0-9]{13})\.([A-Za-z0-9_-]{32})\.([A-Za-z0-9_-]{43})$/);
+  if (!match) return false;
+  const issued = Number(match[1]);
+  if (!Number.isSafeInteger(issued) || issued > Date.now() + 10000 ||
+      Date.now() - issued > COOKIE_AGE_MS) return false;
+  const expected = cookieSignature(`${match[1]}.${match[2]}`);
+  const actual = Buffer.from(match[3]), known = Buffer.from(expected);
+  return known.length === actual.length && timingSafeEqual(known, actual);
+}
 const listeners = new Map(ENVIRONMENTS.map((value) => [value, new Set()]));
 const store = new DashboardStore(dataRoot);
 await store.init();
@@ -49,7 +70,7 @@ function authorized(request) {
   const bearer = request.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
   if (tokenMatches(bearer)) return true;
   const id = cookies(request).arbivane_session;
-  return Boolean(id && sessions.has(id));
+  return verifyCookie(id);
 }
 function sameOrigin(request) {
   const origin = request.headers.origin;
@@ -67,16 +88,21 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
     if (url.pathname === '/api/health')
-      return json(response, 200, {status: 'ok', mainnetExecutionEnabled: false});
+      return json(response, process.env.NODE_ENV === 'production' && !configuredToken ? 503 : 200,
+        {status: process.env.NODE_ENV === 'production' && !configuredToken ? 'auth_not_configured' : 'ok',
+          mainnetExecutionEnabled: false});
     if (url.pathname === '/api/auth/session' && request.method === 'POST') {
       if (!sameOrigin(request)) return json(response, 403, {error: 'ORIGIN_REJECTED'});
       const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
       const local = ['127.0.0.1', '::1'].includes(request.socket.remoteAddress ?? '');
       if (configuredToken && !tokenMatches(supplied)) return json(response, 401, {error: 'INVALID_TOKEN'});
       if (!configuredToken && !local) return json(response, 503, {error: 'AUTH_NOT_CONFIGURED'});
-      const id = randomBytes(24).toString('base64url'); sessions.set(id, Date.now());
+      const id = signCookie();
+      const secure = Boolean(request.socket.encrypted ||
+        configuredOrigin.startsWith('https://') ||
+        request.headers['x-forwarded-proto'] === 'https');
       return json(response, 201, {authenticated: true}, {'set-cookie':
-        `arbivane_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${request.socket.encrypted ? '; Secure' : ''}`});
+        `arbivane_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure ? '; Secure' : ''}`});
     }
     if (url.pathname.startsWith('/api/') && !authorized(request))
       return json(response, 401, {error: 'AUTH_REQUIRED'});
@@ -88,10 +114,24 @@ const server = createServer(async (request, response) => {
           readiness: await environmentReadiness(environment)});
       if (request.method === 'GET' && action === 'events') {
         const after = Number(request.headers['last-event-id'] ?? url.searchParams.get('after') ?? 0);
+        if (!Number.isSafeInteger(after) || after < 0)
+          return json(response, 400, {error:'INVALID_EVENT_CURSOR'});
         response.writeHead(200, {'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform',
           connection: 'keep-alive', 'x-accel-buffering': 'no'});
-        for (const event of await store.events(environment, after, 500))
-          response.write(`id: ${event.sequence}\nevent: operation\ndata: ${JSON.stringify(event)}\n\n`);
+        const send = event => response.write(`id: ${event.sequence}\nevent: operation\ndata: ${JSON.stringify(event)}\n\n`);
+        // Existing sessions get every missed event in source order, in bounded
+        // batches; fresh sessions receive the compact recent window.
+        if (after === 0) {
+          for (const event of await store.events(environment, 0, 500)) send(event);
+        } else {
+          let cursor = after;
+          for (;;) {
+            const batch = await store.events(environment, cursor, 500, {forward:true});
+            for (const event of batch) send(event);
+            if (batch.length < 500) break;
+            cursor = batch.at(-1).sequence;
+          }
+        }
         listeners.get(environment).add(response);
         const keepAlive = setInterval(() => response.write(': keep-alive\n\n'), 15_000);
         request.on('close', () => { clearInterval(keepAlive); listeners.get(environment).delete(response); });
