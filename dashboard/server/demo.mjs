@@ -18,6 +18,28 @@ export class DemoAutomation{
   this.store=store;this.publish=publish;this.intervalMs=intervalMs;
   this.maxCycles=maxCycles;this.jobs=new Map();this.starting=false;
  }
+ // Reconnect only a local browser simulation using its saved phase/cycle.
+ async recover(){
+  const state=await this.store.state('demo');
+  const session=state.session;
+  if(!session?.demo||!['running','paused'].includes(session.status)||
+   this.jobs.has(session.id))return;
+  const checkpoint=session.demoCheckpoint??{cycle:0,phase:0};
+  if(!Number.isSafeInteger(checkpoint.cycle)||checkpoint.cycle<0||
+     checkpoint.cycle>=this.maxCycles||!Number.isSafeInteger(checkpoint.phase)||
+     checkpoint.phase<0||checkpoint.phase>13)return;
+  const job={id:session.id,amount:Number(session.settings.maxFinancingUsd),
+   cycle:checkpoint.cycle,phase:checkpoint.phase,
+   completed:state.transactions.length,
+   gross:Number(state.accounting.grossProceeds??0),
+   fees:Number(state.accounting.financingFees??0),
+   gas:Number(state.accounting.gasFees??0),
+   swap:Number(state.accounting.swapCosts??0),
+   net:Number(state.accounting.cumulativeNetPnl??0),timer:null};
+  if(!Number.isFinite(job.amount)||job.amount<=0)return;
+  this.jobs.set(session.id,job);
+  if(session.status==='running')this.schedule(job);
+ }
  async emit(stage,status,message,evidence={}){
   const e=await this.store.event('demo',{stage,status,message,
    evidence:{...evidence,scenario:'demo'}});
@@ -34,6 +56,7 @@ export class DemoAutomation{
    if(!Number.isFinite(amount)||amount<=0||amount>999999999)throw Error('INVALID_MAX_FINANCING');
    const session=this.store.newSession('demo',settings);
    session.status='running';session.demo=true;session.startedAt=new Date().toISOString();
+   session.demoCheckpoint={cycle:0,phase:0};
    const job={id:session.id,amount,cycle:0,phase:0,completed:0,
     gross:0,fees:0,gas:0,swap:0,net:0,timer:null};
    await this.store.update('demo',s=>{
@@ -147,6 +170,11 @@ export class DemoAutomation{
    await this.emit(stage,status,message,evidence);
    job.phase++;
   }
+  await this.store.update('demo',state=>{
+   if(state.session?.id===id&&state.session.status==='running')
+    state.session.demoCheckpoint={cycle:job.cycle,phase:job.phase};
+   return state;
+  });
   this.schedule(job);
  }
  async pause(){

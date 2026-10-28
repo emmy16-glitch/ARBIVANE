@@ -39,3 +39,10 @@ The public GET /api/health endpoint returns a non-sensitive deploymentRevision (
 The operator UI intentionally exposes three modes: Demo, Testnet, and Mainnet. Demo is a local event-driven scenario engine: no chain RPC, wallet signing, flash loans or blockchain settlement. Only the top mode strip says Interactive simulation. Its generated borrower positions, execution stages, receipts, portfolio and P&L are fictional and isolated in the demo data namespace, never copied to Testnet or Mainnet. Enter a financing limit and press Start; the server sends ordered events over SSE and updates the UI through the session's existing snapshot reconciliation. Pause/Resume/Stop work for the simulated worker. A complete run processes four scenarios and ends cleanly. Advanced real-source screening controls are hidden from Demo; Testnet and Mainnet are future authentic integrations and explicitly remain non-executable.
 
 The historical source-pinned Sandbox scripts remain in the repository for research, but are not part of the three-tab operator UI. On Render Free, local demo history remains subject to ephemeral storage, and an interrupted simulation never resumes unverified operations on boot. A success event in Demo must not be treated as real on-chain evidence or profit.
+
+
+## Stage191 public Demo without operator credentials
+
+The browser Demo now runs independently of the protected Render backend. The former Stage190 frontend called authenticated demo API routes, leaving the public Demo stuck in AUTH_REQUIRED with Start disabled.
+
+The frontend routes Demo load, start, pause, resume, stop and events through a browser-only scenario engine. It never calls a network API or shares state with other visitors. The session, progress checkpoint and events are saved in browser-tab sessionStorage, allowing active simulations to recover after refresh. Storage-restricted browsers retain in-memory functionality. The same standalone Demo works in Render Free and the static UI preview. Testnet and Mainnet retain their existing protected backend boundary, and neither has transaction execution enabled. No wallet, real funds, or blockchain transaction is involved.
