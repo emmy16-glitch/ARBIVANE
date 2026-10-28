@@ -6,7 +6,7 @@ import {
   MagnifyingGlass, Pause, Play, ShieldCheck, SlidersHorizontal, Stop, TrendUp, Wallet,
   WarningCircle, X,
 } from '@phosphor-icons/react';
-import {authenticate, command, loadEnvironment, subscribe} from './api';
+import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
 import type {StreamConnection} from './api';
 import {mergeOperationEvents} from './events';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
@@ -37,7 +37,7 @@ function ApiError({error,onRetry}:{error:string;onRetry:()=>void}) {
 }
 function Shell({children}:{children:React.ReactNode}) {
   const location = useLocation(); const navigate=useNavigate(); const [search,setSearch]=useState('');
-  return <div className="shell">
+  return <div className={`shell ${UI_PREVIEW?'ui-preview':''}`}>
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark"><CirclesThree weight="fill" size={26}/></span><span><b>ARBIVANE</b><small>Autonomous Liquidation Terminal</small></span></div>
       <nav>{nav.map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' } className={({isActive})=>isActive?'active':''}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
@@ -46,9 +46,12 @@ function Shell({children}:{children:React.ReactNode}) {
     </aside>
     <header className="topbar">
       <form className="search" onSubmit={event=>{event.preventDefault();if(search.trim())navigate(`/transactions?query=${encodeURIComponent(search.trim())}`)}}><MagnifyingGlass/><input aria-label="Search" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Search borrowers, transactions, markets…"/><kbd>/</kbd></form>
-      <div className="top-status"><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications not configured" title="Notifications unavailable" disabled><Bell/></button><div className="avatar">A</div><div className="account"><b>Operator</b><span>Private terminal</span></div></div>
+      <div className="top-status"><StatusPill tone="violet">Mainnet locked</StatusPill><button className="icon-button" aria-label="Notifications not configured" title="Notifications unavailable" disabled><Bell/></button><div className="avatar">A</div><div className="account"><b>{UI_PREVIEW?'Design preview':'Operator'}</b><span>{UI_PREVIEW?'View only':'Private terminal'}</span></div></div>
     </header>
-    <main className="main" data-route={location.pathname}>{children}</main>
+    <main className="main" data-route={location.pathname}>
+        {UI_PREVIEW&&<div className="preview-strip" role="status"><strong>INTERFACE PREVIEW</strong><span>Navigation and layouts only. No live trading, wallet connection or simulated earnings.</span><a href="https://github.com/emmy16-glitch/ARBIVANE" target="_blank" rel="noreferrer">Repository <ArrowUpRight size={13}/></a></div>}
+        {children}
+      </main>
     <nav className="mobile-nav">{nav.slice(0,5).map(([to,label,Icon])=><NavLink key={to} to={to} end={to==='/' }><Icon/><span>{label}</span></NavLink>)}</nav>
   </div>;
 }
@@ -58,12 +61,12 @@ function EnvironmentPicker({value,onChange,readiness}:{value:Environment;onChang
 }
 
 function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
-  const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'1000.00');
+  const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'');
   const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'0.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.environment]);
   const status=state?.session?.status??'idle'; const running=['starting','running','pause_requested','stopping'].includes(status);
   return <section className="panel automation"><div className="panel-title"><span><Gear/>Automation Control</span><StatusPill tone={environment==='mainnet'?'danger':'neutral'}>{environment==='mainnet'?'Execution locked':status}</StatusPill></div>
-    <div className="automation-body"><label className="money-label"><span>Maximum financing per liquidation <small>Verified source repayment cannot exceed this cap</small></span><div className="money-input"><span>$ USD</span><input value={amount} inputMode="decimal" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation"/></div></label>
+    <div className="automation-body"><label className="money-label"><span>Maximum financing per liquidation <small>Verified source repayment cannot exceed this cap</small></span><div className="money-input"><span>$ USD</span><input value={amount} inputMode="decimal" placeholder="Enter USD limit" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation"/></div></label>
       <div className="options"><b>Risk controls</b><div className="minimum"><span>Minimum source gross to consider</span><input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)} aria-label="Minimum source gross screening target"/><em>USD</em></div><p className="screening-note">Estimated gross is not net profit. Financing, fees and settlement must be verified separately.</p></div></div>
     <div className="controls"><button className="primary" disabled={running||busy!==null||readiness?.capabilities?.automate!==true} onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}><Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}</button><button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button><button className="stop" disabled={!running||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button></div>
     <div className="readiness"><i className={environment==='mainnet'||readiness?.status==='unavailable'?'warning':''}/>{busy?`${busy}…`:readiness?.status==='connected'?`${readiness.chainId} RPC verified at block ${readiness.blockHeight}; execution adapter unavailable`:environment==='sandbox'&&readiness?.status==='ready'?'Sandbox evidence, RPC, and Workspaces runtime configured':environment==='sandbox'?'Sandbox runner not configured':environment==='testnet'?'Testnet wallet and execution adapter not configured':'Mainnet signing and spending are disabled server-side'}</div>
