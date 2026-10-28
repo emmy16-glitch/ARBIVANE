@@ -95,7 +95,8 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
   const validAmount=/^\d+(?:\.\d{1,2})?$/.test(amount.trim())&&Number(amount)>0;
   return <section className="panel automation">
     <div className="panel-title"><span><Gear/>Automation</span>{hasSession&&<StatusPill tone={running?'success':'neutral'}>{status.replaceAll('_',' ')}</StatusPill>}</div>
-    <div className="automation-body">
+    <div className="automation-layout">
+      <div className="automation-body">
       <label className="money-label">
         <span>Maximum financing per liquidation</span>
         <div className="money-input">
@@ -111,7 +112,8 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
         </label>
       </details>
     </div>
-    <div className="controls">
+      <div className="automation-actions">
+        <div className="controls">
       <button className="primary" disabled={running||busy!==null||!canAutomate||!validAmount}
         onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
         <Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}
@@ -121,7 +123,9 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
         <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
       </>}
     </div>
-    {!canAutomate&&<div className="automation-availability"><span>Automation unavailable</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
+        {!canAutomate&&<div className="automation-availability"><span>Automation unavailable</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
+      </div>
+    </div>
   </section>;
 }
 

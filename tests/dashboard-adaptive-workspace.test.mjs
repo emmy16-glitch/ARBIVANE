@@ -42,3 +42,16 @@ test('Stage182 mode and view hierarchy never invent balances, PNL or a graph',as
  assert.ok(!s.includes('No balance available'));
  assert.ok(!s.includes('samplePnl'));
 });
+
+test('Stage183 automation controls use available card width without oversized idle margins',async()=>{
+ const app=await readFile(new URL('../dashboard/web/src/App.tsx',import.meta.url),'utf8');
+ const css=await readFile(new URL('../dashboard/web/src/styles.css',import.meta.url),'utf8');
+ assert.ok(app.includes('className="automation-layout"'));
+ assert.ok(app.includes('className="automation-actions"'));
+ assert.ok(css.includes('.workspace-idle .workspace-primary { max-width:none; width:100%; }'));
+ assert.match(css,/\.workspace \.automation-layout \{[\s\S]*?grid-template-columns:minmax\(0,1\.45fr\) minmax\(265px,\.85fr\)/);
+ assert.ok(css.includes('.workspace .automation-layout .money-label,'));
+ assert.ok(css.includes('.workspace .automation-actions .controls .primary'));
+ assert.ok(css.includes('@media(max-width:970px)'));
+ assert.ok(css.includes('grid-template-columns:minmax(0,1fr);'));
+});
