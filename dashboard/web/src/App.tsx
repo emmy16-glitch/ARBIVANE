@@ -80,13 +80,13 @@ function Shell({children}:{children:React.ReactNode}) {
 }
 
 function EnvironmentPicker(){
-  const {environment,onChange}=(()=>{const {environment,setEnvironment}=useEnvironment();return {environment,onChange:setEnvironment}})();
+  const {environment,setEnvironment}=useEnvironment();
   return <div className="environment-picker" role="group" aria-label="Network environment">
     {(Object.keys(envInfo) as Environment[]).map(key=>{
       const entry=envInfo[key];
       return <button type="button" key={key} aria-pressed={environment===key}
         className={environment===key?'environment selected':'environment'}
-        onClick={()=>onChange(key)}>{entry.title}</button>;
+        onClick={()=>setEnvironment(key)}>{entry.title}</button>;
     })}
   </div>;
 }
@@ -149,21 +149,47 @@ function Operations({events,onOpen,active,connection}:{events:OperationEvent[];o
 }
 
 function Accounting({state}:{state:DashboardState|null}) {
-  const a=state?.accounting;
-  const balances=state?.wallet.balances??[];
-  const asset=balances[0] as {atomic?:string;tokenId?:string}|undefined;
-  const available=a?.available;
-  const hasAccounting=Boolean(a&&[a.grossProceeds,a.financingFees,a.swapCosts,a.gasFees,a.cumulativeNetPnl].some(v=>v!==null&&v!==undefined));
-  const fields=[['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],['Swap costs','swapCosts'],['Gas fees','gasFees'],['Net P&L','cumulativeNetPnl']] as const;
-  return <section className="panel balance">
-    <div className="panel-title"><span>ARBIVANE Balance</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
-    {asset||available!==null&&available!==undefined?
-      <div className="balance-main"><span className="balance-icon"><Wallet size={23}/></span>
-        <div><small>Available</small><strong>{asset?.atomic??('$'+String(available))}</strong>
-        {asset?.tokenId&&<p>{asset.tokenId} · atomic units</p>}</div>
-      </div>:
-      <div className="balance-empty"><Wallet size={20}/><span>No balance available</span></div>}
-    {hasAccounting&&<div className="metrics">{fields.filter(([,key])=>a?.[key]!=null).map(([label,key])=><div key={key}><small>{label}</small><b>{'$'+String(a?.[key])}</b></div>)}</div>}
+  if(!hasFinancialEvidence(state))return null;
+  const accounting=state!.accounting;
+  const assets=state!.wallet.balances as Array<{atomic?:string;tokenId?:string}>;
+  const values=[
+    ['Gross proceeds',accounting.grossProceeds],
+    ['Financing fees',accounting.financingFees],
+    ['Swap costs',accounting.swapCosts],
+    ['Gas fees',accounting.gasFees],
+    ['Net P&L',accounting.cumulativeNetPnl]
+  ].filter((entry)=>entry[1]!==null&&entry[1]!==undefined);
+  return <section className="panel balance" aria-label="Financial summary">
+    <div className="panel-title"><span>Balance</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
+    <div className="account-balance-grid">
+      {assets.map((asset,i)=><div className="asset-balance" key={asset.tokenId??i}>
+        <small>{asset.tokenId??'Token'} · atomic units</small>
+        <strong>{asset.atomic??'—'}</strong>
+      </div>)}
+      {accounting.available!==null&&accounting.available!==undefined&&
+        <div className="asset-balance"><small>Reconciled available · USD</small><strong>{String(accounting.available)}</strong></div>}
+    </div>
+    {values.length>0&&<div className="financial-metrics">{values.map(([label,value])=>
+      <div key={String(label)}><small>{label}</small><b>{String(value)}</b></div>
+    )}</div>}
+  </section>;
+}
+
+function SessionSummary({state,events}:{state:DashboardState|null;events:OperationEvent[]}){
+  const session=state?.session;
+  if(!session)return null;
+  const last=events.filter(event=>event.sessionId===session.id).at(-1);
+  const active=ongoing.has(session.status)||session.status==='paused';
+  return <section className="panel session-summary" aria-label="Session summary">
+    <div className="panel-title"><span>{active?'Current session':'Last session'}</span>
+      <StatusPill tone={session.status==='completed'?'success':session.status==='failed'?'danger':'neutral'}>{session.status.replaceAll('_',' ')}</StatusPill>
+    </div>
+    <div className="session-summary-content">
+      <div><small>Started</small><strong>{session.startedAt?new Date(session.startedAt).toLocaleString():'Not started'}</strong></div>
+      {session.endedAt&&<div><small>Ended</small><strong>{new Date(session.endedAt).toLocaleString()}</strong></div>}
+      {last&&<div className="session-last-event"><small>Latest event</small><strong>{last.message}</strong></div>}
+      {session.failure!=null&&<NavLink to="/live" className="panel-link">Inspect failure <ArrowUpRight size={14}/></NavLink>}
+    </div>
   </section>;
 }
 
@@ -196,10 +222,14 @@ function Recent({state}:{state:DashboardState|null}) {
   </section>;
 }
 
-function Dashboard() {
-  const [environment,setEnvironment]=useState<Environment>('sandbox'); const [state,setState]=useState<DashboardState|null>(null);
+function Dashboard(){
+  const {environment}=useEnvironment();
+  const [state,setState]=useState<DashboardState|null>(null);
   const [readiness,setReadiness]=useState<Partial<Record<Environment,EnvironmentReadiness>>>({});
-  const [events,setEvents]=useState<OperationEvent[]>([]); const [error,setError]=useState(''); const [busy,setBusy]=useState<string|null>(null); const [detail,setDetail]=useState<OperationEvent|null>(null);
+  const [events,setEvents]=useState<OperationEvent[]>([]);
+  const [error,setError]=useState('');
+  const [busy,setBusy]=useState<string|null>(null);
+  const [detail,setDetail]=useState<OperationEvent|null>(null);
   const [connection,setConnection]=useState<StreamConnection|'connecting'>('connecting');
   const selectedEnvironment=useRef(environment);
   selectedEnvironment.current=environment;
@@ -208,12 +238,11 @@ function Dashboard() {
       const data=await loadEnvironment(environment);
       if(selectedEnvironment.current!==environment)return;
       setState(data.state);
-      setEvents(old=>mergeOperationEvents(environment,old,data.events));
-      setReadiness(old=>({...old,[environment]:data.readiness}));
+      setEvents(previous=>mergeOperationEvents(environment,previous,data.events));
+      setReadiness(previous=>({...previous,[environment]:data.readiness}));
       setError('');
     }catch(e){
-      if(selectedEnvironment.current===environment)
-        setError(e instanceof Error?e.message:'LOAD_FAILED');
+      if(selectedEnvironment.current===environment)setError(e instanceof Error?e.message:'LOAD_FAILED');
     }
   },[environment]);
   useEffect(()=>{
@@ -224,18 +253,45 @@ function Dashboard() {
       if(!active)return;
       source=subscribe(environment,event=>{
         if(!active)return;
-        setEvents(old=>mergeOperationEvents(environment,old,[event]));
-        // Streaming updates remain immediate; only expensive financial/state
-        // reconciliation is batched. Pending timers do not cross environments.
-        if(!refreshTimer)refreshTimer=setTimeout(()=>{
-          refreshTimer=undefined; if(active)void refresh();
-        },900);
+        setEvents(previous=>mergeOperationEvents(environment,previous,[event]));
+        if(!refreshTimer)refreshTimer=setTimeout(()=>{refreshTimer=undefined;if(active)void refresh()},900);
       },status=>{if(active)setConnection(status)});
     });
     return()=>{active=false;if(refreshTimer)clearTimeout(refreshTimer);source?.close()};
   },[environment,refresh]);
-  const run=async(action:string,settings?:DashboardState['settings'])=>{setBusy(action);setError('');try{await command(environment,action,settings);await refresh()}catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}finally{setBusy(null)}};
-  return <div className="dashboard"><EnvironmentPicker value={environment} onChange={setEnvironment} readiness={readiness}/><div className="left-column"><Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>{error&&<ApiError error={error} onRetry={()=>void refresh()}/>}<Operations events={events} onOpen={setDetail} connection={connection} active={Boolean(state?.session&&['running','starting','pause_requested','stopping'].includes(state.session.status))}/><ResearchActivity/></div><div className="right-column"><Accounting state={state}/><Recent state={state}/></div>{detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}><aside className="drawer" onClick={e=>e.stopPropagation()}><button className="drawer-close" onClick={()=>setDetail(null)}><X/></button><small>EVENT {detail.id}</small><h2>{detail.stage}</h2><StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill><p>{detail.message}</p><dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl><h3>Technical evidence</h3><pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre></aside></div>}</div>;
+  const run=async(action:string,settings?:DashboardState['settings'])=>{
+    setBusy(action);setError('');
+    try{await command(environment,action,settings);await refresh()}
+    catch(e){setError(e instanceof Error?e.message:'COMMAND_FAILED')}
+    finally{setBusy(null)}
+  };
+  const session=state?.session;
+  const isWorking=!!session&&ongoing.has(session.status);
+  const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
+  return <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
+    <div className="workspace-primary">
+      <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
+      {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
+      <Operations events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
+      <ResearchActivity/>
+    </div>
+    {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
+      <SessionSummary state={state} events={events}/>
+      <Accounting state={state}/>
+      <Recent state={state}/>
+    </aside>}
+    {detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}>
+      <aside className="drawer" onClick={event=>event.stopPropagation()} aria-label="Operation details">
+        <button className="drawer-close" onClick={()=>setDetail(null)} aria-label="Close event details"><X/></button>
+        <small>EVENT {detail.id}</small><h2>{detail.stage}</h2>
+        <StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill>
+        <p>{detail.message}</p>
+        <dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl>
+        <h3>Technical evidence</h3>
+        <pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre>
+      </aside>
+    </div>}
+  </div>;
 }
 
 type ViewKind='live'|'opportunities'|'performance'|'wallet'|'transactions'|'analytics'|'settings';
