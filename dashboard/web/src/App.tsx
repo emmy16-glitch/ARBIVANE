@@ -279,9 +279,9 @@ function Dashboard(){
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
-      <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
+      <Automation key={environment} environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
-      <Operations events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
+      <Operations key={environment} events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
       {environment==='sandbox'&&<ResearchActivity/>}
     </div>
     {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
@@ -429,42 +429,115 @@ function TransactionWorkspace({rows}:{rows:Array<Record<string,unknown>>}){
   </div>;
 }
 
-function OperationalPage({kind}:{kind:ViewKind}) {
-  const copy=viewCopy[kind],Icon=copy.icon;
+function HumanLabel({name}:{name:string}){
+  return <>{name.replace(/[_-]/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/^./,c=>c.toUpperCase())}</>;
+}
+function WalletWorkspace({state}:{state:DashboardState}){
+  const assets=state.wallet.balances as Array<{tokenId?:string;atomic?:string;transferableOutsideEnvironment?:boolean}>;
+  return <div className="wallet-workspace">
+    <div className="wallet-summary">
+      <div><small>Wallet status</small><strong>{state.wallet.status.replaceAll('_',' ')}</strong></div>
+      <div><small>Account</small><strong>{state.wallet.accountId??'Not connected'}</strong></div>
+    </div>
+    {assets.length?<>
+      <div className="section-label">Assets</div>
+      <div className="wallet-assets">{assets.map((asset,index)=><article className="asset-row" key={asset.tokenId??index}>
+        <div><strong>{asset.tokenId??'Token'}</strong>
+          <small>{asset.transferableOutsideEnvironment===false?'Sandbox asset':'Transfer status unverified'}</small>
+        </div><div className="asset-value"><strong>{asset.atomic??'—'}</strong><small>Atomic units</small></div>
+      </article>)}</div>
+    </>:<div className="compact-blank"><Wallet size={23}/><span>No assets available</span></div>}
+    <div className="wallet-footer"><span>Deposit and withdrawal are unavailable until authorized custody is configured.</span></div>
+  </div>;
+}
+function SettingsWorkspace({readiness,environment}:{readiness:EnvironmentReadiness;environment:Environment}){
+  const capabilities=Object.entries(readiness.capabilities??{});
+  const requirements=Object.entries(readiness.requirements??{});
+  return <div className="settings-workspace">
+    <div className="settings-status">
+      <div><small>Environment</small><strong>{envInfo[environment].title}</strong></div>
+      <div><small>Network status</small><strong>{readiness.status==='unavailable'?'Not configured':readiness.status.replaceAll('_',' ')}</strong></div>
+      <div><small>Chain</small><strong>{readiness.chainId||'—'}</strong></div>
+      <div><small>Observed block</small><strong>{readiness.blockHeight??'—'}</strong></div>
+    </div>
+    {capabilities.length>0&&<section className="settings-section"><h2>Capabilities</h2>
+      <div className="settings-rows">{capabilities.map(([name,available])=><div key={name}>
+        <span><HumanLabel name={name}/></span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Unavailable'}</StatusPill>
+      </div>)}</div>
+    </section>}
+    {requirements.length>0&&<details className="settings-details"><summary>Requirements and diagnostics</summary>
+      <div className="settings-rows">{requirements.map(([name,value])=><div key={name}>
+        <span><HumanLabel name={name}/></span><span className="requirement-value">
+          {typeof value==='boolean'?(value?'Ready':'Missing'):value===null?'Not configured':
+           typeof value==='object'?JSON.stringify(value):String(value)}
+        </span>
+      </div>)}</div>
+    </details>}
+  </div>;
+}
+function OperationalPage({kind}:{kind:ViewKind}){
+  const Icon=viewCopy[kind].icon;
   const {environment}=useEnvironment();
   const [data,setData]=useState<{state:DashboardState;events:OperationEvent[];readiness:EnvironmentReadiness}|null>(null);
   const [error,setError]=useState('');
+  const [retry,setRetry]=useState(0);
   useEffect(()=>{
-    let active=true;let source:EventSource|undefined;
-    setData(null);
-    void loadEnvironment(environment).then(value=>{
-      if(!active)return;
-      setData(value);setError('');
-      if(kind==='live') source=subscribe(environment,event=>{
-        if(active)setData(current=>current?{
-          ...current,events:mergeOperationEvents(environment,current.events,[event])
-        }:current);
-      });
-    }).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED')});
-    return()=>{active=false;source?.close()};
-  },[environment,kind]);
+    let active=true;
+    let source:EventSource|undefined;
+    let poll:ReturnType<typeof setInterval>|undefined;
+    setData(null);setError('');
+    const load=async()=>{
+      try{
+        const value=await loadEnvironment(environment);
+        if(!active)return;
+        setData(current=>current?{
+          ...value,events:mergeOperationEvents(environment,current.events,value.events)
+        }:value);
+        setError(previous=>previous==='STREAM_RECONNECTING'?previous:'');
+        return true;
+      }catch(reason){
+        if(active)setError(reason instanceof Error?reason.message:'LOAD_FAILED');
+        return false;
+      }
+    };
+    void load().then(ok=>{
+      if(!active||!ok)return;
+      if(kind==='live'){
+        source=subscribe(environment,event=>{
+          if(active)setData(current=>current?{
+            ...current,events:mergeOperationEvents(environment,current.events,[event])
+          }:current);
+        },status=>{
+          if(active&&status==='reconnecting')setError('STREAM_RECONNECTING');
+          if(active&&status==='connected')setError(previous=>previous==='STREAM_RECONNECTING'?'':previous);
+        });
+        // Reconcile original persisted records even when the stream is quiet.
+        poll=setInterval(()=>{if(active)void load()},30000);
+      }
+    });
+    return()=>{active=false;source?.close();if(poll)clearInterval(poll)};
+  },[environment,kind,retry]);
   const transactions=data?.state.transactions??[];
   const opportunities=data?.state.opportunities??[];
-  const readiness=data?.readiness;
   let content:React.ReactNode;
-  if(error) content=<ApiError error={error} onRetry={()=>{setError('');void loadEnvironment(environment).then(setData).catch(reason=>setError(reason instanceof Error?reason.message:'LOAD_FAILED'))}}/>;
-  else if(!data) content=<Empty icon={Icon} title="Loading"/>;
-  else if(kind==='transactions') content=transactions.length?<TransactionWorkspace rows={transactions}/>:<Empty icon={Icon} title="No transactions yet"/>;
-  else if(kind==='wallet') content=<div className="record-grid"><div><small>Wallet status</small><strong>{data.state.wallet.status.replaceAll('_',' ')}</strong></div><div><small>Account</small><strong>{data.state.wallet.accountId??'Not configured'}</strong></div><div className="wide"><small>Verified assets</small>{data.state.wallet.balances.length?<div className="compact-records">{data.state.wallet.balances.map((balance,index)=>{
-    const asset=balance as {tokenId?:string;atomic?:string;transferableOutsideEnvironment?:boolean};
-    return <article className="compact-record" key={index}><b>{asset.tokenId??'Unknown token'}</b><span>{asset.atomic??'—'} atomic units</span><small>{asset.transferableOutsideEnvironment===false?'Sandbox-only inventory':'Transferability not verified'}</small></article>;
-  })}</div>:<strong>No balances</strong>}</div><div className="wide record-actions"><button disabled title="Deposit adapter not configured"><ArrowDown/>Deposit</button><button disabled title="No authorized custody or verified transferable balance"><ArrowUpRight/>Withdraw</button></div></div>;
-  else if(kind==='performance'||kind==='analytics') content=data.state.accounting.reconciledAt?
+  if(!data&&error)content=<ApiError error={error} onRetry={()=>setRetry(current=>current+1)}/>;
+  else if(!data)content=<div className="page-loading" role="status">Loading</div>;
+  else if(kind==='transactions')content=transactions.length?
+    <TransactionWorkspace rows={transactions}/>:<Empty icon={Icon} title="No transactions yet"/>;
+  else if(kind==='wallet')content=<WalletWorkspace state={data.state}/>;
+  else if(kind==='performance'||kind==='analytics')content=data.state.accounting.reconciledAt?
     <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
-  else if(kind==='opportunities') content=opportunities.length?<OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
-  else if(kind==='live') content=<LiveEventTable events={data.events}/>;
-  else content=<div className="record-grid"><div><small>Environment</small><strong>{environment}</strong></div><div><small>Network</small><strong>{readiness?.status==='unavailable'?'Offline':readiness?.status.replaceAll('_',' ')??'Offline'}</strong></div><div><small>Chain</small><strong>{readiness?.chainId??'Unavailable'}</strong></div><div><small>Last checked block</small><strong>{readiness?.blockHeight??'—'}</strong></div><div className="wide"><small>Available capabilities</small><div className="capability-list">{Object.entries(readiness?.capabilities??{}).map(([name,available])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><StatusPill tone={available?'success':'neutral'}>{available?'Ready':'Not configured'}</StatusPill></div>)}</div></div><div className="wide"><small>Requirements</small><div className="capability-list">{Object.entries(readiness?.requirements??{}).map(([name,value])=><div key={name}><span>{name.replaceAll(/([A-Z])/g,' $1')}</span><span>{typeof value==='boolean'?(value?'Ready':'Missing'):String(value??'Not configured')}</span></div>)}</div></div></div>;
-  return <div className="subpage operational-page"><section className="panel page-panel">{content}</section></div>;
+  else if(kind==='opportunities')content=opportunities.length?
+    <OpportunityTable rows={opportunities}/>:<Empty icon={Icon} title="No opportunities yet"/>;
+  else if(kind==='live')content=data.events.length?<LiveEventTable events={data.events}/>:<Empty icon={Icon} title="No activity yet"/>;
+  else content=<SettingsWorkspace readiness={data.readiness} environment={environment}/>;
+  return <div className="subpage operational-page">
+    {data&&error&&<div className="route-warning" role="status">
+      <span>{error==='STREAM_RECONNECTING'?'Reconnecting to events':error.replaceAll('_',' ')}</span>
+      <button onClick={()=>setRetry(current=>current+1)}>Retry</button>
+    </div>}
+    <section className="panel page-panel">{content}</section>
+  </div>;
 }
 
 export function App(){const [environment,setEnvironment]=useState<Environment>('sandbox');return <EnvironmentContext.Provider value={{environment,setEnvironment}}><Shell><Routes><Route path="/" element={<Dashboard/>}/><Route path="/live" element={<OperationalPage kind="live"/>}/><Route path="/opportunities" element={<OperationalPage kind="opportunities"/>}/><Route path="/performance" element={<OperationalPage kind="performance"/>}/><Route path="/wallet" element={<OperationalPage kind="wallet"/>}/><Route path="/transactions" element={<OperationalPage kind="transactions"/>}/><Route path="/analytics" element={<Navigate to="/performance" replace/>}/><Route path="/settings" element={<OperationalPage kind="settings"/>}/></Routes></Shell></EnvironmentContext.Provider>}
