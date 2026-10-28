@@ -80,12 +80,40 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
   const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'');
   const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'0.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.environment]);
-  const status=state?.session?.status??'idle'; const running=['starting','running','pause_requested','stopping'].includes(status);
-  return <section className="panel automation"><div className="panel-title"><span><Gear/>Automation Control</span><StatusPill tone={environment==='mainnet'?'danger':'neutral'}>{environment==='mainnet'?'Execution locked':status}</StatusPill></div>
-    <div className="automation-body"><label className="money-label"><span>Maximum financing per liquidation <small>Verified source repayment cannot exceed this cap</small></span><div className="money-input"><span>$ USD</span><input value={amount} inputMode="decimal" placeholder="Enter USD limit" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation"/></div></label>
-      <div className="options"><b>Risk controls</b><div className="minimum"><span>Minimum source gross to consider</span><input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)} aria-label="Minimum source gross screening target"/><em>USD</em></div><p className="screening-note">Estimated gross is not net profit. Financing, fees and settlement must be verified separately.</p></div></div>
-    <div className="controls"><button className="primary" disabled={running||busy!==null||readiness?.capabilities?.automate!==true} onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}><Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}</button><button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button><button className="stop" disabled={!running||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button></div>
-    <div className="readiness"><i className={environment==='mainnet'||readiness?.status==='unavailable'?'warning':''}/>{busy?`${busy}…`:readiness?.status==='connected'?`${readiness.chainId} RPC verified at block ${readiness.blockHeight}; execution adapter unavailable`:environment==='sandbox'&&readiness?.status==='ready'?'Sandbox evidence, RPC, and Workspaces runtime configured':environment==='sandbox'?'Sandbox runner not configured':environment==='testnet'?'Testnet wallet and execution adapter not configured':'Mainnet signing and spending are disabled server-side'}</div>
+  const status=state?.session?.status??'idle';
+  const running=['starting','running','pause_requested','stopping'].includes(status);
+  const hasSession=running||status==='paused';
+  const canAutomate=readiness?.capabilities?.automate===true;
+  const validAmount=/^\d+(?:\.\d{1,2})?$/.test(amount.trim())&&Number(amount)>0;
+  return <section className="panel automation">
+    <div className="panel-title"><span><Gear/>Automation</span>{hasSession&&<StatusPill tone={running?'success':'neutral'}>{status.replaceAll('_',' ')}</StatusPill>}</div>
+    <div className="automation-body">
+      <label className="money-label">
+        <span>Maximum financing per liquidation</span>
+        <div className="money-input">
+          <span>USD</span>
+          <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
+        </div>
+      </label>
+      <details className="advanced-controls">
+        <summary><SlidersHorizontal size={16}/> Advanced settings</summary>
+        <label className="advanced-field"><span>Minimum reference gross (USD)</span>
+          <input value={minimum} inputMode="decimal" onChange={e=>setMinimum(e.target.value)}
+            aria-label="Minimum reference gross screening amount" title="Source screening threshold, not realized profit"/>
+        </label>
+      </details>
+    </div>
+    <div className="controls">
+      <button className="primary" disabled={running||busy!==null||!canAutomate||!validAmount}
+        onClick={()=>onCommand(status==='paused'?'resume':'start',{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
+        <Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}
+      </button>
+      {hasSession&&<>
+        <button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button>
+        <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
+      </>}
+    </div>
+    {!canAutomate&&<div className="automation-availability"><span>Automation unavailable</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
   </section>;
 }
 
