@@ -152,7 +152,7 @@ function Accounting({state}:{state:DashboardState|null}) {
   if(!hasFinancialEvidence(state))return null;
   const accounting=state!.accounting;
   const assets=state!.wallet.balances as Array<{atomic?:string;tokenId?:string}>;
-  const values=[
+  const values:Array<[string,unknown]>=[
     ['Gross proceeds',accounting.grossProceeds],
     ['Financing fees',accounting.financingFees],
     ['Swap costs',accounting.swapCosts],
