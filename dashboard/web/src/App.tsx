@@ -4,7 +4,7 @@ import {
   Pulse as Activity, ArrowDown, ArrowUpRight, ChartLineUp, CheckCircle, CirclesThree,
   ClockCounterClockwise, Cube, Flask, Gauge, Gear, Globe, House, ListMagnifyingGlass,
   Pause, Play, ShieldCheck, SlidersHorizontal, Stop, Wallet,
-  WarningCircle, X,
+  WarningCircle, X, Copy, CaretDown, ArrowClockwise,
 } from '@phosphor-icons/react';
 import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './api';
 import type {StreamConnection} from './api';
@@ -112,9 +112,8 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
           <span>USD</span>
           <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
         </div>
-      </label>:<div className="testnet-scan-target">
-        <span>Verified lending market</span><strong>contract.burrow.testnet</strong>
-        <small>Read actual borrower debt positions and source blocks. No signing or transfers.</small>
+      </label>:<div className="testnet-start-summary">
+        <strong>Market monitor ready</strong><span>Scanning starts automatically.</span>
       </div>}
       {environment==='mainnet'&&<details className="advanced-controls">
         <summary><SlidersHorizontal size={16}/> Advanced settings</summary>
@@ -129,7 +128,7 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
       <button className="primary" disabled={running||busy!==null||!canAutomate||(environment!=='testnet'&&!validAmount)}
         onClick={()=>onCommand(status==='paused'?'resume':'start',
           environment==='testnet'?undefined:{maxFinancingUsd:amount,minimumNetProfitUsd:minimum})}>
-        <Play weight="fill"/>{status==='paused'?'Resume':environment==='testnet'?'Start Testnet Scan':'Start Automation'}
+        <Play weight="fill"/>{status==='paused'?'Resume':'Start Automation'}
       </button>
       {hasSession&&<>
         <button disabled={!['running','starting'].includes(status)||busy!==null} onClick={()=>onCommand('pause')}><Pause weight="fill"/>Pause</button>
@@ -142,20 +141,87 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
   </section>;
 }
 
-function Operations({events,onOpen,active,connection}:{events:OperationEvent[];onOpen:(e:OperationEvent)=>void;active:boolean;connection:StreamConnection|'connecting'}) {
-  const [filter,setFilter]=useState('all');
-  const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
-  const stages=['all',...new Set(events.map(e=>e.stage))];
-  useEffect(()=>{if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')},[events,filter]);
+/** Summary-first event list. The raw technical evidence is still accessible,
+ * but never forces a full-screen drawer or a wall of repetitive JSON. */
+function operationHighlights(events:OperationEvent[],important:boolean){
+  if(!important)return events;
+  return events.filter((event,index)=>{
+    if(event.status==='failure'||event.status==='warning')return true;
+    if(event.environment==='testnet'){
+      if(event.stage==='discovery'&&events.some(other=>
+        other.stage==='scan'&&other.sessionId===event.sessionId&&
+        other.evidence?.blockHeight===event.evidence?.sourceBlock))return false;
+      return event.stage==='scan'||event.stage==='system'||event.stage==='network'||
+        event.stage==='control';
+    }
+    return event.stage==='system'||event.stage==='discovery'||
+      event.stage==='accounting'||event.stage==='confirmation'||
+      event.stage==='control'||(event.stage==='execution'&&event.message.includes('submitted'));
+  });
+}
+function EventDisclosure({event,compact=false}:{event:OperationEvent;compact?:boolean}){
+  const details=Object.entries(event.evidence??{}).filter(([key])=>
+    !['scenario','realizedPnlVerified','mainnetExecutionEnabled'].includes(key));
+  const name=(key:string)=>key.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')
+    .replace(/^./,letter=>letter.toUpperCase());
+  return <details className={'operation-entry event-disclosure'+(compact?' compact':'')}>
+    <summary>
+      <time>{new Date(event.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time>
+      <span className={'operation-stage '+event.stage}>{event.stage}</span>
+      <span className="operation-message">{event.message}</span>
+      {['success','failure','warning'].includes(event.status)?
+        <StatusPill tone={event.status==='failure'?'danger':
+          event.status==='success'?'success':'neutral'}>{event.status}</StatusPill>:
+        <span className="operation-quiet">Recorded</span>}
+      <CaretDown className="operation-expand-icon" size={14}/>
+    </summary>
+    <div className="operation-evidence">
+      <div className="event-detail-heading"><strong>Event details</strong>
+        <span>{event.id}</span></div>
+      <dl><dt>Time</dt><dd>{new Date(event.timestamp).toLocaleString()}</dd>
+        <dt>Stage</dt><dd>{name(event.stage)}</dd>
+        {details.slice(0,7).map(([key,value])=><ReactFragmentRow key={key}
+          name={name(key)} value={typeof value==='object'?JSON.stringify(value):String(value)}/>)}
+      </dl>
+      <details className="event-raw-disclosure"><summary>Technical record <CaretDown size={12}/></summary>
+        <pre>{JSON.stringify({session:event.sessionId,evidence:event.evidence},null,2)}</pre>
+      </details>
+    </div>
+  </details>;
+}
+function ReactFragmentRow({name,value}:{name:string;value:string}){
+  return <><dt>{name}</dt><dd>{value}</dd></>;
+}
+function Operations({events,active,connection}:{events:OperationEvent[];
+  active:boolean;connection:StreamConnection|'connecting'}){
+  const [stage,setStage]=useState('all');
+  const [highlights,setHighlights]=useState(true);
+  const stages=useMemo(()=>['all',...new Set(events.map(e=>e.stage))],[events]);
+  useEffect(()=>{if(stage!=='all'&&!stages.includes(stage))setStage('all')},[stage,stages]);
+  const rows=useMemo(()=>operationHighlights(events,highlights)
+    .filter(e=>stage==='all'||e.stage===stage).slice(-14).reverse(),
+    [events,highlights,stage]);
   return <section className="panel operations">
     <div className="panel-title">
-      <span><Activity/>Live Operations</span>
-      {active&&<StatusPill tone={connection==='connected'?'success':'neutral'}>{connection==='connected'?'Live':connection==='reconnecting'?'Reconnecting':'Connecting'}</StatusPill>}
-      {!active&&events.length>0&&<NavLink className="panel-link" to="/live">History <ArrowUpRight size={14}/></NavLink>}
+      <span><Activity/>Live operations</span>
+      {active&&<StatusPill tone={connection==='connected'?'success':'neutral'}>
+        {connection==='connected'?'Live':'Connecting'}</StatusPill>}
+      <NavLink className="panel-link" to="/live">History <ArrowUpRight size={14}/></NavLink>
     </div>
-    {events.length>0&&<div className="filters">{stages.map(stage=><button className={filter===stage?'active':''} onClick={()=>setFilter(stage)} key={stage}>{stage}<small>{stage==='all'?events.length:events.filter(e=>e.stage===stage).length}</small></button>)}</div>}
-    {filtered.length===0?<div className="stream-empty">{active?'Waiting for events':'No activity yet'}</div>:
-      <div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={'event-dot '+event.status}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
+    {events.length>0&&<div className="event-toolbar">
+      <div className="event-view-switch">
+        <button className={highlights?'active':''} onClick={()=>setHighlights(true)}>Highlights</button>
+        <button className={!highlights?'active':''} onClick={()=>setHighlights(false)}>All</button>
+      </div>
+      <select aria-label="Filter operations by stage" value={stage} onChange={e=>setStage(e.target.value)}>
+        {stages.map(v=><option key={v} value={v}>{v==='all'?'All stages':v}</option>)}
+      </select>
+      <span className="event-toolbar-count">{rows.length} shown</span>
+    </div>}
+    {rows.length===0?<div className="stream-empty">{active?'Monitoring activity…':'No activity yet'}</div>:
+      <div className="inline-event-list" role="log">
+        {rows.map(event=><EventDisclosure key={event.id} event={event} compact/>)}
+      </div>}
   </section>;
 }
 
@@ -193,6 +259,79 @@ function DemoOverview({state,events}:{state:DashboardState|null;events:Operation
   </section>;
 }
 
+const TESTNET_ACCOUNT_KEY='arbivane-testnet-account-v1';
+const TESTNET_ADDRESS=/^(?:[a-z0-9][a-z0-9_.-]{0,56}\.testnet|[a-f0-9]{64})$/;
+type AccountProof={accountId:string;network:string;balanceNear:string;balanceYocto:string;
+  sourceBlock:number;checkedAt:string;canSign:boolean;signerConnected:boolean};
+function TestnetWallet({compact=false}:{compact?:boolean}){
+  const [address,setAddress]=useState(()=>{
+    try{return sessionStorage.getItem(TESTNET_ACCOUNT_KEY)??''}catch{return ''}
+  });
+  const [proof,setProof]=useState<AccountProof|null>(null);
+  const [error,setError]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const valid=TESTNET_ADDRESS.test(address.trim());
+  const verify=useCallback(async(value:string)=>{
+    if(!TESTNET_ADDRESS.test(value.trim())){setProof(null);setError('Enter a valid NEAR Testnet account.');return}
+    setBusy(true);setError('');setProof(null);
+    try{
+      const response=await fetch('/api/public/testnet/account?accountId='+encodeURIComponent(value.trim()),{
+        credentials:'omit',signal:AbortSignal.timeout(15000)});
+      const result=await response.json();
+      if(!response.ok)throw Error(result.error==='TESTNET_RPC_RESPONSE_ERROR'?
+        'Account not found on NEAR Testnet.':String(result.error??'Balance unavailable'));
+      if(result.network!=='testnet'||result.accountId!==value.trim()||
+        result.signerConnected!==false||result.canSign!==false||
+        !/^\d+(?:\.\d+)?$/.test(result.balanceNear))
+        throw Error('Could not verify the account response');
+      setProof(result as AccountProof);
+      try{sessionStorage.setItem(TESTNET_ACCOUNT_KEY,value.trim())}catch{}
+    }catch(reason){setError(reason instanceof Error?reason.message:'Account lookup failed')}
+    finally{setBusy(false)}
+  },[]);
+  useEffect(()=>{
+    if(valid)void verify(address);
+    // Refresh verified balance at a modest rate; never collect secrets.
+    const timer=setInterval(()=>{
+      if(document.visibilityState==='visible'&&TESTNET_ADDRESS.test(address.trim()))
+        void verify(address);
+    },60000);
+    return()=>clearInterval(timer);
+  },[]);
+  const copy=async()=>{
+    if(!proof)return;
+    try{await navigator.clipboard.writeText(proof.accountId);setCopied(true)}
+    catch{setError('Clipboard unavailable. Select the address above to copy it.')}
+  };
+  return <section className={'testnet-wallet-card '+(compact?'compact':'')} aria-label="Testnet wallet funding">
+    <div className="testnet-wallet-heading">
+      <div><span className="testnet-wallet-overline">WALLET & FUNDING</span>
+        <h3>Testnet account</h3></div>
+      <span className="testnet-wallet-state"><i/>{proof?'Balance verified':'Public address only'}</span>
+    </div>
+    <div className="testnet-wallet-input">
+      <input aria-label="NEAR Testnet public wallet address" spellCheck={false}
+        value={address} placeholder="yourname.testnet"
+        onChange={e=>{setAddress(e.target.value);setProof(null);setCopied(false);setError('')}}/>
+      <button type="button" disabled={!valid||busy} onClick={()=>void verify(address)}>
+        <ArrowClockwise size={14}/>{busy?'Checking':'Verify'}</button>
+    </div>
+    {proof&&<div className="testnet-wallet-balance">
+      <div><small>Testnet NEAR balance</small><strong>{Number(proof.balanceNear).toLocaleString(undefined,{maximumFractionDigits:6})}
+        <span> TNEAR</span></strong></div>
+      <button type="button" onClick={()=>void copy()} aria-label="Copy verified Testnet deposit address">
+        <Copy size={15}/>{copied?'Copied':'Copy address'}</button>
+    </div>}
+    {error&&<div className="testnet-wallet-error" role="status">{error}</div>}
+    <div className="testnet-wallet-foot">
+      <a href="https://wallet.testnet.near.org/" target="_blank" rel="noreferrer">Create wallet <ArrowUpRight size={13}/></a>
+      <a href="https://near-faucet.io/" target="_blank" rel="noreferrer">Get test tokens <ArrowUpRight size={13}/></a>
+      <span className="testnet-wallet-note">Signing not connected</span>
+    </div>
+  </section>;
+}
+
 function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?:EnvironmentReadiness}){
   const active=state?.session?.status==='running';
   const session=state?.session as (DashboardState['session']&{
@@ -200,10 +339,9 @@ function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?
   const connected=readiness?.capabilities?.read===true;
   return <section className="demo-overview testnet-overview" aria-label="Live Testnet monitor">
     <div className="demo-overview-top"><div>
-      <span className="demo-eyebrow">ON-CHAIN OBSERVATION</span>
-      <h2>Rhea Testnet debt monitor</h2>
-      <p>Real borrower positions and block heights from NEAR Testnet.
-         Liquidation eligibility and transaction execution are not yet enabled.</p>
+      <span className="demo-eyebrow">NETWORK MONITOR</span>
+      <h2>Testnet automation</h2>
+      <p>Live borrower discovery and execution readiness.</p>
     </div><span className={'demo-overview-activity '+(active?'is-active':'')}>
       <span className="demo-overview-led"/>{active?'Scanning live chain':connected?'RPC connected':'RPC unavailable'}
     </span></div>
@@ -215,14 +353,10 @@ function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?
       <div className="demo-metric"><div className="demo-metric-top"><span>Source block</span><Cube size={17}/></div>
         <strong>{(session?.observedBlocks??readiness?.blockHeight)?.toLocaleString()??'—'}</strong></div>
       <div className="demo-metric"><div className="demo-metric-top"><span>Execution</span><ShieldCheck size={17}/></div>
-        <strong>Disabled</strong></div>
+        <strong>Not ready</strong></div>
     </div>
-    <div className="testnet-observer-footer">NEAR Testnet <span>·</span>
-      contract.burrow.testnet <span>·</span> Live RPC observations
-      <span className="testnet-observer-spacer"/>
-      <a href="https://wallet.testnet.near.org/" target="_blank" rel="noreferrer">Testnet wallet <ArrowUpRight size={13}/></a>
-      <a href="https://near-faucet.io/" target="_blank" rel="noreferrer">Get test tokens <ArrowUpRight size={13}/></a>
-    </div>
+    <div className="testnet-observer-footer">Read-only market monitoring
+      <span>·</span> NEAR Testnet</div>
   </section>;
 }
 
@@ -319,7 +453,7 @@ function Dashboard(){
   const [events,setEvents]=useState<OperationEvent[]>([]);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState<string|null>(null);
-  const [detail,setDetail]=useState<OperationEvent|null>(null);
+
   const [connection,setConnection]=useState<StreamConnection|'connecting'>('connecting');
   const selectedEnvironment=useRef(environment);
   selectedEnvironment.current=environment;
@@ -346,7 +480,7 @@ function Dashboard(){
     };
     const onOnline=()=>{if(active)void reconcile()};
     const onVisible=()=>{if(document.visibilityState==='visible')onOnline()};
-    setState(null);setEvents([]);setDetail(null);setConnection('connecting');
+    setState(null);setEvents([]);setConnection('connecting');
     // Subscribe independently of the first snapshot: a temporary API outage
     // must not leave the dashboard frozen after network recovery.
     if(!UI_PREVIEW){
@@ -380,28 +514,18 @@ function Dashboard(){
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <>{environment==='demo'&&<DemoOverview state={state} events={events}/>}
   {environment==='testnet'&&<TestnetOverview state={state} readiness={readiness.testnet}/>}
+  {environment==='testnet'&&<TestnetWallet compact/>}
   <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
       {error&&<ApiError error={error} onRetry={()=>void refresh()}/>}
-      <Operations key={environment} events={events} onOpen={setDetail} connection={connection} active={isWorking}/>
+      <Operations key={environment} events={events} connection={connection} active={isWorking}/>
     </div>
     {hasAside&&<aside className="workspace-aside" aria-label="Session and financial details">
       <SessionSummary state={state} events={events}/>
       <Accounting state={state}/>
       <Recent state={state}/>
     </aside>}
-    {detail&&<div className="drawer-backdrop" onClick={()=>setDetail(null)}>
-      <aside className="drawer" onClick={event=>event.stopPropagation()} aria-label="Operation details">
-        <button className="drawer-close" onClick={()=>setDetail(null)} aria-label="Close event details"><X/></button>
-        <small>EVENT {detail.id}</small><h2>{detail.stage}</h2>
-        <StatusPill tone={detail.status==='failure'?'danger':'neutral'}>{detail.status}</StatusPill>
-        <p>{detail.message}</p>
-        <dl><dt>Timestamp</dt><dd>{detail.timestamp}</dd><dt>Session</dt><dd>{detail.sessionId??'None'}</dd></dl>
-        <h3>Technical evidence</h3>
-        <pre>{detail.evidence?JSON.stringify(detail.evidence,null,2):'No additional evidence attached.'}</pre>
-      </aside>
-    </div>}
   </div></>;
 }
 
@@ -418,39 +542,39 @@ const viewCopy:Record<ViewKind,{title:string;icon:typeof Gauge}>={
 
 function LiveEventTable({events}:{events:OperationEvent[]}){
   const [query,setQuery]=useState('');
-  const [filter,setFilter]=useState('all');
+  const [stage,setStage]=useState('all');
+  const [highlights,setHighlights]=useState(true);
+  const [limit,setLimit]=useState(35);
   const stages=useMemo(()=>['all',...new Set(events.map(e=>e.stage))],[events]);
-  useEffect(()=>{if(filter!=='all'&&!events.some(event=>event.stage===filter))setFilter('all')},[events,filter]);
-  const rows=useMemo(()=>events.filter(e=>(filter==='all'||e.stage===filter)&&
-    (!query.trim()||[e.message,e.stage,e.status,e.id,e.sessionId].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())))
-    .slice().reverse(),[events,filter,query]);
+  useEffect(()=>{if(stage!=='all'&&!stages.includes(stage))setStage('all')},[stage,stages]);
+  const matching=useMemo(()=>operationHighlights(events,highlights).filter(e=>
+    (stage==='all'||e.stage===stage)&&(!query.trim()||
+      [e.message,e.stage,e.status,e.id,e.sessionId].filter(Boolean).join(' ')
+       .toLowerCase().includes(query.trim().toLowerCase()))).slice().reverse(),
+    [events,stage,query,highlights]);
+  const rows=matching.slice(0,limit);
   return <div className="operations-workspace">
-    <div className="table-toolbar">
+    <div className="table-toolbar event-history-toolbar">
       <label className="table-search"><span className="visually-hidden">Search operations</span>
-        <input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search events, stages, transactions"/>
+        <input type="search" value={query} onChange={event=>setQuery(event.target.value)}
+          placeholder="Find an event or borrower"/>
       </label>
-      <select aria-label="Filter by operation stage" value={filter} onChange={event=>setFilter(event.target.value)}>
-        {stages.map(stage=><option value={stage} key={stage}>{stage==='all'?'All stages':stage}</option>)}
+      <div className="event-view-switch">
+        <button className={highlights?'active':''} onClick={()=>setHighlights(true)}>Highlights</button>
+        <button className={!highlights?'active':''} onClick={()=>setHighlights(false)}>All events</button>
+      </div>
+      <select aria-label="Filter by event stage" value={stage} onChange={event=>setStage(event.target.value)}>
+        {stages.map(v=><option key={v} value={v}>{v==='all'?'All stages':v}</option>)}
       </select>
-      <NavLink to="/transactions" className="table-text-link">Transactions <ArrowUpRight size={15}/></NavLink>
     </div>
-    {rows.length===0?<div className="data-empty">No matching activity</div>:
+    {rows.length===0?<div className="data-empty">No matching events</div>:
       <div className="operations-table">
-        <div className="operations-table-head"><span>Time</span><span>Stage</span><span>Activity</span><span>Result</span></div>
-        {rows.map(event=><details key={event.id} className="operation-entry">
-          <summary>
-            <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
-            <span className="operation-stage">{event.stage}</span>
-            <span className="operation-message">{event.message}</span>
-            <StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill>
-          </summary>
-          <div className="operation-evidence">
-            <dl><dt>Event ID</dt><dd>{event.id}</dd><dt>Session</dt><dd>{event.sessionId??'—'}</dd>
-            <dt>Timestamp</dt><dd>{event.timestamp}</dd></dl>
-            {event.evidence&&<pre>{JSON.stringify(event.evidence,null,2)}</pre>}
-          </div>
-        </details>)}
+        <div className="operations-table-head event-table-head"><span>Time</span>
+          <span>Stage</span><span>Activity</span><span>Result</span><span/></div>
+        {rows.map(event=><EventDisclosure key={event.id} event={event}/>)}
       </div>}
+    {matching.length>limit&&<button className="event-load-more"
+      onClick={()=>setLimit(n=>n+35)}>Show older events ({matching.length-limit} remaining)</button>}
   </div>;
 }
 
@@ -640,7 +764,8 @@ function OperationalPage({kind}:{kind:ViewKind}){
   else if(!data)content=<div className="page-loading" role="status">Loading</div>;
   else if(kind==='transactions')content=transactions.length?
     <TransactionWorkspace rows={transactions}/>:<Empty icon={Icon} title="No transactions yet"/>;
-  else if(kind==='wallet')content=<WalletWorkspace state={data.state}/>;
+  else if(kind==='wallet')content=environment==='testnet'?
+    <TestnetWallet/>:<WalletWorkspace state={data.state}/>;
   else if(kind==='performance'||kind==='analytics')content=data.state.accounting.reconciledAt?
     <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
   else if(kind==='opportunities')content=opportunities.length?

@@ -104,3 +104,25 @@ export async function getTestnetPositions(from,limit,{fetchImpl=fetch}={}){
   eligibilityVerified:false,realizedPnlVerified:false};
 }
 
+
+/** Public account lookup only. Never returns access keys or mutable account state. */
+export async function getTestnetAccount(accountId,{fetchImpl=fetch}={}){
+ if(typeof accountId!=='string'||accountId.length>64||
+   !(/^[a-z0-9][a-z0-9_.-]{0,56}\.testnet$/.test(accountId)||
+     /^[a-f0-9]{64}$/.test(accountId)))
+  errors('INVALID_TESTNET_ACCOUNT_ID');
+ const chain=await testnetRpc('status',[],{fetchImpl});
+ if(chain.chain_id!=='testnet'||chain.sync_info?.syncing!==false)
+  errors('WRONG_TESTNET_CHAIN');
+ const result=await testnetRpc('query',{request_type:'view_account',
+  finality:'final',account_id:accountId},{fetchImpl});
+ if(typeof result.amount!=='string'||!/^[0-9]{1,80}$/.test(result.amount)||
+    typeof result.locked!=='string'||!/^[0-9]{1,80}$/.test(result.locked)||
+    !Number.isSafeInteger(result.block_height))
+  errors('TESTNET_ACCOUNT_INVALID_RESPONSE');
+ return {accountId,network:'testnet',balanceYocto:result.amount,
+  lockedYocto:result.locked,
+  balanceNear:(Number(BigInt(result.amount)/1000000000000000000n)/1000000).toFixed(6),
+  sourceBlock:result.block_height,checkedAt:new Date().toISOString(),
+  canSign:false,signerConnected:false,executionEnabled:false};
+}
