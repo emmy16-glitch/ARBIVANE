@@ -38,3 +38,13 @@ test('Stage184 accessible controls and compact details on desktop and mobile',as
  assert.ok(styles.includes('.operation-entry summary:focus-visible'));
  assert.ok(styles.includes('.transaction-entry summary:focus-visible'));
 });
+
+test('Stage185 transaction history stays accessible with an empty live event feed',async()=>{
+ const app=await readFile(appPath,'utf8');
+ const css=await readFile(cssPath,'utf8');
+ assert.ok(app.includes("(kind==='live'||kind==='transactions')"));
+ assert.ok(app.includes('aria-label="Operations sections"'));
+ assert.ok(app.includes('<NavLink to="/live" end>Events</NavLink>'));
+ assert.ok(app.includes('<NavLink to="/transactions">Transactions</NavLink>'));
+ assert.ok(css.includes('.history-tabs a.active'));
+});

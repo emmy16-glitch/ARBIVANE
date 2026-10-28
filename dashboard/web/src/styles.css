@@ -636,3 +636,15 @@ body { background:var(--bg); color:#eaf1f9; }
   .asset-row { flex-direction:column; align-items:stretch; }
   .asset-value { text-align:left; }
 }
+
+/* Stage185: primary operations history remains navigable with zero events. */
+.history-tabs { display:inline-flex; align-items:center; gap:5px; justify-self:start;
+  padding:4px; background:#101e2b; border:1px solid #2b4054; border-radius:9px; }
+.history-tabs a { padding:9px 18px; text-decoration:none; font-size:12px; color:#aabbd0;
+  font-weight:570; border-radius:6px; }
+.history-tabs a:hover { background:#1b2c3d; color:#f1f5fb; }
+.history-tabs a.active { color:#f1edff; background:#34305a; }
+.history-tabs a:focus-visible { outline:2px solid #b7a6f5; outline-offset:2px; }
+@media(max-width:620px){ .history-tabs { width:100%; }
+  .history-tabs a { flex:1; text-align:center; }
+}
