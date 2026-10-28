@@ -41,7 +41,7 @@ test('dashboard HTTP boundary authenticates, isolates and denies unsupported exe
   const settings={maxFinancingUsd:'1000.00',minimumNetProfitUsd:'1.00'};
   const missing=await fetch(`${origin}/api/environments/sandbox/start`,{method:'POST',
     headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({settings})});
-  assert.equal(missing.status,400); assert.equal((await missing.json()).error,'SANDBOX_EVIDENCE_NOT_CONFIGURED');
+  assert.equal(missing.status,400); assert.equal((await missing.json()).error,'SANDBOX_RUNTIME_NOT_READY');
   const mainnet=await fetch(`${origin}/api/environments/mainnet/start`,{method:'POST',
     headers:{cookie,origin,'content-type':'application/json'},body:JSON.stringify({settings})});
   assert.equal(mainnet.status,400); assert.equal((await mainnet.json()).error,'MAINNET_EXECUTION_DISABLED');

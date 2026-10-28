@@ -86,7 +86,7 @@ function EnvironmentPicker(){
 }
 
 function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
-  const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'');
+  const [amount,setAmount]=useState(state?.settings.maxFinancingUsd??'1000.00');
   const [minimum,setMinimum]=useState(state?.settings.minimumNetProfitUsd??'0.00');
   useEffect(()=>{if(state){setAmount(state.settings.maxFinancingUsd);setMinimum(state.settings.minimumNetProfitUsd)}},[environment,state?.environment]);
   const status=state?.session?.status??'idle';
@@ -99,7 +99,7 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
     <div className="automation-layout">
       <div className="automation-body">
       <label className="money-label">
-        <span>Maximum financing per liquidation</span>
+        <span>{environment==='sandbox'?'Maximum Sandbox financing per liquidation':'Maximum financing per liquidation'}</span>
         <div className="money-input">
           <span>USD</span>
           <input value={amount} inputMode="decimal" placeholder="Enter amount" onChange={e=>setAmount(e.target.value)} aria-label="Maximum financing per liquidation in US dollars"/>
@@ -124,7 +124,7 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
         <button className="stop" disabled={status==='stopping'||busy!==null} onClick={()=>onCommand('stop')}><Stop weight="fill"/>Stop</button>
       </>}
     </div>
-        {!canAutomate&&<div className="automation-availability"><span>Automation unavailable</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
+        {!canAutomate&&<div className="automation-availability"><span>{environment==='sandbox'?'Sandbox worker not configured':environment==='testnet'?'Testnet automation not configured':'Mainnet execution disabled'}</span><NavLink to="/settings">Details <ArrowUpRight size={13}/></NavLink></div>}
       </div>
     </div>
   </section>;

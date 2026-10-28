@@ -63,7 +63,7 @@ test('Stage171 concurrency: two start requests cannot both enter admission',asyn
  const first=manager.start('sandbox',settings);
  await assert.rejects(()=>manager.start('sandbox',settings),/SESSION_ALREADY_ACTIVE/);
  release();
- await assert.rejects(()=>first,/SANDBOX_EVIDENCE_NOT_CONFIGURED/);
+ await assert.rejects(()=>first,/SANDBOX_RUNTIME_NOT_READY/);
  assert.equal(manager.startingEnvironments.size,0);
 });
 
