@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {AutomationManager,validateSettings} from './automation.mjs';
 import {DemoAutomation} from './demo.mjs';
 import {inspectTestnet,getTestnetPositions,getTestnetAccount} from './testnet-readonly.mjs';
+import {assessTestnetPage} from './testnet-assessment.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -45,7 +46,25 @@ function verifyCookie(value) {
 // Rate-limit all public Testnet read-only bridge requests by client IP.
 const publicTestnetLimits = new Map();
 let publicTestnetHealthCache=null;
-function publicTestnetAllowed(request){
+// A single borrower preflight triggers many upstream reads. Share one
+// bounded source-backed result per page rather than allowing each visitor
+// to amplify traffic to NEAR RPC.
+const testnetAssessmentCache=new Map();
+const testnetAssessmentInFlight=new Map();
+async function cachedTestnetAssessment(from,limit){
+  const key=from+':'+limit;
+  const cached=testnetAssessmentCache.get(key);
+  if(cached&&Date.now()-cached.at<12000)return cached.value;
+  if(testnetAssessmentInFlight.has(key))return testnetAssessmentInFlight.get(key);
+  const pending=assessTestnetPage(from,limit).then(result=>{
+    testnetAssessmentCache.set(key,{value:result,at:Date.now()});
+    if(testnetAssessmentCache.size>50)testnetAssessmentCache.delete(testnetAssessmentCache.keys().next().value);
+    return result;
+  }).finally(()=>{testnetAssessmentInFlight.delete(key)});
+  testnetAssessmentInFlight.set(key,pending);
+  return pending;
+}
+function publicTestnetAllowed(request,limit=40){
   const ip=request.socket.remoteAddress??'unknown';
   const now=Date.now();
   if(publicTestnetLimits.size>2048){
@@ -58,7 +77,7 @@ function publicTestnetAllowed(request){
     return true;
   }
   prev.count++;
-  return prev.count<=40;
+  return prev.count<=limit;
 }
 const listeners = new Map(ENVIRONMENTS.map((value) => [value, new Set()]));
 const store = new DashboardStore(dataRoot);
@@ -120,7 +139,8 @@ const server = createServer(async (request, response) => {
           mainnetExecutionEnabled: false, deploymentRevision});
     if (url.pathname.startsWith('/api/public/testnet/')) {
       if(request.method!=='GET')return json(response,405,{error:'METHOD_NOT_ALLOWED'});
-      if(!publicTestnetAllowed(request))return json(response,429,{error:'TESTNET_BRIDGE_RATE_LIMITED'});
+      if(!publicTestnetAllowed(request,url.pathname==='/api/public/testnet/assessment'?8:40))
+        return json(response,429,{error:'TESTNET_BRIDGE_RATE_LIMITED'});
       try{
         if(url.pathname==='/api/public/testnet/health'){
           if(publicTestnetHealthCache&&Date.now()-publicTestnetHealthCache.time<15000)
@@ -135,6 +155,16 @@ const server = createServer(async (request, response) => {
              /^[a-f0-9]{64}$/.test(accountId)))
             return json(response,400,{error:'INVALID_TESTNET_ACCOUNT_ID'});
           return json(response,200,await getTestnetAccount(accountId));
+        }
+        if(url.pathname==='/api/public/testnet/assessment'){
+          const rawFrom=url.searchParams.get('from')??'';
+          const rawLimit=url.searchParams.get('limit')??'';
+          if(!/^\d{1,7}$/.test(rawFrom)||!/^\d{1,2}$/.test(rawLimit))
+            return json(response,400,{error:'INVALID_TESTNET_ASSESSMENT_PAGE'});
+          const from=Number(rawFrom),limit=Number(rawLimit);
+          if(from>1500000||limit<1||limit>20)
+            return json(response,400,{error:'INVALID_TESTNET_ASSESSMENT_PAGE'});
+          return json(response,200,await cachedTestnetAssessment(from,limit));
         }
         if(url.pathname==='/api/public/testnet/positions'){
           const from=Number(url.searchParams.get('from')),limit=Number(url.searchParams.get('limit'));
