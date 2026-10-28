@@ -182,6 +182,7 @@ jobs:
             sandbox_exit=0
             if EXECUTION_ENABLED=false NEAR_WORKSPACES_NETWORK=sandbox STAGE37_ALLOW_SANDBOX_MUTATION=true STAGE49_ALLOW_SANDBOX_WRAP_NEAR_FUNDING=true \
               STAGE37_STAGE35_EVIDENCE_PATH=stage38-positive-stage35-evidence.json \
+              ARBIVANE_MAX_FINANCING_USD=1000.00 ARBIVANE_MINIMUM_NET_PROFIT_USD=0.00 \
               NEAR_RPC_URL=https://archival-rpc.mainnet.fastnear.com \
               NEAR_CLI_MAINNET_RPC_SERVER_URL=https://archival-rpc.mainnet.fastnear.com \
               timeout --kill-after=10s 12m node --experimental-strip-types scripts/stage37-workspaces-sandbox-replay.mjs > stage69-sandbox-actual.json; then
@@ -230,6 +231,8 @@ jobs:
             stage69-sandbox-actual.json
             stage69-sandbox-runner.log
             stage37-process-result.json
+            stage171-dashboard-budget-admission.json
+            stage177-prefunding-oracle-parity-diagnostics.json
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
             stage46-sandbox-clone-evidence.json
