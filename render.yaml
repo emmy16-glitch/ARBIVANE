@@ -1,30 +1,29 @@
-# ARBIVANE private operations terminal.
-# Applying this Blueprint provisions a PAID web service + persistent disk.
-# Render prompts for the operator token; never commit secrets to Git.
+# ARBIVANE free, disposable dashboard PREVIEW only.
+# No disk or durable ledger. Local state resets on spin-down/redeploy.
+# Production-funded liquidation, custodial wallet and Mainnet remain disabled.
+# Render prompts privately for operator authentication; never commit tokens.
 services:
   - type: web
     name: arbivane-terminal
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     branch: main
     autoDeployTrigger: checksPass
     buildCommand: npm ci && npm run build:dashboard
     startCommand: node dashboard/server/index.mjs
     healthCheckPath: /api/health
-    disk:
-      name: arbivane-state
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 22.16.0
+      - key: NPM_CONFIG_INCLUDE
+        value: dev
       - key: NODE_ENV
         value: production
       - key: HOST
         value: 0.0.0.0
       - key: ARBIVANE_DASHBOARD_DATA_DIR
-        value: /var/data/arbivane
+        value: /tmp/arbivane-dashboard
       - key: EXECUTION_ENABLED
         value: "false"
       - key: ARBIVANE_DASHBOARD_TOKEN
