@@ -114,3 +114,44 @@ body { background:var(--bg); color:#eaf1f9; }
 .transaction-row small { font-size:10px; }
 .data-head,.data-row,.page-events>div { font-size:12px; }
 @media(max-width:760px) { .compact-records { padding:9px; } .compact-record { padding:12px; } }
+
+
+/* Vercel interface-review scope; production backend styles are untouched. */
+.ui-preview .preview-strip {
+  grid-column:1 / -1;
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  border:1px solid #32475e; border-radius:10px;
+  background:#101f2d; color:#c5d4e3;
+  padding:12px 16px; margin-bottom:12px;
+  font-size:12px; line-height:1.5;
+}
+.ui-preview .preview-strip strong { color:#baa9ff; letter-spacing:.09em; font-size:10px; white-space:nowrap; }
+.ui-preview .preview-strip span { flex:1; min-width:220px; }
+.ui-preview .preview-strip a { display:inline-flex; gap:4px; align-items:center; color:#cabdff; text-decoration:none; }
+.ui-preview .preview-strip a:hover { text-decoration:underline; }
+.ui-preview .dashboard { gap:14px; }
+.ui-preview .panel { background:#101e2c; border-color:#2b3b4e; border-radius:11px; box-shadow:none; }
+.ui-preview .environment { min-height:92px; background:#112130; border-color:#2c4055; }
+.ui-preview .environment.selected { background:#1d2441; box-shadow:inset 0 0 0 1px #8271dd; }
+.ui-preview .environment small,.ui-preview .environment em { font-size:11px; line-height:1.4; }
+.ui-preview .topbar,.ui-preview .sidebar { background:#0b1725; }
+.ui-preview .sidebar nav a { min-height:43px; color:#b2c1d2; font-size:13px; }
+.ui-preview .sidebar nav a.active { background:#242448; }
+.ui-preview .main { padding:20px clamp(16px,2vw,30px); }
+.ui-preview .panel-title { font-size:14px; min-height:49px; }
+.ui-preview .status-pill { font-size:11px; }
+.ui-preview .readiness,.ui-preview .screening-note { font-size:12px; line-height:1.5; }
+.ui-preview .money-input input { font-size:24px; }
+.ui-preview .money-input input::placeholder { color:#8497b0; opacity:1; font-size:16px; font-weight:450; }
+.ui-preview .empty { min-height:90px; padding:22px; }
+.ui-preview .empty p { font-size:12px; max-width:420px; }
+.ui-preview .balance-main strong { font-size:23px; }
+.ui-preview .metrics small { font-size:11px; }
+.ui-preview .metrics b { font-size:14px; }
+.ui-preview .controls button { min-height:45px; }
+.ui-preview :where(button,input,a):focus-visible { outline:2px solid #b4a6ff; outline-offset:3px; }
+@media(max-width:760px) {
+ .ui-preview .main { padding:12px; }
+ .ui-preview .preview-strip { gap:6px; padding:10px 12px; }
+ .ui-preview .preview-strip span { min-width:0; flex-basis:100%; }
+}
