@@ -12,9 +12,9 @@ import {mergeOperationEvents} from './events';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
-  sandbox: {title:'Sandbox', description:'Isolated NEAR Workspaces', detail:'Local test assets only', icon:Flask},
-  testnet: {title:'Testnet', description:'NEAR test network', detail:'Wallet not configured', icon:CirclesThree},
-  mainnet: {title:'Mainnet', description:'Live read-only infrastructure', detail:'Spending disabled', icon:Globe},
+  sandbox: {title:'Sandbox', icon:Flask},
+  testnet: {title:'Testnet', icon:CirclesThree},
+  mainnet: {title:'Mainnet', icon:Globe},
 } as const;
 const nav = [
   ['/', 'Dashboard', House], ['/live', 'Live Ops', Activity], ['/opportunities', 'Opportunities', Cube],
@@ -61,8 +61,19 @@ function Shell({children}:{children:React.ReactNode}) {
   </div>;
 }
 
-function EnvironmentPicker({value,onChange,readiness}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
-  return <div className="environment-picker">{(Object.keys(envInfo) as Environment[]).map((key)=>{const info=envInfo[key];const Icon=info.icon;const live=readiness[key];return <button key={key} className={`environment ${value===key?'selected':''} ${key}`} onClick={()=>onChange(key)}><span className="env-icon"><Icon size={25}/></span><span><b>{info.title}</b><small>{info.description}</small><em className={live?.status==='unavailable'?'unavailable':''}>{live?(live.status==='connected'?`RPC connected · block ${live.blockHeight}`:live.status.replaceAll('_',' ')):info.detail}</em></span>{value===key&&<CheckCircle className="selected-check" weight="fill"/>}</button>})}</div>;
+function EnvironmentPicker({value,onChange}:{value:Environment;onChange:(e:Environment)=>void;readiness:Partial<Record<Environment,EnvironmentReadiness>>}) {
+  return <div className="environment-picker" role="tablist" aria-label="Environment">
+    {(Object.keys(envInfo) as Environment[]).map(key=>{
+      const info=envInfo[key];const Icon=info.icon;
+      return <button key={key} role="tab" aria-selected={value===key}
+        className={'environment '+(value===key?'selected ':'')+key}
+        onClick={()=>onChange(key)}>
+        <span className="env-icon"><Icon size={22}/></span>
+        <span className="env-name">{info.title}</span>
+        {value===key&&<CheckCircle className="selected-check" weight="fill"/>}
+      </button>;
+    })}
+  </div>;
 }
 
 function Automation({environment,state,readiness,onCommand,busy}:{environment:Environment;state:DashboardState|null;readiness?:EnvironmentReadiness;onCommand:(a:string,s?:DashboardState['settings'])=>void;busy:string|null}) {
