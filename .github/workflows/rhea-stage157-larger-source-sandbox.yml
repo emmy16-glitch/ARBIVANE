@@ -201,6 +201,7 @@ jobs:
             stage88-sandbox-clone-witness.json
             stage52-actor-borrow-capacity.json
             stage172-wnear-pyth-parity-diagnostics.json
+            stage177-prefunding-oracle-parity-diagnostics.json
             stage55-sandbox-phase-evidence.json
             stage56-sandbox-attempt-evidence.json
             stage116-raw-transaction.json
