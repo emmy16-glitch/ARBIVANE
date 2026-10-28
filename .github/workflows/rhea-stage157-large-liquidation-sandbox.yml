@@ -209,6 +209,7 @@ jobs:
             stage37-sandbox-execution.json
             stage41-sandbox-balance-settlement.json
             stage172-wnear-pyth-parity-diagnostics.json
+            stage177-prefunding-oracle-parity-diagnostics.json
             stage55-sandbox-phase-evidence.json
             stage49-sandbox-funding.json
             stage51-active-pyth-sandbox-parity.json

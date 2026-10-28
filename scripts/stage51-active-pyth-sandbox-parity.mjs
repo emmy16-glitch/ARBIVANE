@@ -78,7 +78,8 @@ export function selectPinnedActivePythSandboxDependencies(config,plan){
 }
 
 export async function attestStage51PythParity({
- rpc,contracts,plan,blockHeight,fallbackEndpoint=null,fallbackRpc=null
+ rpc,contracts,plan,blockHeight,fallbackEndpoint=null,fallbackRpc=null,
+ includeFundingCollateral=false,onQuoteMismatch=null
 }){
  const lender=plan?.lendingContract;
  if(!rpc||typeof rpc.view!=='function'||!contracts||
@@ -128,7 +129,9 @@ export async function attestStage51PythParity({
   'BAD_SANDBOX_PYTH_INFO');
  if(!equal(remoteInfo,cloneInfo))
   throw Error('STAGE51_TOKEN_PYTH_INFO_DIFFERENT_IN_SANDBOX');
- const tokens=[...new Set([repay,seize])],feeds=new Set(),derived=[];
+ // WNEAR is used by the disposable actor for intermediate borrow collateral.
+ // Stage177 checks it BEFORE registration or funding, never after mutation.
+ const tokens=[...new Set([repay,seize,...(includeFundingCollateral?['wrap.near']:[])])],feeds=new Set(),derived=[];
  let defaultTokenCount=0;
  for(const id of tokens){
   const info=obj(remoteInfo[id],'POSITION_ASSET_HAS_NO_PYTH_INFO');
@@ -169,9 +172,25 @@ export async function attestStage51PythParity({
    !/^(0|[1-9][0-9]*)$/.test(String(quote.publish_time))||
    !/^-?(0|[1-9][0-9]*)$/.test(String(quote.expo)))
    throw Error('STAGE51_INVALID_ACTIVE_PYTH_QUOTE');
-  if(!equal(source,mirrored))
+  if(!equal(source,mirrored)){
+   if(typeof onQuoteMismatch==='function'){
+    const changed=['price','conf','expo','publish_time']
+     .filter(key=>JSON.stringify(source?.[key])!==JSON.stringify(mirrored?.[key]));
+    await onQuoteMismatch({
+     mode:'STAGE177_PINNED_PYTH_PRE_FUNDING_MISMATCH',
+     sourceBlockHeight:String(blockHeight),
+     affectedFundingCollateral:includeFundingCollateral&&
+      remoteInfo['wrap.near']?.price_identifier===feed,
+     changedFields:changed,
+     sourcePresent:source!==null&&source!==undefined,
+     clonedPresent:mirrored!==null&&mirrored!==undefined,
+     cloneStateRepairVerified:false,priceOverridden:false,
+     fundingAttempted:false,mayBroadcastMainnet:false,
+    });
+   }
    throw Error(mirrored===null?'STAGE114_IMPORTED_PYTH_QUOTE_EXPIRED_OR_MISSING':
     'STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT');
+  }
   quoteChecks++;
  }
  for(const {token,method} of derived){
@@ -191,6 +210,7 @@ export async function attestStage51PythParity({
   blockHeight:String(blockHeight),lendingContract:lender,
   activeOracleContract:'aggregate-oracle.near',
   tokensChecked:tokens,uniqueFeedsChecked:quoteChecks,
+  fundingCollateralPythPreflightVerified:includeFundingCollateral,
   derivedPriceRatiosChecked:ratioChecks,defaultPricesChecked:defaultTokenCount,
   pinnedSourceAndSandboxPythViewsMatch:true,
   sourceOracleCodeHashVerifiedHere:false, // verified by existing Stage37/46

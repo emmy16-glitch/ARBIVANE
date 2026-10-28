@@ -207,3 +207,35 @@ test('Stage109 names only the failed local Pyth stage and keeps real quote misma
  await assert.rejects(()=>attestStage51PythParity(q),
   /STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT/);
 });
+
+test('Stage177 detects distinct WNEAR funding quote drift before any actor funding',async()=>{
+ const same=plan();
+ same.actions[1].Liquidate.out_assets[0].token_id='usdt.tether-token.near';
+ same.actions[2].Withdraw.token_id='usdt.tether-token.near';
+ same.actions[2].Withdraw.amount='11';
+ same.actions.splice(2,0,{Repay:{token_id:'usdt.tether-token.near',amount:'100'}});
+ const ok=await attestStage51PythParity({...harness({plan:same}),includeFundingCollateral:true});
+ assert.deepEqual(ok.tokensChecked,['usdt.tether-token.near','wrap.near']);
+ assert.equal(ok.uniqueFeedsChecked,2);
+ assert.equal(ok.derivedPriceRatiosChecked,1);
+ assert.equal(ok.fundingCollateralPythPreflightVerified,true);
+ const diagnostics=[];
+ const bad=harness({plan:same,local:(id,method,args,base)=>{
+  const value=base(id,method,args);
+  if(id===oracle&&method==='get_price_no_older_than'&&args.price_id===feedB)
+   return {...value,price:'310000000',conf:'101',publish_time:'1792900001'};
+  return value;
+ }});
+ await assert.rejects(()=>attestStage51PythParity({...bad,
+  includeFundingCollateral:true,onQuoteMismatch:async e=>diagnostics.push(e)}),
+  /STAGE51_IMPORTED_PYTH_FEED_QUOTE_DIFFERENT/);
+ assert.deepEqual(diagnostics[0].changedFields,['price','conf','publish_time']);
+ assert.equal(diagnostics[0].affectedFundingCollateral,true);
+ assert.equal(diagnostics[0].fundingAttempted,false);
+ assert.equal(diagnostics[0].priceOverridden,false);
+ assert.equal(diagnostics[0].mayBroadcastMainnet,false);
+ assert.ok(!JSON.stringify(diagnostics).includes(feedB));
+ const runner=await readFile(new URL('../scripts/stage37-workspaces-sandbox-replay.mjs',import.meta.url),'utf8');
+ assert.ok(runner.indexOf('includeFundingCollateral:true')<runner.indexOf("root.createSubAccount('arbivane-replay'"));
+ assert.ok(runner.includes('stage177-prefunding-oracle-parity-diagnostics.json'));
+});

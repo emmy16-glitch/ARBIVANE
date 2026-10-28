@@ -319,6 +319,11 @@ async function main(){
  const pythParity=await attestStage51PythParity({rpc,contracts,plan,blockHeight:block,
   fallbackEndpoint:e.STAGE45_ARCHIVAL_FALLBACK_URL||
    'https://archival-rpc.mainnet.near.org',
+  includeFundingCollateral:true,
+  onQuoteMismatch:async diagnostic=>{
+   await writeFile('stage177-prefunding-oracle-parity-diagnostics.json',
+    JSON.stringify(diagnostic,null,2)+'\n',{mode:0o600});
+  },
  });
  await writeFile('stage51-active-pyth-sandbox-parity.json',
   JSON.stringify(pythParity,null,2)+'\n');
