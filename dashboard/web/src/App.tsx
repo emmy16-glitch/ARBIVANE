@@ -332,6 +332,62 @@ function TestnetWallet({compact=false}:{compact?:boolean}){
   </section>;
 }
 
+interface VerifiedTestnetLab{
+ network:'testnet';status:string;initialized:boolean;sourceBlock:number;
+ signerConnected:false;executionEnabled:false;verifiedTransactions:0;
+ contracts:Array<{accountId:string;codeVerified:boolean;deploymentTx:string}>;
+ reason:string;
+}
+function TestnetLab(){
+ const [lab,setLab]=useState<VerifiedTestnetLab|null>(null);
+ const [error,setError]=useState(false);
+ useEffect(()=>{
+  let active=true;
+  async function update(){
+   try{
+    const response=await fetch('/api/public/testnet/lab',{
+     credentials:'omit',headers:{accept:'application/json'},signal:AbortSignal.timeout(25000)});
+    if(!response.ok)throw Error('LAB_STATUS_UNAVAILABLE');
+    const next=await response.json() as VerifiedTestnetLab;
+    if(next.network!=='testnet'||next.executionEnabled!==false||
+       !Array.isArray(next.contracts)||next.contracts.length!==2)
+      throw Error('LAB_PROOF_INVALID');
+    if(active){setLab(next);setError(false)}
+   }catch{if(active)setError(true)}
+  }
+  void update();const timer=setInterval(()=>void update(),60000);
+  return()=>{active=false;clearInterval(timer)};
+ },[]);
+ const deployed=lab?.contracts.every(c=>c.codeVerified)===true;
+ return <section className="testnet-lab-card" aria-label="Controlled Testnet laboratory">
+  <div className="testnet-lab-head">
+   <span className="testnet-lab-icon"><Cube size={18}/></span>
+   <div><span className="demo-eyebrow">CONTROLLED TESTNET LAB</span>
+    <h3>Independent liquidation environment</h3></div>
+   <StatusPill tone={deployed?'warning':'neutral'}>
+    {deployed?'Setup incomplete':error?'Unavailable':'Verifying'}</StatusPill>
+  </div>
+  <p>Separate from Rhea's shared Testnet market. Deployed WASM is not proof of an executable liquidation.</p>
+  <div className="testnet-lab-steps">
+   <span className={deployed?'complete':''}><CheckCircle size={14}/> Contracts deployed</span>
+   <span className={lab?.initialized?'complete':''}><ShieldCheck size={14}/> Initialize lending</span>
+   <span><ListMagnifyingGlass size={14}/> Fund test positions</span>
+   <span><Activity size={14}/> Verify receipt</span>
+  </div>
+  {lab&&<div className="testnet-lab-detail">
+   {lab.contracts.map(c=><div key={c.accountId}>
+    <span>{c.accountId.startsWith('lend.')?'Lending':'Oracle'}</span>
+    <a href={'https://testnet.nearblocks.io/txns/'+encodeURIComponent(c.deploymentTx)}
+      target="_blank" rel="noreferrer">{c.accountId}<ArrowUpRight size={13}/></a>
+   </div>)}
+   <div><span>Readiness</span><strong>{lab.status.replaceAll('_',' ').toLowerCase()}</strong></div>
+   <div><span>Verified liquidations</span><strong>{lab.verifiedTransactions}</strong></div>
+  </div>}
+  {error&&<span className="testnet-lab-warning">Live contract verification unavailable; no execution is authorized.</span>}
+  <span className="testnet-lab-note">No private keys connected · Mainnet spending disabled</span>
+ </section>;
+}
+
 function TestnetOverview({state,readiness}:{state:DashboardState|null;readiness?:EnvironmentReadiness}){
   const active=state?.session?.status==='running';
   const session=state?.session as (DashboardState['session']&{
@@ -538,6 +594,7 @@ function Dashboard(){
   return <>{environment==='demo'&&<DemoOverview state={state} events={events}/>}
   {environment==='testnet'&&<TestnetOverview state={state} readiness={readiness.testnet}/>}
   {environment==='testnet'&&<TestnetWallet compact/>}
+  {environment==='testnet'&&<TestnetLab/>}
   <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>

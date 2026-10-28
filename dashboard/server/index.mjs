@@ -7,6 +7,7 @@ import {AutomationManager,validateSettings} from './automation.mjs';
 import {DemoAutomation} from './demo.mjs';
 import {inspectTestnet,getTestnetPositions,getTestnetAccount} from './testnet-readonly.mjs';
 import {assessTestnetPage} from './testnet-assessment.mjs';
+import {inspectTestnetLab} from './testnet-lab.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -46,6 +47,19 @@ function verifyCookie(value) {
 // Rate-limit all public Testnet read-only bridge requests by client IP.
 const publicTestnetLimits = new Map();
 let publicTestnetHealthCache=null;
+let publicTestnetLabCache=null;
+let publicTestnetLabPending=null;
+async function readCachedTestnetLab(){
+ if(publicTestnetLabCache&&Date.now()-publicTestnetLabCache.at<30000)
+  return publicTestnetLabCache.value;
+ if(publicTestnetLabPending)return publicTestnetLabPending;
+ const job=inspectTestnetLab().then(value=>{
+  publicTestnetLabCache={at:Date.now(),value};return value;
+ }).finally(()=>{publicTestnetLabPending=null});
+ publicTestnetLabPending=job;
+ return job;
+}
+
 // A single borrower preflight triggers many upstream reads. Share one
 // bounded source-backed result per page rather than allowing each visitor
 // to amplify traffic to NEAR RPC.
@@ -142,6 +156,10 @@ const server = createServer(async (request, response) => {
       if(!publicTestnetAllowed(request,url.pathname==='/api/public/testnet/assessment'?8:40))
         return json(response,429,{error:'TESTNET_BRIDGE_RATE_LIMITED'});
       try{
+        if(url.pathname==='/api/public/testnet/lab'){
+          // Separate fixed-account read-only test fixture.
+          return json(response,200,await readCachedTestnetLab());
+        }
         if(url.pathname==='/api/public/testnet/health'){
           if(publicTestnetHealthCache&&Date.now()-publicTestnetHealthCache.time<15000)
             return json(response,200,publicTestnetHealthCache.data);
