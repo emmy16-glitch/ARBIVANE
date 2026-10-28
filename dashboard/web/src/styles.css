@@ -91,3 +91,26 @@ body { background:var(--bg); color:#eaf1f9; }
 @media(forced-colors:active) {
   .status-pill,.panel,.environment { border:1px solid CanvasText; }
 }
+
+/* Stage175 — concise, inspectable records instead of full-width JSON dumps. */
+.compact-records { display:grid; gap:10px; padding:12px; min-width:0; }
+.compact-record { display:grid; gap:6px; min-width:0; padding:13px 15px; background:var(--surface-2); border:1px solid var(--line); border-radius:9px; }
+.compact-record-heading { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+.compact-record b { font-size:13px; font-weight:650; overflow-wrap:anywhere; }
+.compact-record span { font-size:12px; color:var(--soft); overflow-wrap:anywhere; }
+.compact-record small { font-size:11px; color:var(--muted); line-height:1.5; }
+.compact-record details { margin-top:3px; min-width:0; }
+.compact-record summary { cursor:pointer; color:#b7acfb; font-size:12px; padding:6px 0; }
+.compact-record pre { max-height:320px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; color:#b8c7d7; background:#0b1725; border:1px solid var(--line); border-radius:7px; font-size:11px; line-height:1.5; }
+.capability-list { display:grid; gap:0; }
+.capability-list>div { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:37px; border-bottom:1px solid var(--line); }
+.capability-list>div:last-child { border-bottom:0; }
+.capability-list>div>span:first-child { font-size:12px; color:var(--soft); text-transform:capitalize; }
+.capability-list>div>span:last-child { font-size:11px; color:var(--muted); text-align:right; }
+.record-grid small { font-size:11px; color:var(--muted); }
+.record-grid strong { font-size:13px; }
+.record-grid code,.record-json { font-size:11px; }
+.transaction-row b { font-size:12px; }
+.transaction-row small { font-size:10px; }
+.data-head,.data-row,.page-events>div { font-size:12px; }
+@media(max-width:760px) { .compact-records { padding:9px; } .compact-record { padding:12px; } }
