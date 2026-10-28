@@ -10,6 +10,7 @@ import {authenticate, command, loadEnvironment, subscribe, UI_PREVIEW} from './a
 import type {StreamConnection} from './api';
 import {mergeOperationEvents} from './events';
 import {useResearchRuns} from './research';
+import {hasFinancialEvidence} from './workspace';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -29,14 +30,6 @@ function useEnvironment(){
   return state;
 }
 const ongoing = new Set(['starting','running','pause_requested','stopping']);
-const hasFinancialEvidence=(state:DashboardState|null)=>{
-  if(!state)return false;
-  const a=state.accounting;
-  return state.wallet.balances.length>0 ||
-   [a.available,a.grossProceeds,a.financingFees,a.swapCosts,a.gasFees,a.cumulativeNetPnl,a.realizedProfit,a.realizedLoss]
-    .some(v=>v!==null&&v!==undefined);
-};
-
 function Empty({icon:Icon = Activity, title, text}:{icon?:typeof Activity;title:string;text?:string}) {
   return <div className="empty"><span className="empty-icon"><Icon size={19}/></span><strong>{title}</strong>{text&&<p>{text}</p>}</div>;
 }
