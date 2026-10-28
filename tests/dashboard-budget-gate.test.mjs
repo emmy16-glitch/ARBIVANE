@@ -66,3 +66,32 @@ test('Stage171 concurrency: two start requests cannot both enter admission',asyn
  await assert.rejects(()=>first,/SANDBOX_EVIDENCE_NOT_CONFIGURED/);
  assert.equal(manager.startingEnvironments.size,0);
 });
+
+test('Stage180 direct API start cannot bypass missing Sandbox runtime prerequisites', async()=>{
+ const {mkdtemp,writeFile,rm}=await import('node:fs/promises');
+ const {tmpdir}=await import('node:os');
+ const {join}=await import('node:path');
+ const root=await mkdtemp(join(tmpdir(),'arbivane-preflight-'));
+ const evidence=join(root,'source.json');
+ await writeFile(evidence,'{}');
+ const originalEvidence=process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH;
+ const originalRpc=process.env.NEAR_RPC_URL;
+ try{
+  process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH=evidence;
+  process.env.NEAR_RPC_URL='';
+  let mutation=false;
+  const store={state:async()=>({session:null}),update:async()=>{mutation=true}};
+  const manager=new AutomationManager({store,repoRoot:'.',publish:()=>{}});
+  await assert.rejects(()=>manager.start('sandbox',{
+   maxFinancingUsd:'100.00',minimumNetProfitUsd:'0.00'
+  }),/SANDBOX_RUNTIME_NOT_READY/);
+  assert.equal(mutation,false);
+  assert.equal(manager.startingEnvironments.size,0);
+ }finally{
+  if(originalEvidence===undefined)delete process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH;
+  else process.env.ARBIVANE_SANDBOX_EVIDENCE_PATH=originalEvidence;
+  if(originalRpc===undefined)delete process.env.NEAR_RPC_URL;
+  else process.env.NEAR_RPC_URL=originalRpc;
+  await rm(root,{recursive:true,force:true});
+ }
+});
