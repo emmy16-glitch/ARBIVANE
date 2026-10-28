@@ -118,22 +118,53 @@ function Automation({environment,state,readiness,onCommand,busy}:{environment:En
 }
 
 function Operations({events,onOpen,active,connection}:{events:OperationEvent[];onOpen:(e:OperationEvent)=>void;active:boolean;connection:StreamConnection|'connecting'}) {
-  const [filter,setFilter]=useState('all'); const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
+  const [filter,setFilter]=useState('all');
+  const filtered=filter==='all'?events:events.filter(e=>e.stage===filter);
   const stages=['all',...new Set(events.map(e=>e.stage))];
-  return <section className="panel operations"><div className="panel-title"><span><Activity/>Live Operations Stream</span><StatusPill tone={connection==='connected'&&active?'success':'neutral'}>{active?(connection==='connected'?'Streaming':connection==='reconnecting'?'Reconnecting':'Connecting'):(events.length?'History':'Idle')}</StatusPill></div>
+  return <section className="panel operations">
+    <div className="panel-title">
+      <span><Activity/>Live Operations</span>
+      {active&&<StatusPill tone={connection==='connected'?'success':'neutral'}>{connection==='connected'?'Live':connection==='reconnecting'?'Reconnecting':'Connecting'}</StatusPill>}
+      {!active&&events.length>0&&<NavLink className="panel-link" to="/live">History <ArrowUpRight size={14}/></NavLink>}
+    </div>
     {events.length>0&&<div className="filters">{stages.map(stage=><button className={filter===stage?'active':''} onClick={()=>setFilter(stage)} key={stage}>{stage}<small>{stage==='all'?events.length:events.filter(e=>e.stage===stage).length}</small></button>)}</div>}
-    {filtered.length===0?<Empty title="No active session" text="Start automation to monitor genuine backend operations."/>:<div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={`event-dot ${event.status}`}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
+    {filtered.length===0?<div className="stream-empty">{active?'Waiting for events':'No activity yet'}</div>:
+      <div className="event-list" role="log">{filtered.slice().reverse().map(event=><button className="event-row" key={event.id} onClick={()=>onOpen(event)}><time>{new Date(event.timestamp).toLocaleTimeString([], {hour12:false})}</time><span className={'event-dot '+event.status}/><b>{event.stage}</b><span className="event-message">{event.message}</span><StatusPill tone={event.status==='failure'?'danger':event.status==='success'?'success':'neutral'}>{event.status}</StatusPill><ArrowUpRight/></button>)}</div>}
   </section>;
 }
 
 function Accounting({state}:{state:DashboardState|null}) {
-  const a=state?.accounting; const asset=state?.wallet.balances?.[0] as {atomic?:string;tokenId?:string}|undefined;
-  const fields=[['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],['Swap costs','swapCosts'],['Gas fees','gasFees'],['Realized P&L','cumulativeNetPnl']] as const;
-  return <><section className="panel balance"><div className="panel-title"><span>ARBIVANE Balance</span><span className="network-label">{state?.environment??'—'}</span></div><div className="balance-main"><span className="balance-icon"><Wallet/></span><div><small>{asset?'Verified unsold inventory':'Verified available'}</small><strong>{asset?.atomic??(a?.available==null?'—':`$${a.available}`)}</strong><p>{asset?`atomic ${asset.tokenId}`:state?.wallet.status==='not_configured'?'Wallet not configured':'Reconciled balance'}</p></div><div className="balance-actions"><button disabled title="Deposit is unavailable until an environment-specific custody adapter is configured"><ArrowDown/>Deposit</button><button className="primary" disabled title="Withdrawal is unavailable without authorized custody and verified transferable funds"><ArrowUpRight/>Withdraw</button></div></div><div className="metrics">{fields.map(([label,key])=><div key={key}><small>{label}</small><b>{a?.[key]==null?'—':`$${a[key]}`}</b></div>)}</div></section>
-    <section className="panel chart"><div className="panel-title"><span>Cumulative P&amp;L</span><span className="network-label">Verified settlements only</span></div><Empty icon={ChartLineUp} title="No reconciled P&L yet" text="The chart appears after settled proceeds and every cost are independently verified."/></section></>;
+  const a=state?.accounting;
+  const balances=state?.wallet.balances??[];
+  const asset=balances[0] as {atomic?:string;tokenId?:string}|undefined;
+  const available=a?.available;
+  const hasAccounting=Boolean(a&&[a.grossProceeds,a.financingFees,a.swapCosts,a.gasFees,a.cumulativeNetPnl].some(v=>v!==null&&v!==undefined));
+  const fields=[['Gross proceeds','grossProceeds'],['Financing fees','financingFees'],['Swap costs','swapCosts'],['Gas fees','gasFees'],['Net P&L','cumulativeNetPnl']] as const;
+  return <section className="panel balance">
+    <div className="panel-title"><span>ARBIVANE Balance</span><NavLink className="panel-link" to="/wallet">Wallet <ArrowUpRight size={14}/></NavLink></div>
+    {asset||available!==null&&available!==undefined?
+      <div className="balance-main"><span className="balance-icon"><Wallet size={23}/></span>
+        <div><small>Available</small><strong>{asset?.atomic??('$'+String(available))}</strong>
+        {asset?.tokenId&&<p>{asset.tokenId} · atomic units</p>}</div>
+      </div>:
+      <div className="balance-empty"><Wallet size={20}/><span>No balance available</span></div>}
+    {hasAccounting&&<div className="metrics">{fields.filter(([,key])=>a?.[key]!=null).map(([label,key])=><div key={key}><small>{label}</small><b>{'$'+String(a?.[key])}</b></div>)}</div>}
+  </section>;
 }
 
-function Recent({state}:{state:DashboardState|null}) {const tx=state?.transactions??[];return <section className="panel recent"><div className="panel-title"><span>Recent Operations</span><NavLink to="/transactions">View all <ArrowUpRight/></NavLink></div>{tx.length?<div className="transaction-list">{tx.slice(0,5).map((row)=><div className="transaction-row" key={String(row.id)}><span className="tx-icon"><CheckCircle weight="fill"/></span><span><b>{String(row.type)}</b><small>{String(row.borrowerAccountId)}</small></span><span><b>{String(row.assetIncreaseAtomic)} atomic</b><small>{String(row.seizeTokenId)}</small></span><span><StatusPill tone="success">Verified</StatusPill><small>Unsold inventory</small></span></div>)}</div>:<Empty icon={ClockCounterClockwise} title="No verified transactions" text="Only reconciled environment-specific receipts will appear here."/>}</section>}
+function Recent({state}:{state:DashboardState|null}) {
+  const tx=state?.transactions??[];
+  if(!tx.length)return null;
+  return <section className="panel recent">
+    <div className="panel-title"><span>Recent Operations</span><NavLink to="/transactions">View all <ArrowUpRight/></NavLink></div>
+    <div className="transaction-list">{tx.slice(0,5).map(row=><div className="transaction-row" key={String(row.id)}>
+      <span className="tx-icon"><CheckCircle weight="fill"/></span>
+      <span><b>{String(row.type)}</b><small>{String(row.borrowerAccountId)}</small></span>
+      <span><b>{String(row.assetIncreaseAtomic)} atomic</b><small>{String(row.seizeTokenId)}</small></span>
+      <span><StatusPill tone="success">Verified</StatusPill><small>Unsold inventory</small></span>
+    </div>)}</div>
+  </section>;
+}
 
 function Dashboard() {
   const [environment,setEnvironment]=useState<Environment>('sandbox'); const [state,setState]=useState<DashboardState|null>(null);
