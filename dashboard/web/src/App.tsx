@@ -11,6 +11,7 @@ import type {StreamConnection} from './api';
 import {mergeOperationEvents} from './events';
 import {useResearchRuns} from './research';
 import {hasFinancialEvidence} from './workspace';
+import {TestnetSetup} from './testnet-setup';
 import type {DashboardState, Environment, EnvironmentReadiness, OperationEvent} from './types';
 
 const envInfo = {
@@ -593,8 +594,7 @@ function Dashboard(){
   const hasAside=hasFinancialEvidence(state)||!!session||(state?.transactions.length??0)>0;
   return <>{environment==='demo'&&<DemoOverview state={state} events={events}/>}
   {environment==='testnet'&&<TestnetOverview state={state} readiness={readiness.testnet}/>}
-  {environment==='testnet'&&<TestnetWallet compact/>}
-  {environment==='testnet'&&<TestnetLab/>}
+  {environment==='testnet'&&<TestnetSetup compact/>}
   <div className={`workspace ${isWorking?'workspace-running':hasAside?'workspace-history':'workspace-idle'}`}>
     <div className="workspace-primary">
       <Automation environment={environment} state={state} readiness={readiness[environment]} onCommand={run} busy={busy}/>
@@ -861,7 +861,7 @@ function OperationalPage({kind}:{kind:ViewKind}){
   else if(kind==='transactions')content=transactions.length?
     <TransactionWorkspace rows={transactions}/>:<Empty icon={Icon} title="No transactions yet"/>;
   else if(kind==='wallet')content=environment==='testnet'?
-    <TestnetWallet/>:<WalletWorkspace state={data.state}/>;
+    <TestnetSetup/>:<WalletWorkspace state={data.state}/>;
   else if(kind==='performance'||kind==='analytics')content=data.state.accounting.reconciledAt?
     <PerformanceWorkspace accounting={data.state.accounting}/>:<Empty icon={Icon} title="No performance data"/>;
   else if(kind==='opportunities')content=opportunities.length?

@@ -23,10 +23,23 @@ function rpcStub({missing=[],codeDrift=false,initialized=false,wrongOracle=false
    const name=body.params.account_id;
    if(missing.includes(name))return {ok:true,json:async()=>({jsonrpc:'2.0',error:{cause:{name:'UNKNOWN_ACCOUNT'}}})};
    const expectedHash=name===fixture.accountIds.oracle?SOURCE.oracleCodeHash:
-    name===fixture.accountIds.lending?SOURCE.lendingCodeHash:'11111111111111111111111111111111';
+    name===fixture.accountIds.lending?SOURCE.lendingCodeHash:
+    fixture.tokens.some(token=>token.accountId===name)?SOURCE.fungibleTokenCodeHash:
+    '11111111111111111111111111111111';
    return read({code_hash:codeDrift?'badcode':expectedHash,amount:'1000000000000000000000000',block_height:275000001});
   }
   assert.equal(body.params.request_type,'call_function');
+  const token=fixture.tokens.find(value=>value.accountId===body.params.account_id);
+  if(token){
+   const method=body.params.method_name;
+   const args=JSON.parse(Buffer.from(body.params.args_base64,'base64').toString());
+   if(method==='ft_metadata')return read({result:[...Buffer.from(JSON.stringify({
+    name:token.name,symbol:token.symbol,decimals:token.decimals}))],block_height:275000001});
+   if(method==='ft_balance_of')return read({result:[...Buffer.from(JSON.stringify('0'))],block_height:275000001});
+   if(method==='storage_balance_of')return read({result:[...Buffer.from(JSON.stringify(
+    {total:'100000000000000000000000',available:'0'}))],block_height:275000001});
+   throw Error('UNEXPECTED_TOKEN_METHOD_'+method+' '+JSON.stringify(args));
+  }
   assert.equal(body.params.account_id,fixture.accountIds.lending);
   const method=body.params.method_name;
   if(method==='get_config'){
@@ -65,10 +78,9 @@ test('generated setup pins upstream WASM, signs only Testnet through local keych
  assert.ok(ps.includes(SOURCE.lendingWasm));
  assert.ok(ps.includes(SOURCE.oracleWasm));
  assert.ok(ps.includes('DEPLOY-TESTNET'));
- assert.ok(ps.includes('Need at least 9 TNEAR'));
- assert.ok(ps.includes('Invoke-RestMethod'));
- assert.ok(ps.includes('ownerBalance'));
- assert.ok(ps.includes('with-init-call new'));
+ assert.ok(ps.includes('preflight.mjs'));
+ assert.ok(ps.includes('--expect \'unused\''));
+ assert.ok(ps.includes('with-init-call $init'));
  assert.ok(ps.includes('without-init-call'));
  assert.ok(ps.includes('sign-with-keychain'));
  assert.ok(ps.includes('network-config testnet'));
@@ -78,7 +90,7 @@ test('generated setup pins upstream WASM, signs only Testnet through local keych
  assert.ok(!ps.includes('contract.burrow.testnet'));
  assert.ok(!ps.includes('arbivane-fixture-66971fd6.testnet'));
  assert.ok(ps.includes('"oracle_account_id":"oracle.validoperator.testnet"'));
- assert.ok(!ps.includes('unused'));
+ assert.ok(ps.includes('--expect \'unused\''));
 });
 test('operator plan is write-once; refuses overwriting signed plans',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'arbivane-plan-'));
@@ -111,12 +123,12 @@ test('deployed but uninitialized lender is not a usable liquidation market',asyn
 test('fully initialized lab still requires assets, receipts, profitability proof',async()=>{
  const stub=rpcStub({initialized:true});
  const state=await inspectManifest(fixture,{fetchImpl:stub.fetchImpl});
- assert.equal(state.readiness,'INITIALIZED_AWAITING_ASSETS');
+ assert.equal(state.readiness,'ASSETS_NOT_CONFIGURED');
  assert.equal(state.initialized,true);
  assert.equal(state.configuredOracleId,fixture.accountIds.oracle);
- assert.equal(state.liquidationEligibleVerified,false);
+ assert.equal(state.liquidationEligibilityModeled,false);
  assert.equal(state.executionEnabled,false);
- assert.equal(state.realizedPnl,null);
+ assert.equal(state.realizedTestNotional,null);
  assert.ok(stub.calls.every(c=>['status','query'].includes(c.method)));
 });
 test('invalid configured oracle, owner and bytecode fail closed',async()=>{

@@ -925,3 +925,151 @@ body { background:var(--bg); color:#eaf1f9; }
  .testnet-lab-head{flex-wrap:wrap}
  .testnet-lab-detail{grid-template-columns:1fr}
 }
+
+/* Stage199 — user-owned NEAR Testnet onboarding and liquidation lab. */
+.lab-setup{border:1px solid #294454;background:linear-gradient(135deg,#101f30,#0c1c29);
+ border-radius:14px;padding:20px;margin:9px 0;color:#dbe9f5}
+.lab-setup.compact{padding:18px}
+.lab-setup-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;
+ flex-wrap:wrap;margin-bottom:16px}
+.lab-title{display:flex;gap:12px;min-width:0}
+.lab-title-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+ background:#173452;color:#8fd2ff;flex:none}
+.lab-title h2{font-size:19px;line-height:1.25;margin:3px 0 4px;letter-spacing:-.02em}
+.lab-title p{font-size:11px;line-height:1.5;color:#8faec4;margin:0;max-width:720px}
+.lab-network{display:inline-flex;align-items:center;gap:7px;border:1px solid #2b5a6d;
+ border-radius:999px;background:#0a2a35;color:#7fe1d0;font-size:9px;font-weight:700;
+ letter-spacing:.08em;padding:6px 10px;white-space:nowrap}
+.lab-network i{width:6px;height:6px;border-radius:50%;background:#35c99d;
+ box-shadow:0 0 8px rgba(53,201,157,.7)}
+.lab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.lab-card{border:1px solid #274255;border-radius:11px;background:#0b1b29;padding:14px;
+ min-width:0;display:flex;flex-direction:column;gap:10px}
+.lab-card-wide{grid-column:1/3}
+.lab-card-head{display:flex;align-items:center;gap:8px;min-width:0}
+.lab-card-head svg{color:#8fc8e8;flex:none}
+.lab-card-head h3{font-size:13px;margin:0;flex:1;letter-spacing:-.01em}
+.lab-badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;
+ padding:4px 8px;font-size:9px;border:1px solid #3b4e60;color:#b8c9d9;background:#122334;
+ white-space:nowrap}
+.lab-badge.ok{border-color:#24654f;background:#0d2b24;color:#79e0bc}
+.lab-badge.pending{border-color:#5d4b26;background:#2a2112;color:#f0c879}
+.lab-muted{font-size:10px;line-height:1.55;color:#8ba6bb;margin:0}
+.lab-button-row,.lab-owner-actions,.lab-receipt-row,.lab-owner-row{display:flex;gap:8px;
+ align-items:flex-end;flex-wrap:wrap}
+.lab-button-row button,.lab-button-row .lab-button,.lab-owner-actions button,
+.lab-receipt-row button,.lab-owner-row button,.lab-account button,.lab-copy-line button{
+ display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;
+ border:1px solid #2c4a60;background:#102436;color:#cfe6f7;border-radius:7px;
+ padding:0 11px;font-size:10px;font-weight:600;text-decoration:none;cursor:pointer}
+.lab-button-row button.primary,.lab-button-row .lab-button.primary,
+.lab-owner-actions button.primary,.lab-receipt-row button.primary,
+.lab-owner-row button.primary{background:linear-gradient(135deg,#3d2bb5,#6b46e8);
+ border-color:#7a5df0;color:#fff}
+.lab-button-row button:disabled,.lab-owner-actions button:disabled,
+.lab-receipt-row button:disabled,.lab-owner-row button:disabled,
+.lab-account button:disabled{opacity:.5;cursor:not-allowed}
+.lab-links{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:10px}
+.lab-links a{color:#8fd2ff;text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.lab-links a:hover{text-decoration:underline}
+.lab-links code{background:#071522;border:1px solid #213b4f;border-radius:5px;
+ padding:3px 6px;font-size:9px;color:#bcd7ea}
+.lab-account{display:flex;justify-content:space-between;gap:10px;align-items:center;
+ border:1px solid #274255;border-radius:8px;background:#0a1a28;padding:10px}
+.lab-account small{display:block;font-size:9px;color:#7e9ab0;margin-bottom:4px}
+.lab-account strong{font-size:13px;overflow-wrap:anywhere}
+.lab-proof{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.lab-proof>span{border:1px solid #223c50;border-radius:7px;background:#091927;padding:8px}
+.lab-proof small{display:block;font-size:8px;color:#7895ab;margin-bottom:4px;
+ text-transform:uppercase;letter-spacing:.04em}
+.lab-proof strong{font-size:11px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lab-proof em{font-style:normal;color:#7fb6cf;font-size:9px}
+.lab-error,.lab-warning,.lab-message,.lab-result{display:flex;gap:7px;align-items:flex-start;
+ border-radius:7px;padding:8px 10px;font-size:10px;line-height:1.45}
+.lab-error{border:1px solid #6e2634;background:#2a1118;color:#ffb0bd}
+.lab-warning{border:1px solid #66502a;background:#241f11;color:#f0cc86}
+.lab-message{border:1px solid #24654f;background:#0d2b24;color:#8fe3c4;margin-top:12px}
+.lab-result{border:1px solid #24455d;background:#0b2131;color:#bcd8ea;align-items:center}
+.lab-result a{color:#8fd2ff;text-decoration:none;display:inline-flex;gap:3px;align-items:center}
+.lab-owner-row label,.lab-receipt-row label{display:flex;flex-direction:column;gap:5px;
+ font-size:9px;color:#8ba6bb;flex:1;min-width:180px}
+.lab-owner-row input,.lab-receipt-row input{width:100%;background:#071625;color:#e1f0fb;
+ border:1px solid #27455c;border-radius:7px;padding:9px 10px;font-size:11px;outline:0}
+.lab-owner-row input:focus,.lab-receipt-row input:focus{outline:2px solid #4c7c9d;
+ outline-offset:1px}
+.lab-copy-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;
+ align-items:center;border:1px solid #223c50;border-radius:7px;background:#071522;
+ padding:7px 9px;font-size:9px;color:#8ba6bb}
+.lab-copy-line code{color:#bcd7ea;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lab-copy-line button{min-height:26px;padding:0 8px;font-size:9px}
+.lab-steps{display:flex;gap:7px;flex-wrap:wrap}
+.lab-steps span{display:inline-flex;align-items:center;gap:5px;border:1px solid #2a4357;
+ border-radius:999px;background:#0c2030;color:#8ba6bb;font-size:9px;padding:5px 9px}
+.lab-steps span.complete{border-color:#24654f;background:#0d2b24;color:#8fe3c4}
+.lab-account-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:7px}
+.lab-account-grid>div{border:1px solid #223c50;border-radius:7px;background:#091927;
+ padding:8px;min-width:0}
+.lab-account-grid span{display:block;font-size:8px;text-transform:uppercase;
+ letter-spacing:.06em;color:#7895ab;margin-bottom:3px}
+.lab-account-grid code{display:block;font-size:10px;color:#cfe6f7;overflow:hidden;
+ text-overflow:ellipsis;white-space:nowrap}
+.lab-account-grid small{display:block;font-size:9px;color:#7fb6cf;margin-top:4px}
+.lab-intents{display:grid;gap:6px}
+.lab-intents>div{display:grid;grid-template-columns:20px minmax(0,1fr) minmax(0,1.1fr) auto;
+ gap:8px;align-items:center;border:1px solid #223c50;border-radius:7px;background:#091927;
+ padding:7px 9px;font-size:9px}
+.lab-intents>div>span{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+ background:#1b3850;color:#9ed6f3;font-size:8px}
+.lab-intents code{color:#a9c8dd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lab-intents small{color:#7895ab;white-space:nowrap}
+.lab-asset-table{display:flex;flex-direction:column;border:1px solid #223c50;border-radius:8px;
+ overflow:hidden}
+.lab-asset-table>div{display:grid;grid-template-columns:1.25fr 1fr .8fr .8fr .8fr 1.4fr;
+ gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #183044;font-size:9px;
+ min-width:0}
+.lab-asset-table>div:last-child{border-bottom:0}
+.lab-asset-table>div.head{background:#0a1a28;color:#7895ab;text-transform:uppercase;
+ letter-spacing:.05em;font-size:8px}
+.lab-asset-table b,.lab-asset-table code{display:block;overflow:hidden;text-overflow:ellipsis;
+ white-space:nowrap}
+.lab-asset-table code{color:#8fb6ce;font-size:8px;margin-top:2px}
+.lab-health{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.lab-health>div{border:1px solid #223c50;border-radius:7px;background:#091927;padding:9px}
+.lab-health small{display:block;font-size:8px;color:#7895ab;text-transform:uppercase;
+ letter-spacing:.05em;margin-bottom:4px}
+.lab-health strong{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.lab-health span{display:inline-block;margin-top:4px;font-size:9px}
+.lab-health span.ok{color:#79e0bc}.lab-health span.bad{color:#ff9aab}
+.lab-health .lab-muted{font-size:9px;line-height:1.4;margin-top:4px}
+.lab-positions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.lab-positions>div{border:1px solid #223c50;border-radius:7px;background:#091927;padding:9px}
+.lab-positions span{display:block;font-size:8px;color:#7895ab;margin-bottom:4px}
+.lab-positions strong{font-size:10px;overflow-wrap:anywhere}
+.lab-receipt{display:flex;gap:9px;align-items:flex-start;border-radius:8px;padding:10px;
+ border:1px solid #24455d;background:#0b2131}
+.lab-receipt.ok{border-color:#24654f;background:#0d2b24;color:#a8ecd3}
+.lab-receipt.bad{border-color:#6e2634;background:#2a1118;color:#ffb0bd}
+.lab-receipt strong{display:block;font-size:11px;margin-bottom:3px}
+.lab-receipt span{display:block;font-size:9px;line-height:1.45;color:#9fbdce}
+.lab-receipt a{display:inline-flex;gap:3px;align-items:center;font-size:9px;color:#8fd2ff;
+ margin-top:4px;text-decoration:none}
+.lab-foot{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;margin-top:14px;
+ padding-top:11px;border-top:1px solid #223c50;font-size:9px;color:#7895ab}
+.lab-foot span{display:inline-flex;align-items:center;gap:5px}
+.lab-foot code{color:#a9c8dd}
+@media(max-width:900px){
+ .lab-grid{grid-template-columns:1fr}.lab-card-wide{grid-column:1}
+ .lab-health{grid-template-columns:1fr}
+ .lab-asset-table>div{grid-template-columns:1.2fr 1fr .8fr .8fr;gap:6px}
+ .lab-asset-table>div>span:nth-child(5),.lab-asset-table>div>span:nth-child(6){display:none}
+ .lab-asset-table>div.head>span:nth-child(5),.lab-asset-table>div.head>span:nth-child(6){display:none}
+}
+@media(max-width:560px){
+ .lab-setup{padding:13px}.lab-title h2{font-size:16px}
+ .lab-copy-line{grid-template-columns:1fr auto}.lab-copy-line>span{display:none}
+ .lab-asset-table>div{grid-template-columns:1.2fr 1fr}
+ .lab-asset-table>div>span:nth-child(n+3){display:none}
+ .lab-positions{grid-template-columns:1fr}
+ .lab-intents>div{grid-template-columns:18px minmax(0,1fr) auto}
+ .lab-intents>div>code{display:none}
+}

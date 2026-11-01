@@ -12,7 +12,7 @@
     "build:dashboard": "vite build --config dashboard/web/vite.config.ts",
     "preview:dashboard": "vite preview --config dashboard/web/vite.config.ts",
     "test:dashboard": "node --test tests/dashboard-*.test.mjs",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test --test-concurrency=4 tests/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "demo": "node --experimental-strip-types src/demo/run.ts",
     "scan:readonly": "node --experimental-strip-types src/rhea/cli.ts",
@@ -70,9 +70,15 @@
     "vite": "^7.3.7"
   },
   "dependencies": {
+    "@near-wallet-selector/core": "^10.1.4",
+    "@near-wallet-selector/meteor-wallet": "^10.1.4",
+    "@near-wallet-selector/my-near-wallet": "^10.1.4",
     "@phosphor-icons/react": "^2.1.10",
+    "buffer": "^6.0.3",
+    "process": "^0.11.10",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "util": "^0.12.5"
   }
 }

@@ -31,7 +31,11 @@ test('Demo streams complete multi-stage session with portfolio and transaction a
  const {store,demo,events}=await setup(t);
  const session=await demo.start({maxFinancingUsd:'125.00',minimumNetProfitUsd:'0.00'});
  assert.equal(session.environment,'demo');assert.equal(session.status,'running');
- await until(async()=>(await store.state('demo')).session.status==='completed');
+ await until(async()=>{
+  const current=await store.state('demo');
+  return current.session.status==='completed'&&
+   events.some(e=>e.stage==='system'&&e.status==='success');
+ });
  const state=await store.state('demo');
  assert.equal(state.transactions.length,2);
  assert.equal(state.accounting.evidence.scenario,'demo');

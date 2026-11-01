@@ -8,6 +8,15 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root: resolve(here),
   plugins: [react()],
+  define: {global: 'globalThis'},
+  resolve: {
+    alias: {
+      buffer: 'buffer/',
+      util: 'util/',
+      process: 'process/browser',
+    },
+  },
+  optimizeDeps: {include: ['buffer', 'util', 'process/browser']},
   server: {host: '0.0.0.0', allowedHosts: ['terminal.local'], proxy: {'/api': 'http://127.0.0.1:8787'}},
   preview: {host: '0.0.0.0', allowedHosts: ['terminal.local']},
   build: {outDir: 'dist', emptyOutDir: true, sourcemap: true},

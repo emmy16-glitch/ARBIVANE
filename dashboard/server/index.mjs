@@ -8,6 +8,7 @@ import {DemoAutomation} from './demo.mjs';
 import {inspectTestnet,getTestnetPositions,getTestnetAccount} from './testnet-readonly.mjs';
 import {assessTestnetPage} from './testnet-assessment.mjs';
 import {inspectTestnetLab} from './testnet-lab.mjs';
+import {inspectOwnerLab,buildOwnerIntents,readTokenBalance} from './testnet-lab-verify.mjs';
 import {DashboardStore, ENVIRONMENTS} from './store.mjs';
 import {environmentReadiness} from './readiness.mjs';
 
@@ -153,7 +154,8 @@ const server = createServer(async (request, response) => {
           mainnetExecutionEnabled: false, deploymentRevision});
     if (url.pathname.startsWith('/api/public/testnet/')) {
       if(request.method!=='GET')return json(response,405,{error:'METHOD_NOT_ALLOWED'});
-      if(!publicTestnetAllowed(request,url.pathname==='/api/public/testnet/assessment'?8:40))
+      if(!publicTestnetAllowed(request,url.pathname==='/api/public/testnet/assessment'?8:
+          url.pathname.startsWith('/api/public/testnet/lab/')?10:40))
         return json(response,429,{error:'TESTNET_BRIDGE_RATE_LIMITED'});
       try{
         if(url.pathname==='/api/public/testnet/lab'){
@@ -166,6 +168,38 @@ const server = createServer(async (request, response) => {
           const data=await inspectTestnet();
           publicTestnetHealthCache={time:Date.now(),data};
           return json(response,200,data);
+        }
+        if(url.pathname==='/api/public/testnet/lab/verify'){
+          const owner=url.searchParams.get('owner')??'';
+          const tx=url.searchParams.get('tx');
+          const withdraw=url.searchParams.get('withdraw');
+          try{
+            return json(response,200,await inspectOwnerLab(owner,{
+              txHash:tx||null,withdrawTxHash:withdraw||null}));
+          }catch(error){
+            const code=message(error);
+            const status=code.startsWith('INVALID_')||code==='MANIFEST_TAMPERED_OR_INCOMPATIBLE'?400:
+              code.startsWith('TESTNET_TRANSACTION_NOT_FOUND')?404:502;
+            return json(response,status,{error:code});
+          }
+        }
+        if(url.pathname==='/api/public/testnet/lab/intents'){
+          const owner=url.searchParams.get('owner')??'';
+          const account=url.searchParams.get('account')??'';
+          try{
+            return json(response,200,await buildOwnerIntents(owner,account));
+          }catch(error){
+            const code=message(error);
+            const status=code.startsWith('INVALID_')||code==='CONNECTED_WALLET_IS_NOT_LAB_OWNER'?400:
+              code.startsWith('LAB_')||code==='LENDING_NOT_INITIALIZED'?409:502;
+            return json(response,status,{error:code});
+          }
+        }
+        if(url.pathname==='/api/public/testnet/token'){
+          const contract=url.searchParams.get('contract')??'';
+          const account=url.searchParams.get('account')??'';
+          try{return json(response,200,await readTokenBalance(contract,account))}
+          catch(error){return json(response,400,{error:message(error)})}
         }
         if(url.pathname==='/api/public/testnet/account'){
           const accountId=url.searchParams.get('accountId')??'';
@@ -264,7 +298,7 @@ const server = createServer(async (request, response) => {
       '.css':'text/css; charset=utf-8','.png':'image/png','.woff2':'font/woff2'};
     response.writeHead(200, {'content-type': types[extname(path)] ?? 'application/octet-stream',
       'x-content-type-options':'nosniff', 'referrer-policy':'same-origin',
-      'content-security-policy':"default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'"});
+      'content-security-policy':"default-src 'self'; connect-src 'self' https://rpc.testnet.near.org https://helper.testnet.near.org https://*.near.org https://*.mynearwallet.com https://*.meteorwallet.app; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'"});
     response.end(content);
   } catch (error) { json(response, 400, {error: message(error)}); }
 });

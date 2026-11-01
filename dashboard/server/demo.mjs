@@ -75,7 +75,11 @@ export class DemoAutomation{
   }finally{this.starting=false}
  }
  schedule(job){
-  job.timer=setTimeout(()=>{void this.tick(job.id).catch(error=>this.fail(job.id,error))},this.intervalMs);
+  job.timer=setTimeout(()=>{
+   const run=this.tick(job.id).catch(error=>this.fail(job.id,error));
+   job.running=run;
+   void run.finally(()=>{if(job.running===run)job.running=null});
+  },this.intervalMs);
   job.timer.unref?.();
  }
  async fail(id,error){
@@ -182,6 +186,11 @@ export class DemoAutomation{
   const job=session&&this.jobs.get(session.id);
   if(!job||session.status!=='running')throw Error('NO_RUNNING_SESSION');
   clearTimeout(job.timer);
+  if(job.running)await job.running;
+  clearTimeout(job.timer);
+  const latest=await this.store.state('demo');
+  if(latest.session?.id!==session.id||latest.session.status!=='running')
+   throw Error('NO_RUNNING_SESSION');
   await this.store.update('demo',s=>{s.session.status='paused';return s});
   await this.emit('control','info','Automation paused · current progress preserved.');
   return (await this.store.state('demo')).session;
@@ -199,6 +208,8 @@ export class DemoAutomation{
   const session=(await this.store.state('demo')).session;
   const job=session&&this.jobs.get(session.id);
   if(!job||!['running','paused'].includes(session.status))throw Error('NO_ACTIVE_SESSION');
+  clearTimeout(job.timer);
+  if(job.running)await job.running;
   clearTimeout(job.timer);this.jobs.delete(session.id);
   await this.store.update('demo',s=>{s.session.status='stopped';
    s.session.endedAt=new Date().toISOString();return s});
